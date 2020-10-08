@@ -10,166 +10,158 @@
     This file also serves as the example for OpenCL, which is an extension of C.
 */
 
-/// global variable used by some examples
-int y;
 
+/// example 1
 
-void example1() {
-    int x = 2;
-    //@ assert x == 2;
-    int y = x + 3;
-    /*@
-    assert y == 5;
-    @*/
-}
-
-void example2(int arr[]) {
-    /// note: currently not supported, see Issue #453
-    /// ghost option<int> x = (arr==NULL ? None : Some(arr[0]);
-}
+//@ requires x>0;
+int increment(int x);
 
 /*@
-    /// requirements to make assertion actually pass
-    requires x==1 && y==5 && z!=NULL;
+requires x>0;
+requires y>0;
 @*/
-void example3(int x, int y, int z[]) {
-    //@ assert (\let int abs_x = (x<0 ? -x : x); y==(z==NULL ? abs_x : 5*abs_x));
+int add1(int x, int y);
+
+
+/// example 2
+
+/*@
+requires x >= 0;
+requires y >= 0;
+ensures \result == x+y;
+ensures \result >= 0;
+@*/
+int add2(int x, int y) {
+    return x+y;
 }
+
+// /*
+// requires xs != NULL;
+// ensures \result != NULL;
+// ensures \result.length == \old(xs.length)+1;
+// ensures \result.length > 0;
+// */
+// int[] append(int[] xs, int y) {
+    // return new int[xs.length+1];
+// }
+
+
+/// example 3
+
+//@ requires a>0 && b>0;
+//@ ensures \result == a*b;
+int mult3(int a, int b) {
+    int res = 0;
+    //@ loop_invariant res == i*a;
+    //@ loop_invariant i <= b;
+    for (int i=0; i<b; i++) {
+        res = res + a;
+    }
+    return res;
+}
+
 
 /// example 4
-//@ requires arr != NULL;
-//@ requires (\forall* int i ; 0<=i && i<arr_len ; Perm(arr[i], read));
-//@ requires (\forall int i ; 0<=i && i<arr_len ; arr[i]>0);
-void foo(int arr[], int arr_len) {
-    /// example of a quantifier using an interval
-    //@ assert (\forall int i = 0 .. arr_len ; arr[i]>0);
+
+//@ ensures a==0 ? \result == 0 : \result >= 10;
+int mult10(int a) {
+    int res = a;
+    if (res < 0) {
+        res = 0-res;
+    }
+    //@ assert res >= 0;
+    return 10*res;
 }
+
 
 /// example 5
-//@ requires arr != NULL;
-//@ requires Perm(arr[*], read);
-//@ requires (\forall* int i ; 0<=i && i<arr_len ; Perm(arr[i], read));
-//@ requires (\exists int i ; 0<=i && i<arr_len ; arr[i]>0);
-void foo2(int arr[], int arr_len) {
-}
 
-/*
-///    /// requirements to make assertion actually pass
-///     requires x==4 ** |s| ==1 ** s[0]==2;
-/// ghost void example6(int x, seq<int> s) {
-    /// Issue #458: \sum not supported
-    /// assert x == (\sum int i; 0<i && i<|s|; s[i]*s[i]);
-}
-*/
-
-void example7() {
+void example5() {
     int x = 2;
     //@ assume x == 1;
     int y = x + 3;
     //@ assert y == 4;
 }
 
-/// example 8
-/*@ 
-    context Perm(y, 1);
-    requires x == 2;
-    ensures y == 5;
-@*/
-void foo3(int x) {
-    y = x + 3;
-}
 
-/// example 9
-//@ requires Perm(y, 1);
-void bar() {
-    int a = 2;
-    foo3(a);
-    a = y + 5;
-    //@ assert a == 10;
-}
+/// example 6
 
-/// example 10
-//@ context Perm(y, 1\2);
-//@ context y == 5;
-int incr(int x) {
-    int res = x + 2*y;
-    //@ assert res == x + 10;
-    return res;
-}
-
-/// example 11
-//@ context Perm(y, 1\2);
-//@ ensures y == \old(y);
-//@ ensures \result == x + 2*y;
-int incr2(int x) {
-    return x + 2*y;
-}
-
-/// example 12
-//@ requires a>0 && b>0;
-//@ ensures \result == a*b;
-int mult(int a, int b) {
-    int res = 0;
-    //@ loop_invariant res == i*a;
-    //@ loop_invariant i <= b;
-    for (int i=0; i<b; i++) {
-        res = res+a;
-    }
-    //@ assert a == \old(a);
-    return res;
-}
-
-/// example 13
 /*@
-    requires arr != NULL;
-    requires (\forall* int i ; 0<=i && i<arr_len ; Perm(arr[i], read));
-    /// requirements to make assert true
-    requires y==5 && arr_len==1 && arr[0]==3;
+requires x>=0 && y>=0;
+ensures \result == (x<y ? 5*x : 5*y);
 @*/
-void whatever(int x, int y, int arr[], int arr_len) {
-    x = 2;
+int minTimes5(int x, int y) {
     //@ ghost int min = (x<y ? x : y);
-    //@ assert (\forall int i; 0<=i && i<arr_len; min<=arr[i] && arr[i] < 2*min);
-    if (arr_len > 0) {
-        x = 4;
+    int res = 0;
+    //@ loop_invariant i<=5;
+    //@ loop_invariant res == i*min;
+    //@ loop_invariant min<=x && min<=y && (min==x || min==y); 
+    for (int i=0; i<5; i++) {
+        if (x<y) {
+            res = res + x;
+        } else {
+            res = res + y;
+        }
     }
-    /*@ ghost 
-    if (min < x) {
-        assert (\forall int i; 0<=i && i<arr_len; min<=arr[i] && arr[i] < 2*min);
+    /*@ 
+    ghost if (x<y) {
+        assert res == 5*x;
+    } else {
+        assert res == 5*y;
     }
     @*/
+    return res;
 }
 
-/// example 14
-/*
-/// ghost methods currently not supported, see Issue #460
+
+/// example 7
+
+/*@
 requires x > 0;
-ensures cond ==> \result == x+y;
-int cond_add(bool cond, int x, int y) {
+ensures \result == (cond ? x+y : x);
+ghost static int cond_add7(bool cond, int x, int y) {
     if (cond) {
         return x+y;
     } else {
         return x;
     }
 }
-*/
+@*/
 
 //@ requires val1 > 0 && val2>0 && z==val1+val2;
-void some_method(int val1, int val2, int z) {
-    // ghost int z2 = cond_add(val2>0, val1, val2);
-    // assert z == z2;
+void some_method7(int val1, int val2, int z) {
+    //@ ghost int z2 = cond_add7(val2>0, val1, val2);
+    //@ assert z == z2;
 }
 
 
-/// example 15
+/// example 8
+
+/// pure functions currently not supported for C, see Issue #460
 /*
-/// pure functions currently not supported, see Issue #460
 requires x > 0;
-pure int cond_add2(bool cond, int x, int y) 
+static pure int cond_add8(bool cond, int x, int y) 
     = cond ? x+y : x;
 */
 
-/// example 16
+
+/// example 9
+
+/// pure functions currently not supported for C, see Issue #460
+// /*
+// requires x > 0;
+// */
+// static /* pure */ int cond_add9(boolean cond, int x, int y) {
+    // if (cond) {
+        // return x+y;
+    // } else {
+        // return x;
+    // }
+// }
+
+
+/// example 10
+
 //@ requires a>0 && b>0;
 //@ ensures \result == a*b;
 int mult2(int a, int b);
@@ -184,35 +176,79 @@ int mult2(int a, int b);
 //  return res;
 //}
 
-/* 
-/// pure functions currently not supported, see Issue #460
-requires a>0 && b>0;
-ensures \result == a+b;
-pure int add(int a, int b);
-*/
+/// pure functions currently not supported for C, see Issue #460
+// /*
+// requires a>0 && b>0;
+// ensures \result == a+b;
+// pure int add10(int a, int b);
+// */
 
-/// example 17
-/// pure functions currently not supported, see Issue #460
-// pure inline int min(int x, int y) = (x<y ? x : y);
 
-/// example 18
+/// example 11
+
+//@ pure inline int min(int x, int y) = (x<y ? x : y);
+
+
+/// example 12
+/// ghost parameters currently not supported for C, see Issue #460
+
+// /*
+// given int x;
+// given int y2;
+// yields int modified_x;
+// requires x > 0;
+// ensures modified_x > 0;
+// */
+// int some_method12(boolean real_arg) {
+    // int res = 0;
+    // /// ...
+    // // ghost modified_x = x + 1;
+    // /// ...
+    // return res;
+// }
+
+// void other_method12() {
+    // // ghost int some_ghost;
+    // int some_result = some_method12(true) /* with {y2=3; x=2;} then {some_ghost=modified_x;} */;
+// }
+
+
+/// example 13
+
 /*@
-given int x;
-given int y2;
-yields int modified_x;
-requires x > 0;
-ensures modified_x > 0;
+    /// requirements to make assertion actually pass
+    requires x==1 && y==5 && z!=NULL;
 @*/
-int some_method2(int real_arg) {
-    int res = 0;
-    /// ...
-    //@ ghost modified_x = x + 1;
-    /// ...
-    return res;
+void example13(int x, int y, int* z) {
+    //@ assert (\let int abs_x = (x<0 ? -x : x); y==(z==NULL ? abs_x : 5*abs_x));
 }
 
-void other_method2() {
-    //@ ghost int some_ghost;
-    /// ghost parameters currently not supported, see Issue #460
-    /// int some_result = some_method2(0) /* with {y2=3; x=2;} then {some_ghost=modified_x;} */;
+
+/// example 14
+
+//@ requires arr != NULL;
+//@ requires (\forall* int i ; 0<=i && i<arr_len ; Perm(arr[i], read));
+//@ requires (\forall int i ; 0<=i && i<arr_len ; arr[i]>0);
+void foo14(int arr[], int arr_len) {
+    /// example of a quantifier using an interval
+    //@ assert (\forall int i = 0 .. arr_len ; arr[i]>0);
 }
+
+
+/// example 15
+
+//@ requires arr != NULL;
+//@ requires (\forall* int i ; 0<=i && i<arr_len ; Perm(arr[i], read));
+//@ requires (\exists int i ; 0<=i && i<arr_len ; arr[i]>0);
+void foo15(int arr[], int arr_len);
+
+
+/// example 16
+
+//@ requires arr != NULL;
+//@ requires (\forall* int i ; 0<=i && i<arr_len ; Perm(arr[i], read));
+//@ requires (\forall int i ; 0<=i && i<arr_len ; {: arr[i] :} > 0);
+void foo16(int arr[], int arr_len);
+
+
+
