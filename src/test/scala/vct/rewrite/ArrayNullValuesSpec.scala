@@ -6,9 +6,9 @@ import vct.col.ast.expr.StandardOperator
 import vct.col.ast.generic.ASTNode
 import vct.col.ast.stmt.decl.ProgramUnit
 import vct.col.rewrite.ArrayNullValues
-import vct.col.util.AbstractTypeCheck
+import vct.col.util.TypeCheck
 
-class ArrayNullValuesSpec extends RewriteSpec(new ArrayNullValues(null), before=new AbstractTypeCheck(null, new ProgramUnit())) {
+class ArrayNullValuesSpec extends RewriteSpec(new ArrayNullValues(null), before=new TypeCheck(null, new ProgramUnit())) {
   def INT_TYPE = create primitive_type PrimitiveSort.Integer
   def SEQ_TYPE = create class_type "seq"
   def BOOL_TYPE = create primitive_type PrimitiveSort.Boolean

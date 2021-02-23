@@ -408,7 +408,7 @@ class Main {
   }
 
   def collectPassesForSilver: Seq[AbstractPass] = {
-    report = Passes.BY_KEY("checkTypesJava").apply_pass(report, Array())
+    report = Passes.BY_KEY("checkTypes").apply_pass(report, Array())
 
     var features = Feature.scan(report.getOutput) ++ Set(
       // These are "gated" features: they are (too) hard to detect normally.
@@ -487,7 +487,7 @@ class Main {
 
       Progress("[%02d%%] %s took %d ms", Int.box(100 * (i+1) / passes.size), pass.key, Long.box(tk.show))
 
-      report = BY_KEY("checkTypesJava").apply_pass(report, Array())
+      report = BY_KEY("checkTypes").apply_pass(report, Array())
 
       if(report.getFatal > 0) {
         Verdict("The final verdict is Fail")

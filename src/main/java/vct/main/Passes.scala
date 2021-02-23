@@ -10,7 +10,7 @@ import vct.col.ast.syntax.{JavaDialect, JavaSyntax, PVLSyntax}
 import vct.col.features
 import vct.col.features.{Feature, RainbowVisitor}
 import vct.col.rewrite._
-import vct.col.util.{JavaTypeCheck, LocalVariableChecker, SimpleTypeCheck}
+import vct.col.util.{TypeCheck, LocalVariableChecker}
 import vct.experiments.learn.{NonLinCountVisitor, Oracle}
 import vct.logging.{ExceptionMessage, PassReport}
 import vct.parsers.rewrite.{AnnotationInterpreter, ConvertTypeExpressions, EncodeAsClass, FilterSpecIgnore, FlattenVariableDeclarations, InferADTTypes, KernelInvocationToMethodInvocation, RewriteWithThen, StripUnusedExtern}
@@ -48,13 +48,13 @@ object Passes {
       }
       arg
     }, introduces=Set(), permits=Feature.ALL),
-    new AbstractPass("checkTypes", "run a basic type check") {
+    new AbstractPass("checkTypes", "run a type check") {
       val permits: Set[Feature] = Feature.ALL
       val removes: Set[Feature] = Set.empty
       val introduces: Set[Feature] = Set.empty
 
       override def apply(report: PassReport, arg: ProgramUnit, args: Array[String]): ProgramUnit = {
-        new JavaTypeCheck(report, arg).check(); arg // Sneakily changing this to make abrupt tests pass for now
+        new TypeCheck(report, arg).check(); arg // Sneakily changing this to make abrupt tests pass for now
       }
     },
     SimplePass("checkAssignInPar",
@@ -63,15 +63,6 @@ object Passes {
       permits=Feature.DEFAULT_PERMIT + features.TopLevelImplementedMethod + features.TopLevelMethod,
       removes=Set(features.ParallelLocalAssignmentNotChecked),
     ),
-    new AbstractPass("checkTypesJava", "run a Java-aware type check") {
-      val permits: Set[Feature] = Feature.ALL
-      val removes: Set[Feature] = Set.empty
-      val introduces: Set[Feature] = Set.empty
-
-      override def apply(report: PassReport, arg: ProgramUnit, args: Array[String]): ProgramUnit = {
-        new JavaTypeCheck(report, arg).check(); arg
-      }
-    },
     new AbstractPass("printJavaToFile", "Generate code") {
       override def apply(report: PassReport, arg: ProgramUnit, args: Array[String]): ProgramUnit = {
         val dir = new File(".").getAbsoluteFile

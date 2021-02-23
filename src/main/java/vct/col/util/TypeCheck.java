@@ -3,6 +3,7 @@ package vct.col.util;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import hre.ast.Origin;
 import scala.Option;
 import scala.collection.JavaConverters;
 import vct.col.ast.expr.NameExpressionKind;
@@ -18,7 +19,10 @@ import vct.col.ast.type.*;
 import vct.col.ast.util.*;
 import vct.col.rewrite.AddZeroConstructor;
 import vct.java.JavaASTClassLoader;
+import vct.logging.MessageFactory;
+import vct.logging.PassAddVisitor;
 import vct.logging.PassReport;
+import vct.logging.VerCorsError;
 import vct.parsers.rewrite.InferADTTypes;
 import vct.col.rewrite.TypeVarSubstitution;
 import viper.api.SilverTypeMap;
@@ -32,8 +36,151 @@ import viper.api.SilverTypeMap;
  *
  */
 @SuppressWarnings("incomplete-switch")
-public class AbstractTypeCheck extends RecursiveVisitor<Type> {
+public class TypeCheck extends RecursiveVisitor<Type> {
   PassReport report;
+  Set<Type> liveExceptionTypes = new HashSet<>();
+  boolean inSignals = false;
+  protected NameSpace currentNamespace = null;
+
+
+  @Override
+  public void visit(CatchClause cc) {
+    for (Type t : cc.javaCatchTypes()) {
+      // Unchecked exceptions are allowed even on empty try blocks
+      if (!isCheckedException(source(), t)) {
+        continue;
+      }
+
+      // If one of the catch types is a supertype of one of the live types,
+      // the catch block is used, so no error
+      boolean hasGuaranteedCatches = liveExceptionTypes.stream()
+              .anyMatch(exceptionType -> t.supertypeof(source(), exceptionType));
+      // If one of the live types is a supertype of the catch type,
+      // the catch block might be used, so no error
+      boolean hasPossibleCatches = liveExceptionTypes.stream().anyMatch(exceptionType -> exceptionType.supertypeof(source(), t));
+
+      // If neither is the case, the catch block is unused, hence an error
+      if (!(hasGuaranteedCatches || hasPossibleCatches)) {
+        reportFail(String.format("Catch type %s is not thrown within corresponding try block", t),
+                VerCorsError.ErrorCode.TypeError, VerCorsError.SubCode.UnusedCatch,
+                t, cc
+        );
+      }
+
+      // Remove exception types that are guaranteed to be caught from the live exceptions set
+      liveExceptionTypes = liveExceptionTypes.stream()
+              .filter(exceptionType -> !t.supertypeof(source(), exceptionType))
+              .collect(Collectors.toSet());
+    }
+
+    super.visit(cc);
+  }
+
+  @Override
+  public void visit(TryCatchBlock tcb) {
+    super.visit(tcb);
+
+    // Types of catch clauses cannot overlap
+    ArrayList<ClassType> encounteredCatchTypes = new ArrayList<>();
+    ClassType throwableType = new ClassType(ClassType.javaLangThrowableName());
+
+    for (CatchClause cc : tcb.catchesJava()) {
+      enter(cc);
+      ArrayList<ClassType> encounteredMultiCatchTypes = new ArrayList<>();
+
+      for (Type catchType : cc.javaCatchTypes()) {
+        if (!(catchType instanceof ClassType)) {
+          Fail("Catch clause types must be class types");
+        }
+
+        ClassType ct = (ClassType) catchType;
+
+        if (!isThrowableType(ct)) {
+          Fail("Catch clause types must inherit from Throwable");
+        }
+
+        for (ClassType t : encounteredMultiCatchTypes) {
+          if (t.supertypeof(source(), ct)) {
+            Fail("Types within a multi-catch cannot be subtypes");
+          }
+        }
+        encounteredMultiCatchTypes.add(ct);
+
+        for (Type t : encounteredCatchTypes) {
+          if (t.supertypeof(source(), ct)) {
+            Fail("Catch type %s is already caught by earlier catch clause", ct);
+          }
+        }
+        encounteredCatchTypes.add(ct);
+      }
+
+      leave(cc);
+    }
+  }
+
+  @Override
+  public void visit(SignalsClause sc) {
+    inSignals = true;
+    super.visit(sc);
+    inSignals = false;
+
+    ClassType throwableType = new ClassType(ClassType.javaLangThrowableName());
+    if (!isThrowableType(sc.type())) {
+      reportFail("Signals type must extend Throwable",
+              VerCorsError.ErrorCode.TypeError, VerCorsError.SubCode.ExtendsThrowable,
+              sc.getType(), sc);
+    }
+  }
+
+  public void reportFail(VerCorsError e) {
+    if (report != null) {
+      MessageFactory log=new MessageFactory(new PassAddVisitor(report));
+      log.error(e);
+    } else {
+      Abort("Report was null: %s", e);
+    }
+  }
+
+  public void reportFail(String message, VerCorsError.ErrorCode ec, VerCorsError.SubCode sc, ASTNode primaryOrigin, ASTNode... secondaryOrigins) {
+    List<Origin> auxOrigin = Arrays.stream(secondaryOrigins).map(n -> n.getOrigin()).collect(Collectors.toList());
+    reportFail(new VerCorsError(
+            ec, sc,
+            primaryOrigin.getOrigin(),
+            auxOrigin
+    ));
+    Fail(message);
+  }
+
+  public static boolean isCheckedException(ProgramUnit source, Type t) {
+    ClassType javaLangException = new ClassType(ClassType.javaLangExceptionName());
+    ClassType javaLangRuntimeException = new ClassType(ClassType.javaLangRuntimeExceptionName());
+
+    return !(t.equals(javaLangException))
+            && javaLangException.supertypeof(source, t)
+            && !javaLangRuntimeException.supertypeof(source, t);
+  }
+
+  private boolean isThrowableType(Type t) {
+    /* When AddTypeADT has occurred, EncodeTryThrowSignals is about to encode the typing rules using the TYPE ADT. */
+    if(source().find_decl(new String[]{"TYPE"}) != null) {
+      return true;
+    }
+
+    if (t instanceof ClassType) {
+      ASTClass astClass = (ASTClass)((ClassType) t).definitionJava(source(), JavaASTClassLoader.INSTANCE(), currentNamespace);
+      if (astClass.kind == ASTClass.ClassKind.Record) {
+        return true;
+      }
+    }
+
+    ClassType throwableType = new ClassType(ClassType.javaLangThrowableName());
+    ClassType unflatThrowableType = new ClassType(new String[]{"java", "lang", "Throwable"});
+    visit(unflatThrowableType); // collect definition
+
+    return throwableType.supertypeof(source(), t) // Actually throwable
+            || unflatThrowableType.supertypeof(source(), t)
+            || (t.toString().startsWith("__") && t.toString().endsWith("_ex")); // We defined it (sorry, hacky!)
+  }
 
   public void check(){
     for(ASTDeclaration entry:source().get()){
@@ -49,12 +196,10 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
     }
   }
 
-  public AbstractTypeCheck(PassReport report, ProgramUnit arg){
+  public TypeCheck(PassReport report, ProgramUnit arg){
     super(arg,true);
     this.report = report;
   }
-
-  protected NameSpace currentNamespace = null;
 
   public void visit(NameSpace ns) {
     if(currentNamespace != null) {
@@ -242,23 +387,27 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
     throw null;
   }
 
-  public void visit(MethodInvokation e){
-    super.visit(e);
+  public void visit(MethodInvokation methodInvokation){
+    super.visit(methodInvokation);
+    if (methodInvokation.definition() != null && (methodInvokation.definition().getKind() == Method.Kind.Constructor || methodInvokation.definition().getKind() == Method.Kind.Plain)) {
+      // Any types that the method has declared, can become live when calling this method
+      liveExceptionTypes.addAll(Arrays.asList(methodInvokation.definition().signals));
+    }
     ClassType object_type=null;
-    if (e.object()!=null){
-      if(e.object().getType()==null){
-        Fail("object has no type at %s",e.object().getOrigin());
+    if (methodInvokation.object()!=null){
+      if(methodInvokation.object().getType()==null){
+        Fail("object has no type at %s",methodInvokation.object().getOrigin());
       }
-      if (!(e.object().getType() instanceof ClassType)){
+      if (!(methodInvokation.object().getType() instanceof ClassType)){
         Fail("invokation on non-class");
       }
-      object_type=(ClassType)e.object().getType();
+      object_type=(ClassType)methodInvokation.object().getType();
     }
-    int N=e.getArity();
+    int N=methodInvokation.getArity();
     for(int i=0;i<N;i++){
-      if (e.getArg(i).labels()>0) {
+      if (methodInvokation.getArg(i).labels()>0) {
         for(int j=i+1;j<N;j++){
-          if (e.getArg(j).labels()==0) Fail("positional argument following named argument");
+          if (methodInvokation.getArg(j).labels()==0) Fail("positional argument following named argument");
         }
         N=i;
         break;
@@ -266,12 +415,12 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
     }
     Type type[]=new Type[N];
     for(int i=0;i<N;i++){
-      type[i]=e.getArg(i).getType();
+      type[i]=methodInvokation.getArg(i).getType();
       if (type[i]==null) Abort("argument %d has no type.",i);
     }
 
-    Method m=find_method(e);
-    e.setDefinition(m);
+    Method m=find_method(methodInvokation);
+    methodInvokation.setDefinition(m);
 
     if(current_method() != null && current_method().getKind() == Method.Kind.Pure && (m.getKind() != Method.Kind.Pure && m.getKind() != Method.Kind.Predicate)) {
       // We're in the body of a pure method, but neither is the invoked method pure, nor are we applying a predicate
@@ -286,18 +435,18 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
       Type t=m.getReturnType();
       Map<String,Type> map=new HashMap<String, Type>();
       TypeVarSubstitution sigma=new TypeVarSubstitution(source(),map);
-      if (!(e.object() instanceof ClassType)){
-        Fail("%s is not an ADT in %s",e.object(),e);
+      if (!(methodInvokation.object() instanceof ClassType)){
+        Fail("%s is not an ADT in %s",methodInvokation.object(),methodInvokation);
       }
-      SilverTypeMap.get_adt_subst(sigma.copy_rw,map,(ClassType)e.object());
-      e.setType(sigma.rewrite(t));
-      e.getType().accept(this);
+      SilverTypeMap.get_adt_subst(sigma.copy_rw,map,(ClassType)methodInvokation.object());
+      methodInvokation.setType(sigma.rewrite(t));
+      methodInvokation.getType().accept(this);
       return;
     }
 
     for(int i = 0; i < N; i++) {
       Type argType = m.getArgType(i);
-      ASTNode arg = e.getArg(i);
+      ASTNode arg = methodInvokation.getArg(i);
 
       if(argType.isPrimitive(PrimitiveSort.Option)) {
         arg.setType(argType);
@@ -311,7 +460,7 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
      */
     for(int i=0;i<N;i++){
       Type ti=m.getArgType(i);
-      ASTNode arg=e.getArg(i);
+      ASTNode arg=methodInvokation.getArg(i);
       if (!ti.supertypeof(arg.getType(), Option.apply(source()), Option.apply(JavaASTClassLoader.INSTANCE()), Option.apply(currentNamespace))){
         boolean argAssignable =
                 (arg instanceof Dereference || arg instanceof FieldAccess)
@@ -439,37 +588,37 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
         */
     switch(m.kind){
     case Constructor:
-      if (e.dispatch()!=null){
-        e.setType(e.dispatch());
+      if (methodInvokation.dispatch()!=null){
+        methodInvokation.setType(methodInvokation.dispatch());
       } else {
-        e.setType((Type)e.object());
+        methodInvokation.setType((Type)methodInvokation.object());
       }
       break;
     case Predicate:
       for(int i=0;i<N;i++){
         if (type[i].isPrimitive(PrimitiveSort.Fraction)){
-          force_frac(e.getArg(i));
+          force_frac(methodInvokation.getArg(i));
         }
       }
-      e.setType(new PrimitiveType(PrimitiveSort.Resource));
+      methodInvokation.setType(new PrimitiveType(PrimitiveSort.Resource));
       break;
     default:
       {
         MultiSubstitution sigma=m.getSubstitution(object_type);
-        e.setType(sigma.rewrite(m.getReturnType()));
-        e.getType().accept(this);
+        methodInvokation.setType(sigma.rewrite(m.getReturnType()));
+        methodInvokation.getType().accept(this);
         break;
       }
     }
-    if (e.get_before()!=null) {
-      enter_before(e);
-      e.get_before().accept(this);
-      leave_before(e);
+    if (methodInvokation.get_before()!=null) {
+      enter_before(methodInvokation);
+      methodInvokation.get_before().accept(this);
+      leave_before(methodInvokation);
     }
-    if (e.get_after()!=null) {
-      enter_after(e);
-      e.get_after().accept(this);
-      leave_after(e);
+    if (methodInvokation.get_after()!=null) {
+      enter_after(methodInvokation);
+      methodInvokation.get_after().accept(this);
+      leave_after(methodInvokation);
     }
     auto_before_after=false;
   }
@@ -552,10 +701,38 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
   }
 
   public void visit(Method m){
-    super.visit(m);
+    liveExceptionTypes = new HashSet<>();
     String name=m.getName();
     ASTNode body=m.getBody();
     Contract contract=m.getContract();
+
+    super.visit(m);
+
+    if (m.getKind() == Method.Kind.Pure && m.canThrowSpec()) {
+      Fail("Pure methods cannot throw exceptions");
+    }
+
+    for (Type t : m.signals) {
+      if (!(t instanceof ClassType)) {
+        Fail("Throws type can only be class");
+      }
+
+      ClassType ct = (ClassType) t;
+      if (!isThrowableType(ct)) {
+        Fail("Throws type must extend throwable");
+      }
+
+      // Remove throws type from the live exception types.
+      // Any types leftover have to be unchecked!
+      liveExceptionTypes.remove(t);
+    }
+
+    for (Type t : liveExceptionTypes) {
+      if (isCheckedException(source(), t)) {
+        reportFail(String.format("Cannot throw checked exception of type %s without adding it to the throws list", t),
+                VerCorsError.ErrorCode.TypeError, VerCorsError.SubCode.UnlistedExceptionType, m);
+      }
+    }
 
     if (contract!=null){
       if(contract.pre_condition.isConstant(false)) {
@@ -612,21 +789,26 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
       check_loc_val(m.getReturnType(),body,"return type (%s) does not match body (%s)");
     }
   }
-  public void visit(NameExpression e){
-    super.visit(e);
-    Debug("%s name %s",e.getKind(),e.getName());
-    NameExpressionKind kind = e.getKind();
-    String name=e.getName();
+  public void visit(NameExpression nameExpression){
+    super.visit(nameExpression);
+    Debug("%s name %s",nameExpression.getKind(),nameExpression.getName());
+    NameExpressionKind kind = nameExpression.getKind();
+    String name=nameExpression.getName();
+
+    if (nameExpression.isReserved(ASTReserved.Result) && inSignals) {
+      nameExpression.getOrigin().report("error", "Using \\result in signals is not allowed");
+      Fail("Using \\result in signals is not allowed");
+    }
 
     if (kind == NameExpressionKind.Unresolved) {
       VariableInfo info = variables.lookup(name);
       if (info != null) {
         Debug("unresolved %s name %s found during type check", info.kind, name);
-        e.setKind(info.kind);
+        nameExpression.setKind(info.kind);
         kind = info.kind;
       } else {
-        e.setType(new ClassType(e.name()));
-        e.getType().accept(this);
+        nameExpression.setType(new ClassType(nameExpression.name()));
+        nameExpression.getType().accept(this);
         return;
       }
     }
@@ -640,10 +822,10 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
           for(String v:variables.keySet()){
             Debug("var %s : %s",v,variables.lookup(v).reference.getType());
           }
-          e.getOrigin().report("undefined.name",String.format("%s name %s is undefined",kind,name));
+          nameExpression.getOrigin().report("undefined.name",String.format("%s name %s is undefined",kind,name));
           Fail("fatal error");
         } else {
-          e.setSite(info.reference);
+          nameExpression.setSite(info.reference);
           if (info.kind != kind) {
             if ((kind == NameExpressionKind.Local && info.kind == NameExpressionKind.Argument)
                     || (kind == NameExpressionKind.Argument && info.kind == NameExpressionKind.Local)) {
@@ -653,20 +835,20 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
             }
           }
           DeclarationStatement decl = (DeclarationStatement) info.reference;
-          e.setType(decl.getType());
-          e.getType().accept(this);
+          nameExpression.setType(decl.getType());
+          nameExpression.getType().accept(this);
         }
         break;
       }
       case Method:
-        if (e.getType()!=null){
+        if (nameExpression.getType()!=null){
           Abort("type of member %s has been set illegally",name);
         }
         break;
       case Reserved:
-        switch(e.reserved()){
+        switch(nameExpression.reserved()){
         case EmptyProcess:{
-          e.setType(new PrimitiveType(PrimitiveSort.Process));
+          nameExpression.setType(new PrimitiveType(PrimitiveSort.Process));
           break;
         }
         case This:{
@@ -676,32 +858,32 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
           } else {
             ClassType t = new ClassType(cl.getFullName());
             t.setDefinition(cl);
-            e.setType(t);
+            nameExpression.setType(t);
           }
           break;
         }
         case Null:{
-          e.setType(new ClassType("<<null>>"));
+          nameExpression.setType(new ClassType("<<null>>"));
           break;
         }
         case FullPerm:{
-          e.setType(new PrimitiveType(PrimitiveSort.Fraction));
+          nameExpression.setType(new PrimitiveType(PrimitiveSort.Fraction));
           break;
         }
         case ReadPerm:{
-          e.setType(new PrimitiveType(PrimitiveSort.Fraction));
+          nameExpression.setType(new PrimitiveType(PrimitiveSort.Fraction));
           break;
         }
         case NoPerm:{
-          e.setType(new PrimitiveType(PrimitiveSort.ZFraction));
+          nameExpression.setType(new PrimitiveType(PrimitiveSort.ZFraction));
           break;
         }
         case CurrentThread:{
-          e.setType(new PrimitiveType(PrimitiveSort.Integer));
+          nameExpression.setType(new PrimitiveType(PrimitiveSort.Integer));
           break;
         }
         case OptionNone:{
-          e.setType(new PrimitiveType(PrimitiveSort.Option,
+          nameExpression.setType(new PrimitiveType(PrimitiveSort.Option,
               new ClassType("<<null>>")));
           break;
         }
@@ -710,7 +892,7 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
           if (m==null){
             Fail("Use of result keyword outside of a method context.");
           } else {
-            e.setType(m.getReturnType());
+            nameExpression.setType(m.getReturnType());
           }
           break;
         }
@@ -722,17 +904,17 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
             if (cl.super_classes.length == 0) {
               Fail("class %s does not have a super type", cl.getName());
             }
-            e.setType(cl.super_classes[0]);
+            nameExpression.setType(cl.super_classes[0]);
           }
           break;
         }
       case Any:{
-          e.setType(new PrimitiveType(PrimitiveSort.Integer));
+          nameExpression.setType(new PrimitiveType(PrimitiveSort.Integer));
           break;
         }
       case LocalThreadId:
       case GlobalThreadId:
-          e.setType(new PrimitiveType(PrimitiveSort.Integer));
+          nameExpression.setType(new PrimitiveType(PrimitiveSort.Integer));
           break;
         default:
             Abort("missing case for reserved name %s",name);
@@ -746,28 +928,28 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
           case "tid":
           case "gid":
           case "lid":
-            e.setType(new PrimitiveType(PrimitiveSort.Integer));
+            nameExpression.setType(new PrimitiveType(PrimitiveSort.Integer));
             break;
           default:
             for(String n:this.variables.keySet()){
               Debug("var %s: ...",n);
             }
-            Abort("unresolved name %s found during type check at %s",name,e.getOrigin());
+            Abort("unresolved name %s found during type check at %s",name,nameExpression.getOrigin());
         }
         break;
       }
       case ADT:
-        e.setType(new ClassType("<<adt>>"));
+        nameExpression.setType(new ClassType("<<adt>>"));
         break;
       case Label:
-        e.setType(new ClassType("<<label>>"));
+        nameExpression.setType(new ClassType("<<label>>"));
         break;
       case Output:
         VariableInfo info=variables.lookup(name);
         if (info==null) {
           Abort("%s name %s is undefined",kind,name);
         } else {
-          e.setType(info.reference.getType());
+          nameExpression.setType(info.reference.getType());
         }
         break;
       default:
@@ -2102,69 +2284,81 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
   }
 
   @Override
-  public void visit(ASTSpecial s){
-    super.visit(s);
-    Debug("special %s",s.kind);
-    for(ASTNode n:s.args){
+  public void visit(ASTSpecial special){
+    super.visit(special);
+    Debug("special %s",special.kind);
+    for(ASTNode n:special.args){
       if(!(n instanceof ExpressionNode)) continue;
 
       Type t=n.getType();
       if (t==null){
-        Abort("untyped argument to %s: %s",s.kind, Configuration.getDiagSyntax().print(n));
+        Abort("untyped argument to %s: %s",special.kind, Configuration.getDiagSyntax().print(n));
       }
     }
     Type t1;
-    switch(s.kind){
-    case Fresh:{
-      // TODO: check arguments.
-      break;
-    }
-    case Recv:
-    case Send:{
-      t1=s.args[0].getType();
-      Objects.requireNonNull(t1, () -> String.format("type of left argument is unknown at %s", s.getOrigin()));
-      if (!t1.isResource()) Fail("type of left argument is %s rather than resource at %s",t1,s.getOrigin());
-      break;
-    }
-    case Fold:
-    case Unfold:
-    case Open:
-    case Close:
-    {
-      ASTNode arg=s.args[0];
-      if (!(arg instanceof MethodInvokation) && !(arg.isa(StandardOperator.Scale))){
-        Fail("At %s: argument of [%s] must be a (scaled) predicate invokation",arg.getOrigin(),s.kind);
+    switch(special.kind){
+      case Fresh:{
+        // TODO: check arguments.
+        break;
       }
-      if (arg instanceof MethodInvokation){
-        MethodInvokation prop=(MethodInvokation)arg;
-        if (prop.getDefinition().kind != Method.Kind.Predicate &&
-                !(prop.getDefinition().kind == Method.Kind.Pure &&
-                  prop.getDefinition().getReturnType().isPrimitive(PrimitiveSort.Resource))) {
-          Fail("At %s: argument of [%s] must be predicate and not %s",arg.getOrigin(),s.kind,prop.getDefinition().kind);
+      case Recv:
+      case Send:{
+        t1=special.args[0].getType();
+        Objects.requireNonNull(t1, () -> String.format("type of left argument is unknown at %s", special.getOrigin()));
+        if (!t1.isResource()) Fail("type of left argument is %s rather than resource at %s",t1,special.getOrigin());
+        break;
+      }
+      case Fold:
+      case Unfold:
+      case Open:
+      case Close:
+      {
+        ASTNode arg=special.args[0];
+        if (!(arg instanceof MethodInvokation) && !(arg.isa(StandardOperator.Scale))){
+          Fail("At %s: argument of [%s] must be a (scaled) predicate invokation",arg.getOrigin(),special.kind);
+        }
+        if (arg instanceof MethodInvokation){
+          MethodInvokation prop=(MethodInvokation)arg;
+          if (prop.getDefinition().kind != Method.Kind.Predicate &&
+                  !(prop.getDefinition().kind == Method.Kind.Pure &&
+                          prop.getDefinition().getReturnType().isPrimitive(PrimitiveSort.Resource))) {
+            Fail("At %s: argument of [%s] must be predicate and not %s",arg.getOrigin(),special.kind,prop.getDefinition().kind);
+          }
+        }
+        special.setType(new PrimitiveType(PrimitiveSort.Void));
+        break;
+      }
+      case Use:
+      case QED:
+      case Apply:
+      case Refute:
+      case Assert:
+      case HoarePredicate:
+      case Assume:
+      case Witness:
+      {
+        Type t=special.args[0].getType();
+        Objects.requireNonNull(t, () -> String.format("type of argument is unknown at %s", special.getOrigin()));
+        if (!t.isBoolean()&&!t.isPrimitive(PrimitiveSort.Resource)){
+          Fail("Argument of %s must be boolean or resource at %s",special.kind,special.getOrigin());
+        }
+        special.setType(new PrimitiveType(PrimitiveSort.Void));
+        break;
+      }
+      case Throw:
+      {
+        ASTNode throwee = special.getArg(0);
+        if (!isThrowableType(throwee.getType())) {
+          reportFail("Type of thrown expression needs to extend Throwable",
+                  VerCorsError.ErrorCode.TypeError, VerCorsError.SubCode.ExtendsThrowable,
+                  throwee, special);
+        } else {
+          liveExceptionTypes.add(throwee.getType());
         }
       }
-      s.setType(new PrimitiveType(PrimitiveSort.Void));
-      break;
+
     }
-    case Use:
-    case QED:
-    case Apply:
-    case Refute:
-    case Assert:
-    case HoarePredicate:
-    case Assume:
-    case Witness:
-    {
-      Type t=s.args[0].getType();
-      Objects.requireNonNull(t, () -> String.format("type of argument is unknown at %s", s.getOrigin()));
-      if (!t.isBoolean()&&!t.isPrimitive(PrimitiveSort.Resource)){
-        Fail("Argument of %s must be boolean or resource at %s",s.kind,s.getOrigin());
-      }
-      s.setType(new PrimitiveType(PrimitiveSort.Void));
-      break;
-    }
-    }
-    s.setType(new PrimitiveType(PrimitiveSort.Void));
+    special.setType(new PrimitiveType(PrimitiveSort.Void));
   }
 
   @Override
