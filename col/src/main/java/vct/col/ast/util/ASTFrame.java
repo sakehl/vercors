@@ -1,7 +1,6 @@
 package vct.col.ast.util;
 
 import hre.lang.Failure;
-import hre.util.SingleNameSpace;
 import scala.Option;
 import vct.col.ast.expr.*;
 import vct.col.ast.generic.ASTNode;
@@ -18,34 +17,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  */
 public abstract class ASTFrame<T> {
-  
-  /**
-   * Information record for variables.
-   * 
-   * @author Stefan Blom
-   */
-  public static class VariableInfo {
-    
-    /**
-     * Reference to the place where the variable was defined.
-     */
-    public final ASTNode reference;
-    
-    /**
-     * Stores the kind of the variable.
-     */
-    public final NameExpressionKind kind;
-    
-    /**
-     * Constructor for a variable info record.
-     */
-    public VariableInfo(ASTNode reference, NameExpressionKind kind){
-      this.reference=reference;
-      this.kind=kind;
-    }
-  }
-  
-  public final SingleNameSpace<String,VariableInfo> variables;
+
+  public final SingleNameSpace variables;
   
   /**
    * Field for communicating return value.
@@ -108,7 +81,7 @@ public abstract class ASTFrame<T> {
     method_stack=new Stack<Method>();
     result_stack=new Stack<T>();
     result_ref=new AtomicReference<T>();
-    variables=new SingleNameSpace<String,VariableInfo>();
+    variables=new SingleNameSpace();
     scope=new ManageScope();
   }
   

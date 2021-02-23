@@ -389,10 +389,7 @@ public class TypeCheck extends RecursiveVisitor<Type> {
 
   public void visit(MethodInvokation methodInvokation){
     super.visit(methodInvokation);
-    if (methodInvokation.definition() != null && (methodInvokation.definition().getKind() == Method.Kind.Constructor || methodInvokation.definition().getKind() == Method.Kind.Plain)) {
-      // Any types that the method has declared, can become live when calling this method
-      liveExceptionTypes.addAll(Arrays.asList(methodInvokation.definition().signals));
-    }
+
     ClassType object_type=null;
     if (methodInvokation.object()!=null){
       if(methodInvokation.object().getType()==null){
@@ -450,6 +447,11 @@ public class TypeCheck extends RecursiveVisitor<Type> {
 
       if(argType.isPrimitive(PrimitiveSort.Option)) {
         arg.setType(argType);
+      }
+
+      if (methodInvokation.definition() != null && (methodInvokation.definition().getKind() == Method.Kind.Constructor || methodInvokation.definition().getKind() == Method.Kind.Plain)) {
+        // Any types that the method has declared, can become live when calling this method
+        liveExceptionTypes.addAll(Arrays.asList(methodInvokation.definition().signals));
       }
     }
 

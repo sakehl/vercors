@@ -1,4 +1,4 @@
-package hre.util;
+package vct.col.ast.util;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -6,29 +6,34 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 
+import static hre.lang.System.Fail;
+
 /**
  * A name space with a single definition per name.
  * 
  * @author Stefan Blom
  *
- * @param <K>
- * @param <D>
  */
-public class SingleNameSpace<K,D> implements Map<K,D> {
+public class SingleNameSpace implements Map<String, VariableInfo> {
 
-  private Stack<Map<K,D>> stack=new Stack<Map<K, D>>();
+  private Stack<Map<String, VariableInfo>> stack=new Stack<Map<String, VariableInfo>>();
   
-  private Map<K,D> map=new HashMap<K, D>();
+  private Map<String, VariableInfo> map=new HashMap<String, VariableInfo>();
  
   public void enter(){
     stack.push(map);
-    map=new HashMap<K, D>();
+    map=new HashMap<String, VariableInfo>();
     map.putAll(stack.peek());
   }
-  public D lookup(K name){
+  public VariableInfo lookup(String name){
     return map.get(name);
   }
-  public void add(K name,D def){
+  public void add(String name, VariableInfo def){
+    if(map.containsKey(name)){
+      def.reference.getOrigin().report("","Duplicate declaration found");
+      map.get(name).reference.getOrigin().report("","Original declaration");
+      Fail("");
+    }
     map.put(name, def);
   }
   public void leave(){
@@ -52,19 +57,19 @@ public class SingleNameSpace<K,D> implements Map<K,D> {
     return map.containsValue(value);
   }
   @Override
-  public D get(Object key) {
+  public VariableInfo get(Object key) {
     return map.get(key);
   }
   @Override
-  public D put(K key, D value) {
+  public VariableInfo put(String key, VariableInfo value) {
     return map.put(key, value);
   }
   @Override
-  public D remove(Object key) {
+  public VariableInfo remove(Object key) {
     return map.remove(key);
   }
   @Override
-  public void putAll(Map<? extends K, ? extends D> m) {
+  public void putAll(Map<? extends String, ? extends VariableInfo> m) {
     map.putAll(m);
   }
   @Override
@@ -72,15 +77,15 @@ public class SingleNameSpace<K,D> implements Map<K,D> {
     map.clear();
   }
   @Override
-  public Set<K> keySet() {
+  public Set<String> keySet() {
     return map.keySet();
   }
   @Override
-  public Collection<D> values() {
+  public Collection<VariableInfo> values() {
     return map.values();
   }
   @Override
-  public Set<java.util.Map.Entry<K, D>> entrySet() {
+  public Set<java.util.Map.Entry<String, VariableInfo>> entrySet() {
     return map.entrySet();
   }
 }
