@@ -939,7 +939,7 @@ case class JavaJMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: Jav
       create reserved_name ASTReserved.CurrentThread
     case ValPrimary9(_, binderName, t, id, "=", fr, "..", to, _, main, _) =>
       val name = convertID(id)
-      val decl = create field_decl(name, convertType(t))
+      val decl = origin(exp,create field_decl(name, convertType(t)))
       val guard = create expression(StandardOperator.And,
         create expression(LTE, expr(fr), create unresolved_name(name)),
         create expression(StandardOperator.LT, create unresolved_name(name), expr(to))
@@ -950,7 +950,7 @@ case class JavaJMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: Jav
         case "\\exists" => create exists(guard, expr(main), decl)
       }
     case ValPrimary10(_, binderName, t, id, _, guard, _, main, _) =>
-      val decl = create field_decl(convertID(id), convertType(t))
+      val decl = origin(exp,create field_decl(convertID(id), convertType(t)))
       binderName match {
         case "\\forall*" => create starall(expr(guard), expr(main), decl)
         case "\\forall" => create forall(expr(guard), expr(main), decl)

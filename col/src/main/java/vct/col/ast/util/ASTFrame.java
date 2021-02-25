@@ -448,9 +448,6 @@ public abstract class ASTFrame<T> {
       switch(action){
       case ENTER:
         variables.enter();
-        for(DeclarationStatement decl:((BindingExpression)node).getDeclarations()){
-          variables.add(decl.name(), new VariableInfo(decl, NameExpressionKind.Local));
-        }
         break;
       case LEAVE:
         variables.leave();

@@ -64,7 +64,6 @@ class MatchLinear implements ASTMapping1<Boolean,ASTNode> {
 
   @Override
   public Boolean map(StandardProcedure p, ASTNode a) {
-    
     return null;
   }
 
