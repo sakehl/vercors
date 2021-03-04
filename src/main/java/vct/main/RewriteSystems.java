@@ -33,7 +33,7 @@ public class RewriteSystems {
 
       }
     }
-    return new RewriteSystem(unit,name);
+    return new RewriteSystem(unit,name,true);
   }
 
 }

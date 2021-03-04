@@ -1,11 +1,11 @@
 package vct.col.ast.util;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.Stack;
+import hre.lang.HREException;
+import hre.lang.HREExitException;
 
+import java.util.*;
+
+import static hre.lang.System.DebugException;
 import static hre.lang.System.Fail;
 
 /**
@@ -30,6 +30,8 @@ public class SingleNameSpace implements Map<String, VariableInfo> {
   }
   public void add(String name, VariableInfo def){
     if(map.containsKey(name)){
+      //throw new HREExitException(1);
+      def.reference.getOrigin().report("", Arrays.toString(Thread.currentThread().getStackTrace()));
       def.reference.getOrigin().report("","Duplicate declaration found");
       map.get(name).reference.getOrigin().report("","Original declaration");
       Fail("");
