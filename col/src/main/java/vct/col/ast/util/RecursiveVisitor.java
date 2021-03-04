@@ -39,6 +39,9 @@ public class RecursiveVisitor<T> extends ASTFrame<T> implements ASTVisitor<T> {
   public RecursiveVisitor(ProgramUnit source, ProgramUnit target,boolean do_scope) {
     super(source, target,do_scope);
   }
+  public RecursiveVisitor(ProgramUnit source, ProgramUnit target,boolean do_scope, boolean allowShadowVariables) {
+    super(source, target,do_scope, allowShadowVariables);
+  }
 
   @Override
   public void pre_visit(ASTNode n) {

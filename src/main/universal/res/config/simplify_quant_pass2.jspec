@@ -6,6 +6,7 @@ class simplify_quant_pass2 {
   boolean b1,b2,b3,b4;
   resource r1,r2;
   rational p1,p2;
+  int i;
   
   int ar[];
   

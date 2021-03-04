@@ -56,7 +56,10 @@ public class TypeCheck extends RecursiveVisitor<Type> {
   }
 
   public TypeCheck(PassReport report, ProgramUnit arg){
-    super(arg,true);
+    this(report, arg, false);
+  }
+  public TypeCheck(PassReport report, ProgramUnit arg, boolean allowShadowVariables){
+    super(arg,null,true,allowShadowVariables);
     this.report = report;
   }
 

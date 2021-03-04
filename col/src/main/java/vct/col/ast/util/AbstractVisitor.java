@@ -44,7 +44,11 @@ public class AbstractVisitor<T> extends ASTFrame<T> implements ASTVisitor<T> {
   public AbstractVisitor(ProgramUnit source,ProgramUnit target,boolean do_scope) {
     super(source,target,do_scope);
   }
-  
+
+  public AbstractVisitor(ProgramUnit source,ProgramUnit target,boolean do_scope, boolean allowShadowVariables) {
+    super(source,target,do_scope,allowShadowVariables);
+  }
+
   public AbstractVisitor(ASTFrame<T> shared) {
     super(shared);
   }

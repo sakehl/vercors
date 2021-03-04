@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import vct.col.ast.stmt.decl.ProgramUnit;
+import vct.col.ast.util.SingleNameSpaceWithShadowVariables;
 import vct.col.rewrite.JavaResolver;
 import vct.col.rewrite.RewriteSystem;
 import vct.col.util.TypeCheck;
@@ -20,13 +21,16 @@ public class RewriteSystems {
       f=Configuration.getConfigFile(name + ".jspec");
     }
     ProgramUnit unit=systems.get(f);
-    if (unit==null) synchronized(systems){
+    if (unit==null) synchronized(systems) {
       unit=systems.get(f);
       if (unit==null){
-        unit=Parsers.getParser("jspec").parse(f);
-        unit=new JavaResolver(unit).rewriteAll();
-        new TypeCheck(null, unit).check();
+        unit = Parsers.getParser("jspec").parse(f);
+        var javaResolver = new JavaResolver(unit,true);
+        var typeCheck = new TypeCheck(null, unit,true);
+        unit = javaResolver.rewriteAll();
+        typeCheck.check();
         systems.put(f, unit);
+
       }
     }
     return new RewriteSystem(unit,name);

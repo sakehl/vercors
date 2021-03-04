@@ -65,15 +65,19 @@ public abstract class ASTFrame<T> {
    * @param source
    */
   public ASTFrame(ProgramUnit source,boolean do_scope){
-    this(source,null,do_scope);
+    this(source,null,do_scope,false);
   }
-  
+
+  public ASTFrame(ProgramUnit source,ProgramUnit target,boolean do_scope){
+    this(source,target,do_scope, false);
+  }
+
   /**
    * Create a new frame with both source and target program units.
    * 
    * @param source
    */
-  public ASTFrame(ProgramUnit source,ProgramUnit target,boolean do_scope){
+  public ASTFrame(ProgramUnit source,ProgramUnit target,boolean do_scope, boolean allowShadowVariables){
     this.source=source;
     this.target=target;
     node_stack=new Stack<ASTNode>();
@@ -81,7 +85,11 @@ public abstract class ASTFrame<T> {
     method_stack=new Stack<Method>();
     result_stack=new Stack<T>();
     result_ref=new AtomicReference<T>();
-    variables=new SingleNameSpace();
+    if(allowShadowVariables){
+      variables=new SingleNameSpaceWithShadowVariables();
+    }else{
+      variables=new SingleNameSpace();
+    }
     scope=new ManageScope();
   }
   

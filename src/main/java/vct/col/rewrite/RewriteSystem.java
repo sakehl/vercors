@@ -597,9 +597,11 @@ public class RewriteSystem {
     }
     return false;
   }
-  
   public RewriteSystem(ProgramUnit pu,String sys){
-    normalize=new AbstractRewriter(pu){
+    this(pu,sys,false);
+  }
+  public RewriteSystem(ProgramUnit pu,String sys, boolean allowShadowVariables){
+    normalize=new AbstractRewriter(pu, false, allowShadowVariables){
       @Override
       public void post_visit(ASTNode node){
         Ref<ASTNode> ref=new Ref<ASTNode>(result);

@@ -16,9 +16,9 @@ import static hre.lang.System.Fail;
  */
 public class SingleNameSpace implements Map<String, VariableInfo> {
 
-  private Stack<Map<String, VariableInfo>> stack=new Stack<Map<String, VariableInfo>>();
+  protected Stack<Map<String, VariableInfo>> stack=new Stack<Map<String, VariableInfo>>();
   
-  private Map<String, VariableInfo> map=new HashMap<String, VariableInfo>();
+  protected Map<String, VariableInfo> map=new HashMap<String, VariableInfo>();
  
   public void enter(){
     stack.push(map);

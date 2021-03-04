@@ -7,6 +7,7 @@ class simplify_quant_pass1 {
   resource r1,r2;
   int i,j;
   rational p1,p2;
+  int l;
 
   axiom aunitr { e1+0 == e1 }
   axiom aunitl { 0+e1 == e1 }

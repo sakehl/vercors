@@ -48,8 +48,8 @@ public class AbstractRewriter extends AbstractVisitor<ASTNode> {
     create=new ASTFactory<Object>(copy_rw);
   }
 
-  public AbstractRewriter(ProgramUnit source,ProgramUnit target,boolean do_scope){
-    super(source,target,do_scope);
+  public AbstractRewriter(ProgramUnit source,ProgramUnit target,boolean do_scope, boolean allowShadowVariables){
+    super(source,target,do_scope,allowShadowVariables);
     AbstractRewriter tmp=tl.get();
     if(tmp==null){
       tmp=new AbstractRewriter(Thread.currentThread());
@@ -58,8 +58,13 @@ public class AbstractRewriter extends AbstractVisitor<ASTNode> {
     copy_rw=tmp;
     create=new ASTFactory<Object>(copy_rw);    
   }
+
+  public AbstractRewriter(ProgramUnit source,ProgramUnit target,boolean do_scope){
+    this(source,target,do_scope, false);
+  }
+
   public AbstractRewriter(ProgramUnit source,ProgramUnit target){
-    this(source,target,false);
+    this(source,target,false, false);
   }
 
   /**
@@ -107,9 +112,13 @@ public class AbstractRewriter extends AbstractVisitor<ASTNode> {
   public AbstractRewriter(ProgramUnit source){
     this(source,new ProgramUnit(source),false);
   }
-  
+
   public AbstractRewriter(ProgramUnit source,boolean do_scope){
     this(source,new ProgramUnit(source),do_scope);
+  }
+
+  public AbstractRewriter(ProgramUnit source,boolean do_scope, boolean allowShadowVariables){
+    this(source,new ProgramUnit(source),do_scope, allowShadowVariables);
   }
   
   public void pre_visit(ASTNode n){

@@ -11,10 +11,12 @@ import scala.collection.JavaConverters._
 
 object JavaResolver {
   val DOT = "_DOT_"
+
 }
 
-case class JavaResolver(override val source: ProgramUnit) extends AbstractRewriter(source) {
+case class JavaResolver(override val source: ProgramUnit)(allowShadowVariables: Boolean = false) extends AbstractRewriter(source,false,allowShadowVariables) {
   var currentNamespace: Option[NameSpace] = None
+
 
   override def visit(ns: NameSpace): Unit = {
     if(currentNamespace.isEmpty) {
@@ -44,7 +46,7 @@ case class JavaResolver(override val source: ProgramUnit) extends AbstractRewrit
         rewrite(cls.implemented_classes),
       )
 
-      cls.asScala.map(rewrite(_)).foreach(res add)
+      cls.asScala.map(rewrite(_)).foreach(res.add)
       result = res
     } else {
       super.visit(cls)

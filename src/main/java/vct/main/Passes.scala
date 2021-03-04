@@ -137,7 +137,7 @@ object Passes {
     ),
     SimplePass(
       "loadExternalClasses", "Resolve the library dependencies of a java program",
-      new JavaResolver(_).rewriteAll,
+      new JavaResolver(_)().rewriteAll,
       permits=Feature.DEFAULT_PERMIT - features.StringClass ++ Feature.OPTION_GATES ++ Set(
         features.ArrayOps,
         features.NonVoidMethods,
