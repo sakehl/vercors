@@ -5,9 +5,9 @@ class simplify_quant_pass2 {
   int e1,e2,e3,e4,e5,e6,e7,e8;
   boolean b1,b2,b3,b4;
   resource r1,r2;
+  int i,j,k;
   rational p1,p2;
-  int i;
-  
+
   int ar[];
 
   axiom aunitr { e1+0 == e1 }
