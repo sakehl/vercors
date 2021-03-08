@@ -281,6 +281,7 @@ public class RecursiveVisitor<T> extends ASTFrame<T> implements ASTVisitor<T> {
     dispatch(c.parameters);
     dispatch(c.implemented_classes);
     dispatch(c.super_classes);
+    dispatch(c.getContract());
     for(ASTNode decl : c) {
       decl.accept(this);
     }
