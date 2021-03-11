@@ -1142,7 +1142,7 @@ public class TypeCheck extends RecursiveVisitor<Type> {
       case AddAssign:
       case SubAssign:
       case MulAssign:
-      case DivAssign:
+      case FloorDivAssign:
       case RemAssign:
       case AndAssign:
       case XorAssign:
