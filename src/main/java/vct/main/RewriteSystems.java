@@ -22,15 +22,14 @@ public class RewriteSystems {
     }
     ProgramUnit unit=systems.get(f);
     if (unit==null) synchronized(systems) {
-      unit=systems.get(f);
-      if (unit==null){
+      unit = systems.get(f);
+      if (unit == null) {
         unit = Parsers.getParser("jspec").parse(f);
-        var javaResolver = new JavaResolver(unit,true);
-        var typeCheck = new TypeCheck(null, unit,true);
+        var javaResolver = new JavaResolver(unit, true);
         unit = javaResolver.rewriteAll();
+        var typeCheck = new TypeCheck(null, unit, true);
         typeCheck.check();
         systems.put(f, unit);
-
       }
     }
     return new RewriteSystem(unit,name,true);

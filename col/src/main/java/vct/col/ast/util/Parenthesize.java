@@ -14,7 +14,7 @@ public class Parenthesize extends AbstractRewriter {
   private final Syntax syntax;
 
   public Parenthesize(Syntax syntax){
-    super(null,null);
+    super(null,null,false,true);
     this.syntax=syntax;
   }
 
