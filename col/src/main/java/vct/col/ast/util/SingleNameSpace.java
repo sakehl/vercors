@@ -2,6 +2,7 @@ package vct.col.ast.util;
 
 import hre.lang.HREException;
 import hre.lang.HREExitException;
+import vct.col.ast.expr.NameExpressionKind;
 
 import java.util.*;
 
@@ -30,11 +31,12 @@ public class SingleNameSpace implements Map<String, VariableInfo> {
   }
   public void add(String name, VariableInfo def){
     if(map.containsKey(name)){
-      //throw new HREExitException(1);
-      def.reference.getOrigin().report("", Arrays.toString(Thread.currentThread().getStackTrace()));
-      def.reference.getOrigin().report("","Duplicate declaration found");
-      map.get(name).reference.getOrigin().report("","Original declaration");
-      Fail("");
+      var original = map.get(name);
+      if(original.kind == NameExpressionKind.Field && def.kind == NameExpressionKind.Argument){
+        def.reference.getOrigin().report("","Duplicate declaration found");
+        map.get(name).reference.getOrigin().report("","Original declaration");
+        Fail("");
+      }
     }
     map.put(name, def);
   }
