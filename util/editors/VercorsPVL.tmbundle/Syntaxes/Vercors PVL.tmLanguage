@@ -5,6 +5,7 @@
 	<key>fileTypes</key>
 	<array>
 		<string>pvl</string>
+		<string>jspec</string>
 	</array>
 	<key>name</key>
 	<string>Vercors PVL</string>
