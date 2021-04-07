@@ -68,7 +68,7 @@ class simplify_quant_pass1 {
 
   axiom starall_bool {
     (\forall* int i; b1; b2)
-      ==
+    ==
     (\forall int i; b1; b2)
   }
 
@@ -78,65 +78,67 @@ class simplify_quant_pass1 {
 
   axiom split_forall {
     (\forall int i; b1; b2 && b3)
-     ==
+    ==
     (\forall int i; b1; b2) && (\forall int i; b1; b3)
   }
 
   axiom A3 {
     (\forall int i; b1 ; (\forall int j; (b2!j) && b3 ; b4 ) )
-      ==
+    ==
     (\forall int i; b1 && b2 ; (\forall int j; b3 ; b4 ) )
   }
   axiom A3r {
     (\forall* int i; b1 ; (\forall* int j; (b2!j) && b3 ; r1 ) )
-      ==
+    ==
     (\forall* int i; b1 && b2 ; (\forall* int j; b3 ; r1 ) )
   }
 
-  axiom single_r { (\forall* int i; b1 ; (i == (e1!i)) ==> r1 )
-               ==
-                 (\let int i=e1 ; b1 ==> r1 ) }
+  axiom single_r {
+    (\forall* int i; b1 ; (i == (e1!i)) ==> r1 )
+    ==
+    (\let int i=e1 ; b1 ==> r1 )
+  }
 
   axiom A4 {
     (\forall* int i; b1 ; b2 ==> r1 )
-      ==
+    ==
     (\forall* int i; b1 && b2 ; r1 )
   }
 
   axiom A4b {
     (\forall int i; b1 ; b2 ==> b4 )
-      ==
+    ==
     (\forall int i; b1 && b2 ; b4 )
   }
 
   axiom A5 {
     (i \memberof {e1 .. e2}) && i > e3
-      ==
+    ==
     (i \memberof {e1<=e3?e3+1:e1 .. e2})
   }
 
   axiom A6 {
     (i \memberof {e1 .. e2}) && i < e3
-      ==
+    ==
     (i \memberof {e1 .. e3<e2?e3:e2})
   }
 
   // SJ: repaired by adding the exist here.
   axiom A7 {
     (\forall* int i; b1 ; Value((e1!i)) )
-      ==
+    ==
     (\exists int i; true ; b1 ) ==> Value(e1)
   }
 
   axiom A1 {
     (\forall int i; (i \memberof { e1 .. e2 }) ; (b1!i))
-      ==
+    ==
     e1 < e2 ==> b1
   }
 
   axiom A1_chain {
     (\forall int i; (i \memberof {e1 .. e2}) && (b2!i) ; (b1!i))
-      ==
+    ==
     (e1 < e2 && b2) ==> b1
   }
 
@@ -164,56 +166,102 @@ class simplify_quant_pass1 {
 
   axiom array_perm {
     ArrayPerm(ar,e1,e2,e3,e4)
-     ==
+    ==
     (\forall* int i_fresh ; 0 <= i_fresh && i_fresh < e3 ; Perm(ar[e2 * i_fresh + e1],e4))
   }
 
-  axiom single_b { (\forall int i; b1 ; (i == (e1!i)) ==> b2 )
-               ==
-                 (\let int i=e1 ; b1 ==> b2 ) }
-  /* // SJ: these are already matched by axiom A2
-   axiom inlist { (\forall* int i; e1 <= i && i < e2 ; r1 )
-                 ==
-                 (\forall* int i;  ( i \memberof { e1 .. e2 }) ; r1 ) }
-
-   axiom inlistb { (\forall int i; e1 <= i && i < e2 ; b1 )
-                 ==
-                 (\forall int i;  ( i \memberof { e1 .. e2 }) ; b1 ) }
-*/
-   axiom LEFTPLUS { (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( ar [ (e3!i)+i ] , (p1!i) ) )
-                 ==
-                 (\forall* int i;  ( i \memberof { e3+e1 .. e3+e2 }) ; Perm( ar [ i ] , p1 ) ) }
-
-   axiom LEFTPLUS2 { (\forall* int i;( i \memberof { e1 .. e2 }) ;
-                        (\forall* int j ; (j \memberof {(e5!i)..(e6!i)}) ;
-                        Perm( ar [ (e3!i)+i ] , e4 ) ))
-                 ==
-                   (\forall* int j ; (j \memberof {e5..e6}) ;
-                 (\forall* int i;  ( i \memberof { e3+e1 .. e3+e2 }) ; Perm( ar [ i ] , e4 ) ))
-                  }
-
-   axiom constant { (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( (e3!i) , (e4!i) ) )
-                 ==
-                   e1 < e2 ==> Perm(e3,e4*(e2-e1)) }
-
-   axiom constant_2 {
-      (\forall* int i; (i \memberof {e1 .. e2});
-          (\forall* int j; (j \memberof {(e3!i) .. (e4!i)}); Perm((e5!i), (p1!i))))
+  axiom single_b {
+    (\forall int i; b1 ; (i == (e1!i)) ==> b2 )
+    ==
+    (\let int i=e1 ; b1 ==> b2 ) }
+/* // SJ: these are already matched by axiom A2
+  axiom inlist {
+    (\forall* int i; e1 <= i && i < e2 ; r1 )
       ==
-      (e1 < e2) ==> (\forall* int j; (j \memberof {e3 .. e4}); Perm(e5, (e2 - e1) * p1))
+    (\forall* int i;  ( i \memberof { e1 .. e2 }) ; r1 )
+  }
+
+  axiom inlistb {
+    (\forall int i; e1 <= i && i < e2 ; b1 )
+      ==
+    (\forall int i;  ( i \memberof { e1 .. e2 }) ; b1 )
+  }
+*/
+  axiom left_plus {
+    (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( ar [ (e3!i)+i ] , (p1!i) ) )
+    ==
+    (\forall* int i;  ( i \memberof { e3+e1 .. e3+e2 }) ; Perm( ar [ i ] , p1 ) )
+  }
+
+  axiom left_plus_2 {
+    (\forall* int i;( i \memberof { e1 .. e2 }) ;
+      (\forall* int j ; (j \memberof {(e5!i)..(e6!i)}) ;
+        Perm( ar [ (e3!i)+i ] , e4 ) ))
+    ==
+    (\forall* int j ; (j \memberof {e5..e6}) ;
+      (\forall* int i;  ( i \memberof { e3+e1 .. e3+e2 }) ; Perm( ar [ i ] , e4 ) ))
+  }
+
+  axiom left_plus_3 {
+      (\forall* int i; (i \memberof { e1 .. e2 }) && (b3!i) ; Perm( ar [ (e4!i)+i ] , (p1!i) ) )
+      ==
+      (\forall* int i;  (i \memberof { e4+e1 .. e4+e2 }) && b3 ; Perm( ar [ i ] , p1 ) )
+    }
+
+ axiom left_plus_4 {
+     (\forall* int i; (i \memberof { e1 .. e2 }) && b3 ; Perm( ar [ (e4!i)+i ] , (p1!i) ) )
+     ==
+     (\forall* int i_fresh;  (i_fresh \memberof { e4+e1 .. e4+e2 }) && (\let int i=i_fresh-e4; b3) ; Perm( ar [ i_fresh ] , p1 ) )
    }
 
-   axiom right_plus { (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( ar [ i+(e3!i) ] , (p1!i) ) )
-                 ==
-                 (\forall* int i;  ( i \memberof { e1+e3 .. e2+e3 }) ; Perm( ar [ i ] , p1 ) ) }
+  axiom left_right_plus {
+    (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( ar [ (e3!i)+i+(e4!i)] , (p1!i) ) )
+    ==
+    (\forall* int i;  ( i \memberof { e3+e1+e4 .. e3+e2+e4 }) ; Perm( ar [ i ] , p1 ) )
+  }
 
-   axiom minus { (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( ar [ i-(e3!i) ] , (e4!i) ) )
-                 ==
-                 (\forall* int i;  ( i \memberof { e1-e3 .. e2-e3 }) ; Perm( ar [ i ] , e4 ) ) }
+  axiom constant {
+    (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( (e3!i) , (e4!i) ) )
+    ==
+    e1 < e2 ==> Perm(e3,e4*(e2-e1))
+  }
 
-   axiom left_plusb { (\forall int i;( i \memberof { e1 .. e2 }) ; ar [ (e3!i) + i ] == (e4!i) )
-                 ==
-                 (\forall int i;  ( i \memberof { e3+e1 .. e3+e2 }) ; ar [ i ] == e4 ) }
+  axiom constant_2 {
+    (\forall* int i; (i \memberof {e1 .. e2});
+        (\forall* int j; (j \memberof {(e3!i) .. (e4!i)}); Perm((e5!i), (p1!i))))
+    ==
+    (e1 < e2) ==> (\forall* int j; (j \memberof {e3 .. e4}); Perm(e5, (e2 - e1) * p1))
+  }
+
+  axiom right_plus {
+    (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( ar [ i+(e3!i) ] , (p1!i) ) )
+    ==
+    (\forall* int i;  ( i \memberof { e1+e3 .. e2+e3 }) ; Perm( ar [ i ] , p1 ) )
+  }
+
+  axiom minus {
+    (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( ar [ i-(e3!i) ] , (e4!i) ) )
+    ==
+    (\forall* int i;  ( i \memberof { e1-e3 .. e2-e3 }) ; Perm( ar [ i ] , e4 ) )
+  }
+
+  axiom left_plusb {
+    (\forall int i;( i \memberof { e1 .. e2 }) ; ar [ (e3!i) + i ] == (e4!i) )
+    ==
+    (\forall int i;  ( i \memberof { e3+e1 .. e3+e2 }) ; ar [ i ] == e4 )
+  }
+
+  axiom modulo {
+    (\forall int i; ( i \memberof { e1 .. e2 }) ; ar [ (e3!i) + i ] % (e4!i) == (e5!i) )
+    ==
+    (\forall int i;  ( i \memberof { e3+e1 .. e3+e2 }) ; ar [ i ] % e4 == e5 )
+  }
+
+  axiom modulo_2 {
+    (\forall int i; ( i \memberof { e1 .. e2 }) ; ar [ (e3!i) + i + (e6!i)] % (e4!i) == (e5!i) )
+    ==
+    (\forall int i;  ( i \memberof { e3+e1+e6 .. e3+e2+e6 }) ; ar [ i ] % e4 == e5 )
+  }
 
 
   /* // SJ: Tried to fix this, but still unsure if this holds... Removing it didn't destroy any tests so I'll keep it commented
@@ -230,29 +278,29 @@ class simplify_quant_pass1 {
 
 
 // SJ: I repaired this from something that was clearly false. Unsure if it helps.
-   axiom nested_bool_1 {
-        (\forall int i;( i \memberof { 0 .. e1 }) ;
-           (\forall int j;( j \memberof { 0 .. (e2!i) }) ;
-              ar[ e3 + j ] == ((e4!i)!j) ))
+  axiom nested_bool_1 {
+    (\forall int i;( i \memberof { 0 .. e1 }) ;
+      (\forall int j;( j \memberof { 0 .. (e2!i) }) ;
+        ar[ e3 + j ] == ((e4!i)!j) ))
     ==
-       e1 > 0 && e2 > 0 ==>
-       (\forall int k_fresh;(k_fresh \memberof {0 .. e1*e2});
-          (\let int i=k_fresh/e2 ; (\let int j=k_fresh%e2 ;
-             ar[ e3 + j ] == e4 )))
-   }
+    e1 > 0 && e2 > 0 ==>
+      (\forall int k_fresh;(k_fresh \memberof {0 .. e1*e2});
+        (\let int i=k_fresh/e2 ; (\let int j=k_fresh%e2 ;
+          ar[ e3 + j ] == e4 )))
+  }
 
 // SJ: same as above, but with i and j flipped
-   axiom nested_bool_2 {
-        (\forall int j;( j \memberof { 0 .. e2 }) ;
-          (\forall int i;( i \memberof { 0 .. (e1!j) }) ;
-              ar[ e3 + j ] == e4 ))
+  axiom nested_bool_2 {
+    (\forall int j;( j \memberof { 0 .. e2 }) ;
+      (\forall int i;( i \memberof { 0 .. (e1!j) }) ;
+        ar[ e3 + j ] == e4 ))
     ==
-       e1 > 0 && e2 > 0 ==>
-       (\forall int k_fresh;(k_fresh \memberof { 0 .. e1*e2});
-          (\let int i=k_fresh/e2 ; (\let int j=k_fresh%e2 ;
+    e1 > 0 && e2 > 0 ==>
+      (\forall int k_fresh;(k_fresh \memberof { 0 .. e1*e2});
+        (\let int i=k_fresh/e2 ; (\let int j=k_fresh%e2 ;
 //            ( i \memberof [ 0 .. e1 )) && ( j \memberof { 0 .. e2 }) && ar[ e3 + j ] == e4 )))
-            ar[ e3 + j ] == e4 )))
-   }
+          ar[ e3 + j ] == e4 )))
+  }
 
    /*
    // SJ: Does not hold if e1 <= 0 or if e2 > e3, did not try to fix: rule didn't seem all that needed
@@ -287,16 +335,16 @@ class simplify_quant_pass1 {
    } */
 
    // SJ: given that e1 / 0 = 0, this implies that e1 % 0 = e1, violating e1 % d < d (and acceptably so..)
-   axiom div_mod {
-     (e1 / e2) * e2 + (e1 % e2) == e1
-   }
+  axiom div_mod {
+    (e1 / e2) * e2 + (e1 % e2) == e1
+  }
 
 
-   axiom reorder_1 {
-     ( j \memberof {e3 * i .. e3 * (i + 1)})
-       ==
-     ( j \memberof {i * e3 .. (i + 1) * e3})
-   }
+  axiom reorder_1 {
+    ( j \memberof {e3 * i .. e3 * (i + 1)})
+    ==
+    ( j \memberof {i * e3 .. (i + 1) * e3})
+  }
 
    /*
    // SJ: fixed this slightly, trying to see if removing this breaks anything..
@@ -312,13 +360,13 @@ class simplify_quant_pass1 {
 
    // SJ: I added the requirement that e3 should not depend on i.
    // This rule is probably useful for paralel blocks
-   axiom nested_1 {
-        (\forall* int i;( i \memberof ({ e1 .. e2 }) );
-            (\forall* int j;( j \memberof {i * (e3!i) .. (i + 1) * e3} );
-                (r1!i) ))
-        ==
-        e3 > 0 ==> (\forall* int j;( j \memberof {e1 * e3 .. e2 * e3} ); r1 )
-        }
+  axiom nested_1r {
+    (\forall* int i;( i \memberof ({ e1 .. e2 }) );
+      (\forall* int j;( j \memberof {i * (e3!i) .. (i + 1) * e3} );
+        (r1!i) ))
+    ==
+    e3 > 0 ==> (\forall* int j;( j \memberof {e1 * e3 .. e2 * e3} ); r1 )
+  }
 
    /* // SJ: I guess these are allready taken care of by the rule nested_1, plus they are wrong..
    axiom nested_Z1 {
@@ -349,13 +397,45 @@ class simplify_quant_pass1 {
         } */
 
    // SJ: same as in nested_1: I don't see where this would be useful, but it's nice to have the symmetry
-   axiom nested_1b {
-        (\forall int i;( i \memberof { e1 .. e2 } );
-            (\forall int j;( j \memberof {i * (e3!i) .. (i + 1) * e3} );
-                (b1!i) ))
-        ==
-        e3 > 0 ==> (\forall int j;( j \memberof {e1 * e3 .. e2 * e3} ); b1 )
-        }
+  axiom nested_1b {
+    (\forall int i;( i \memberof { e1 .. e2 } );
+      (\forall int j;( j \memberof {i * (e3!i) .. (i + 1) * e3} );
+        (b1!i) ))
+    ==
+    e3 > 0 ==> (\forall int j;( j \memberof {e1 * e3 .. e2 * e3} ); b1 )
+  }
+
+  axiom nested_2r {
+    (\forall* int i;( i \memberof ({ e1 .. e2 }) );
+      (\forall* int j;( j \memberof {i * (e3!i) + (e4!i) .. (i + 1) * e3 + e4} );
+        (r1!i) ))
+    ==
+    e3 > 0 ==> (\forall* int j;( j \memberof {e1 * e3 + e4 .. e2 * e3 + e4} ); r1 )
+  }
+
+  axiom nested_2b {
+    (\forall int i;( i \memberof ({ e1 .. e2 }) );
+      (\forall int j;( j \memberof {i * (e3!i) + (e4!i) .. (i + 1) * e3 + e4} );
+        (b1!i) ))
+    ==
+    e3 > 0 ==> (\forall int j;( j \memberof {e1 * e3 + e4 .. e2 * e3 + e4} ); b1 )
+  }
+
+  axiom nested_3r {
+    (\forall* int i;( i \memberof ({ e1 .. e2 }) );
+      (\forall* int j;( j \memberof {i * (e3!i) - (e4!i) .. (i + 1) * e3 - e4} );
+        (r1!i) ))
+    ==
+    e3 > 0 ==> (\forall* int j;( j \memberof {e1 * e3 - e4 .. e2 * e3 - e4} ); r1 )
+  }
+
+  axiom nested_3b {
+    (\forall int i;( i \memberof ({ e1 .. e2 }) );
+      (\forall int j;( j \memberof {i * (e3!i) - (e4!i) .. (i + 1) * e3 - e4} );
+        (b1!i) ))
+    ==
+    e3 > 0 ==> (\forall int j;( j \memberof {e1 * e3 - e4 .. e2 * e3 - e4} ); b1 )
+  }
 
    /* // SJ: same comment as for nested_x1, so also commented
    axiom nested_x1b {
@@ -388,37 +468,99 @@ class simplify_quant_pass1 {
         }
     */
 
-    axiom lin1 {
-        (\forall* int i;( i \memberof {e1 * (e2!i) * (e3!i) .. e4}) ; r1 )
-           ==
-        (\forall* int i;( i \memberof {e1 * (e2*e3) .. e4}) ; r1 )
-    }
+  axiom nested_fallback_1r {
+    (\forall* int i;( i \memberof ({ e1 .. e2 }) );
+      (\forall* int j;( (j \memberof {i * (e3!i) .. (i + 1) * e3}) && b1 );
+        r1 ))
+    ==
+    e3 > 0 ==> (\forall* int j;( (j \memberof {e1 * e3 .. e2 * e3}) && (\let int i = j/e3; b1) );
+      (\let int i = j/e3; r1) )
+  }
 
-    axiom lin2 {
-        (\forall* int i;( i \memberof {e4 .. e1 * (e2!i) * (e3!i)}) ; r1 )
-           ==
-        (\forall* int i;( i \memberof {e4 .. e1 * (e2*e3)}) ; r1 )
-    }
+  axiom nested_fallback_1b {
+    (\forall* int i;( i \memberof ({ e1 .. e2 }) );
+      (\forall* int j;( j \memberof {i * (e3!i) .. (i + 1) * e3} );
+          b1 ))
+    ==
+    e3 > 0 ==> (\forall* int j;( j \memberof {e1 * e3 .. e2 * e3} );
+      (\let int i = j/e3; b1) )
+  }
 
-    axiom split1 {
-       (\forall* int i;b1;r1**r2)
-         ==
-       (\forall* int i;b1;r1) ** (\forall* int i;b1;r2)
-    }
+  axiom nested_1b {
+    (\forall int i;( i \memberof { e1 .. e2 } );
+      (\forall int j;( j \memberof {i * (e3!i) .. (i + 1) * e3} );
+        (b1!i) ))
+    ==
+    e3 > 0 ==> (\forall int j;( j \memberof {e1 * e3 .. e2 * e3} ); b1 )
+  }
 
-    axiom split2 {
-       (\forall* int i;b1;PointsTo(e2,e3,e4))
-         ==
-       (\forall* int i;b1;Perm(e2,e3)) ** (\forall int i;b1;e2==e4)
-    }
+  axiom nested_fallback_2r {
+    (\forall* int i;( i \memberof ({ e1 .. e2 }) );
+      (\forall* int j;( j \memberof {i * (e3!i) + (e4!i) .. (i + 1) * e3 + e4} );
+        r1 ))
+    ==
+    e3 > 0 ==> (\forall* int j;( j \memberof {e1 * e3 + e4 .. e2 * e3 + e4} );
+      (\let int i = (j-e4)/e3; r1) )
+  }
 
-    /* // SJ: unfortunately, this introduces an existential quantifier which is not always a good thing...
-    axiom nested_value {
-      (\forall* int i ; e1 ; (\forall* int j ; (e2!i) ; Value((e3!i))))
-        ==
-      (\exists int i; true ; e1 ) ==> (\forall* int j ; e2 ; Value(e3))
-    }
-    */
+  axiom nested_fallback_2b {
+    (\forall* int i;( i \memberof ({ e1 .. e2 }) );
+      (\forall* int j;( j \memberof {i * (e3!i) + (e4!i) .. (i + 1) * e3 + e4} );
+          b1 ))
+    ==
+    e3 > 0 ==> (\forall* int j;( j \memberof {e1 * e3 + e4 .. e2 * e3 + e4} );
+      (\let int i = (j-e4)/e3; b1) )
+  }
+
+  axiom nested_fallback_3r {
+    (\forall* int i;( i \memberof ({ e1 .. e2 }) );
+      (\forall* int j;( j \memberof {i * (e3!i) - (e4!i) .. (i + 1) * e3 - e4} );
+        r1 ))
+    ==
+    e3 > 0 ==> (\forall* int j;( j \memberof {e1 * e3 - e4 .. e2 * e3 - e4} );
+      (\let int i = (j+e4)/e3; r1) )
+  }
+
+    axiom nested_fallback_3b {
+    (\forall* int i;( i \memberof ({ e1 .. e2 }) );
+      (\forall* int j;( j \memberof {i * (e3!i) - (e4!i) .. (i + 1) * e3 - e4} );
+          b1 ))
+    ==
+    e3 > 0 ==> (\forall* int j;( j \memberof {e1 * e3 - e4 .. e2 * e3 - e4} );
+      (\let int i = (j+e4)/e3; b1) )
+  }
+
+  axiom lin1 {
+    (\forall* int i;( i \memberof {e1 * (e2!i) * (e3!i) .. e4}) ; r1 )
+    ==
+    (\forall* int i;( i \memberof {e1 * (e2*e3) .. e4}) ; r1 )
+  }
+
+  axiom lin2 {
+    (\forall* int i;( i \memberof {e4 .. e1 * (e2!i) * (e3!i)}) ; r1 )
+    ==
+    (\forall* int i;( i \memberof {e4 .. e1 * (e2*e3)}) ; r1 )
+  }
+
+  axiom split1 {
+    (\forall* int i;b1;r1**r2)
+    ==
+    (\forall* int i;b1;r1) ** (\forall* int i;b1;r2)
+  }
+
+  axiom split2 {
+    (\forall* int i;b1;PointsTo(e2,e3,e4))
+    ==
+    (\forall* int i;b1;Perm(e2,e3)) ** (\forall int i;b1;e2==e4)
+  }
+
+/* // SJ: unfortunately, this introduces an existential quantifier which is not always a good thing...
+  axiom nested_value {
+    (\forall* int i ; e1 ; (\forall* int j ; (e2!i) ; Value((e3!i))))
+      ==
+    (\exists int i; true ; e1 ) ==> (\forall* int j ; e2 ; Value(e3))
+  }
+*/
 
   axiom resource_independent_quant {
     (\forall* int tid; (tid \memberof {e1..e2}); (Perm(g1, p1)!tid))
