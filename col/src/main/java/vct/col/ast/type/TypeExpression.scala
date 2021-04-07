@@ -35,8 +35,35 @@ case class TypeExpression(val operator:TypeOperator, val types:List[Type]) exten
   /** Provides a Java wrapper (as `java.util.List`) over the types list (`types`) */
   def typesJava = types.asJava
 
-  override def isNumeric: Boolean =
+  override def isPrimitive(fraction:PrimitiveSort): Boolean =
+    if (isLeaky) firstType.isPrimitive(fraction:PrimitiveSort) else false
+
+  override def isFraction =
+    if (isLeaky) firstType.isFraction else false
+
+  override def isBoolean =
+    if (isLeaky) firstType.isBoolean else false
+
+  override def isInteger =
+    if (isLeaky) firstType.isInteger else false
+
+  override def isDouble =
+    if (isLeaky) firstType.isDouble else false
+
+  override def isVoid =
+    if (isLeaky) firstType.isVoid else false
+
+  override def isNull =
+    if (isLeaky) firstType.isNull else false
+
+  override def isIntegerType =
+    if (isLeaky) firstType.isIntegerType else false
+
+  override def isNumeric =
     if (isLeaky) firstType.isNumeric else false
+
+  override def isResource =
+    if (isLeaky) firstType.isResource else false
 
   override def supertypeof(context: ProgramUnit, t: Type): Boolean =
     if (isLeaky) firstType.supertypeof(context, t) else false

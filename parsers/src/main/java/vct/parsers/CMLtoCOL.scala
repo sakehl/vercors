@@ -334,6 +334,8 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
         -> PrimitiveSort.Float,
       Seq(PrimitiveTypeSpec("_Bool"))
         -> PrimitiveSort.Boolean,
+      Seq(PrimitiveTypeSpec("bool"))
+        -> PrimitiveSort.Boolean,
 
       // Unsupported: complex numbers
       //Set(PrimitiveTypeSpec("float"), PrimitiveTypeSpec("_Complex"))

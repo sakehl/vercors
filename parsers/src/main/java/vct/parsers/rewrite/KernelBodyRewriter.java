@@ -44,6 +44,30 @@ class KernelBodyRewriter extends AbstractRewriter {
                     Fail("bad dimension: %s", arg);
                 }
                 break;
+            case "get_group_id":
+                arg = e.getArg(0);
+                if (arg.isConstant(0)) {
+                    result = create.local_name("opencl_gid");
+                } else {
+                    Fail("bad dimension: %s", arg);
+                }
+                break;
+            case "get_local_size":
+                arg = e.getArg(0);
+                if (arg.isConstant(0)) {
+                    result = create.local_name("opencl_gsize");
+                } else {
+                    Fail("bad dimension: %s", arg);
+                }
+                break;
+            case "get_num_groups":
+                arg = e.getArg(0);
+                if (arg.isConstant(0)) {
+                    result = create.local_name("opencl_gcount");
+                } else {
+                    Fail("bad dimension: %s", arg);
+                }
+                break;
             default:
                 super.visit(e);
         }

@@ -248,6 +248,7 @@ typeSpecifier
     |   'double'
     |   'signed'
     |   'unsigned'
+    |   'bool'
     |   '_Bool'
     |   '_Complex'
     |   '__m128'
