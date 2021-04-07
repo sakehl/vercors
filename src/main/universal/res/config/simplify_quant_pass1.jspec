@@ -110,14 +110,52 @@ class simplify_quant_pass1 {
     ==
     (\forall int i; b1 && b2 ; b4 )
   }
+//
+//  axiom linear_gt_1 {
+//    (i \memberof {e1 .. e2}) && i + (e3!i) > (e4!i)
+//    ==
+//    (i \memberof {e1 .. e2}) && i > e4 - e3
+//  }
+//
+//  axiom linear_gt_2 {
+//    (i \memberof {e1 .. e2}) && (e3!i) + i > (e4!i)
+//    ==
+//    (i \memberof {e1 .. e2}) && i > e4 - e3
+//  }
+//
+//  axiom linear_gt_3 {
+//    (i \memberof {e1 .. e2}) && (e3!i) + i + (e4!i) > (e5!i)
+//    ==
+//    (i \memberof {e1 .. e2}) && i > e5 - e3 - e4
+//  }
+//
+//  axiom linear_lt_1 {
+//    (i \memberof {e1 .. e2}) && i + (e3!i) < (e4!i)
+//    ==
+//    (i \memberof {e1 .. e2}) && i < e4 - e3
+//  }
+//
+//  axiom linear_lt_2 {
+//    (i \memberof {e1 .. e2}) && (e3!i) + i < (e4!i)
+//    ==
+//    (i \memberof {e1 .. e2}) && i < e4 - e3
+//  }
+//
+//  axiom linear_lt_3 {
+//    (i \memberof {e1 .. e2}) && (e3!i) + i + (e4!i) < (e5!i)
+//    ==
+//    (i \memberof {e1 .. e2}) && i < e5 - e3 - e4
+//  }
 
   axiom A5 {
+//  (i \memberof {e1 .. e2}) && i > (e3!i) gives invalid ASTs???
     (i \memberof {e1 .. e2}) && i > e3
     ==
     (i \memberof {e1<=e3?e3+1:e1 .. e2})
   }
 
   axiom A6 {
+//    (i \memberof {e1 .. e2}) && i < (e3!i) gives invalid ASTs???
     (i \memberof {e1 .. e2}) && i < e3
     ==
     (i \memberof {e1 .. e3<e2?e3:e2})
@@ -140,6 +178,12 @@ class simplify_quant_pass1 {
     (\forall int i; (i \memberof {e1 .. e2}) && (b2!i) ; (b1!i))
     ==
     (e1 < e2 && b2) ==> b1
+  }
+
+  axiom A1_chain_2 {
+    (\forall int i; (i \memberof {e1 .. e2}) && b2 ; (b1!i))
+    ==
+    (e1 < e2 && (\exists int i; true ; b2 )) ==> b1
   }
 
 /*
@@ -187,8 +231,74 @@ class simplify_quant_pass1 {
     (\forall int i;  ( i \memberof { e1 .. e2 }) ; b1 )
   }
 */
+  axiom reorder_perm_1 {
+    (\forall* int i; b1 ; Perm( ar [ (e1!i) + i ] , p1) )
+    ==
+    (\forall* int i; b1 ; Perm( ar [ i + e1 ] , p1 ) )
+  }
+
+  axiom reorder_perm_2 {
+    (\forall* int i; b1 ; Perm( ar [ (e1!i) * i ] , p1) )
+    ==
+    (\forall* int i; b1 ; Perm( ar [ i * e1 ] , p1 ) )
+  }
+
+  axiom reorder_perm_3 {
+    (\forall* int i; b1 ; Perm( ar [ (e1!i) + i + (e2!i)] , p1) )
+    ==
+    (\forall* int i; b1 ; Perm( ar [ i + e1 + e2 ] , p1 ) )
+  }
+
+  axiom reorder_perm_4 {
+    (\forall* int i; b1 ; Perm( ar [ (e1!i) + i - (e2!i)] , p1) )
+    ==
+    (\forall* int i; b1 ; Perm( ar [ i + e1 - e2 ] , p1 ) )
+  }
+
+  axiom reorder_perm_5 {
+    (\forall* int i; b1 ; Perm( ar [ (e1!i) * i + (e2!i)] , p1) )
+    ==
+    (\forall* int i; b1 ; Perm( ar [ i * e1 + e2 ] , p1 ) )
+  }
+
+  axiom reorder_perm_6 {
+    (\forall* int i; b1 ; Perm( ar [ (e1!i) + i * (e2!i)] , p1) )
+    ==
+    (\forall* int i; b1 ; Perm( ar [ i * e2 + e1 ] , p1 ) )
+  }
+
+  axiom reorder_perm_7 {
+    (\forall* int i; b1 ; Perm( ar [ (e1!i) + (e2!i) * i] , p1) )
+    ==
+    (\forall* int i; b1 ; Perm( ar [ i * e2 + e1 ] , p1 ) )
+  }
+
+  axiom reorder_perm_8 {
+    (\forall* int i; b1 ; Perm( ar [ (e1!i) + i * (e2!i) + (e3!i)] , p1) )
+    ==
+    (\forall* int i; b1 ; Perm( ar [ i * e2 + e1 + e3 ] , p1 ) )
+  }
+
+  axiom reorder_perm_9 {
+    (\forall* int i; b1 ; Perm( ar [ (e1!i) + (e2!i) * i + (e3!i)] , p1) )
+    ==
+    (\forall* int i; b1 ; Perm( ar [ i * e2 + e1 + e3 ] , p1 ) )
+  }
+
+  axiom reorder_perm_10 {
+    (\forall* int i; b1 ; Perm( ar [ (e1!i) + i * (e2!i) - (e3!i)] , p1) )
+    ==
+    (\forall* int i; b1 ; Perm( ar [ i * e2 + e1 - e3 ] , p1 ) )
+  }
+
+  axiom reorder_perm_11 {
+    (\forall* int i; b1 ; Perm( ar [ (e1!i) + (e2!i) * i - (e3!i)] , p1) )
+    ==
+    (\forall* int i; b1 ; Perm( ar [ i * e2 + e1 - e3 ] , p1 ) )
+  }
+
   axiom left_plus {
-    (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( ar [ (e3!i)+i ] , (p1!i) ) )
+    (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( ar [ i + (e3!i)] , (p1!i) ) )
     ==
     (\forall* int i;  ( i \memberof { e3+e1 .. e3+e2 }) ; Perm( ar [ i ] , p1 ) )
   }
@@ -203,21 +313,15 @@ class simplify_quant_pass1 {
   }
 
   axiom left_plus_3 {
-      (\forall* int i; (i \memberof { e1 .. e2 }) && (b3!i) ; Perm( ar [ (e4!i)+i ] , (p1!i) ) )
+      (\forall* int i; (i \memberof { e1 .. e2 }) && (b3!i) ; Perm( ar [ i + (e4!i) ] , (p1!i) ) )
       ==
       (\forall* int i;  (i \memberof { e4+e1 .. e4+e2 }) && b3 ; Perm( ar [ i ] , p1 ) )
     }
 
- axiom left_plus_4 {
-     (\forall* int i; (i \memberof { e1 .. e2 }) && b3 ; Perm( ar [ (e4!i)+i ] , (p1!i) ) )
+  axiom left_plus_4 {
+     (\forall* int i; (i \memberof { e1 .. e2 }) && b3 ; Perm( ar [ i + (e4!i)] , (p1!i) ) )
      ==
      (\forall* int i_fresh;  (i_fresh \memberof { e4+e1 .. e4+e2 }) && (\let int i=i_fresh-e4; b3) ; Perm( ar [ i_fresh ] , p1 ) )
-   }
-
-  axiom left_right_plus {
-    (\forall* int i;( i \memberof { e1 .. e2 }) ; Perm( ar [ (e3!i)+i+(e4!i)] , (p1!i) ) )
-    ==
-    (\forall* int i;  ( i \memberof { e3+e1+e4 .. e3+e2+e4 }) ; Perm( ar [ i ] , p1 ) )
   }
 
   axiom constant {
@@ -228,9 +332,9 @@ class simplify_quant_pass1 {
 
   axiom constant_2 {
     (\forall* int i; (i \memberof {e1 .. e2});
-        (\forall* int j; (j \memberof {(e3!i) .. (e4!i)}); Perm((e5!i), (p1!i))))
+        (\forall* int j; (b1!i); Perm((e5!i), (p1!i))))
     ==
-    (e1 < e2) ==> (\forall* int j; (j \memberof {e3 .. e4}); Perm(e5, (e2 - e1) * p1))
+    (e1 < e2) ==> (\forall* int j; b1; Perm(e5, (e2 - e1) * p1))
   }
 
   axiom right_plus {

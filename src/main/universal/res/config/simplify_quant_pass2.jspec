@@ -43,12 +43,6 @@ class simplify_quant_pass2 {
     (\forall* int i; (i \memberof {e1+e4..e2+e4}); Perm(ar[i], p1))
   }
 
-  axiom simplify_shift_1 {
-    (\forall* int i; b1; Perm(ar[(e1!i) + i] , (p1!i)))
-      ==
-    (\forall* int k_fresh; (\let int i=k_fresh-e1; b1); Perm(ar[k_fresh], p1))
-  }
-
   axiom simplify_shift_2 {
     (\forall* int i; b1; Perm(ar[i + (e1!i)], (p1!i)))
       ==
@@ -61,32 +55,14 @@ class simplify_quant_pass2 {
     (\forall* int k_fresh; (\let int i=k_fresh+e1; b1); Perm(ar[k_fresh], p1))
   }
 
-  axiom simplify_shift_4 {
-    (\forall* int i; b1; Perm(ar[(e1!i) + i + (e2!i)], (p1!i)))
+  axiom simplify_scale_1 {
+    (\forall* int i; b1; Perm(ar[i * (e1!i)], (p1!i)))
       ==
-    (\forall* int k_fresh; (\let int i=k_fresh-e1-e2; b1); Perm(ar[k_fresh], p1))
-  }
-
-  axiom simplify_shift_scale_1 {
-    (\forall* int i; b1; Perm(ar[(e1!i) + i * (e2!i)], (p1!i)))
-      ==
-    (\forall* int k_fresh; (\let int i=(k_fresh/e2)-e1; b1) && k_fresh % e2 == 0; Perm(ar[k_fresh], p1))
+    (\forall* int k_fresh; (\let int i=(k_fresh/e1); b1) && k_fresh % e1 == 0; Perm(ar[k_fresh], p1))
   }
 
   axiom simplify_shift_scale_2 {
     (\forall* int i; b1; Perm(ar[i * (e2!i) + (e1!i)], (p1!i)))
-      ==
-    (\forall* int k_fresh; (\let int i=(k_fresh/e2)-e1; b1) && k_fresh % e2 == 0; Perm(ar[k_fresh], p1))
-  }
-
-  axiom simplify_shift_scale_3 {
-    (\forall* int i; b1; Perm(ar[(e2!i) * i + (e1!i)], (p1!i)))
-      ==
-    (\forall* int k_fresh; (\let int i=(k_fresh/e2)-e1; b1) && k_fresh % e2 == 0; Perm(ar[k_fresh], p1))
-  }
-
-  axiom simplify_shift_scale_4 {
-    (\forall* int i; b1; Perm(ar[(e1!i) + (e2!i) * i], (p1!i)))
       ==
     (\forall* int k_fresh; (\let int i=(k_fresh/e2)-e1; b1) && k_fresh % e2 == 0; Perm(ar[k_fresh], p1))
   }
