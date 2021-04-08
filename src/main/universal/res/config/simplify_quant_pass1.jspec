@@ -110,48 +110,115 @@ class simplify_quant_pass1 {
     ==
     (\forall int i; b1 && b2 ; b4 )
   }
-//
-//  axiom linear_gt_1 {
-//    (i \memberof {e1 .. e2}) && i + (e3!i) > (e4!i)
+
+  axiom linear_lte_l_1 {
+    (i \memberof {e1 .. e2}) && i + e3 <= e4
+    ==
+    (i \memberof {e1 .. e2}) && i <= e4 - e3
+  }
+
+  axiom linear_lte_l_2 {
+    (i \memberof {e1 .. e2}) && e3 + i <= e4
+    ==
+    (i \memberof {e1 .. e2}) && i <= e4 - e3
+  }
+
+  axiom linear_lte_l_3 {
+    (i \memberof {e1 .. e2}) && i - e3 <= e4
+    ==
+    (i \memberof {e1 .. e2}) && i <= e4 + e3
+  }
+
+//  axiom linear_lte_l_4 {
+//    (i \memberof {e1 .. e2}) && e3 + i + e4 <= e5
 //    ==
-//    (i \memberof {e1 .. e2}) && i > e4 - e3
+//    (i \memberof {e1 .. e2}) && i <= e5 - e3 - e4
 //  }
 //
-//  axiom linear_gt_2 {
-//    (i \memberof {e1 .. e2}) && (e3!i) + i > (e4!i)
+//  axiom linear_lte_l_5 {
+//    (i \memberof {e1 .. e2}) && e3 + i - e4 <= e5
 //    ==
-//    (i \memberof {e1 .. e2}) && i > e4 - e3
+//    (i \memberof {e1 .. e2}) && i <= e5 - e3 + e4
+//  }
+
+  axiom linear_lte_r_1 {
+    (i \memberof {e1 .. e2}) && e3 <= i + e4
+    ==
+    (i \memberof {e1 .. e2}) && e3 - e4 <= i
+  }
+
+  axiom linear_lte_r_2 {
+    (i \memberof {e1 .. e2}) && e3 <= e4 + i
+    ==
+    (i \memberof {e1 .. e2}) && e3 - e4 <= i
+  }
+
+  axiom linear_lte_r_3 {
+    (i \memberof {e1 .. e2}) && e3 <= i - e4
+    ==
+    (i \memberof {e1 .. e2}) && e3 + e4 <= i
+  }
+//
+//  axiom linear_lte_r_4 {
+//    (i \memberof {e1 .. e2}) && (e3!i) <= e4 + i + e5
+//    ==
+//    (i \memberof {e1 .. e2}) && e3 - e4 - e5 <= i
 //  }
 //
-//  axiom linear_gt_3 {
-//    (i \memberof {e1 .. e2}) && (e3!i) + i + (e4!i) > (e5!i)
+//  axiom linear_lte_r_5 {
+//    (i \memberof {e1 .. e2}) && (e3!i) <= e4 + i - e5
 //    ==
-//    (i \memberof {e1 .. e2}) && i > e5 - e3 - e4
+//    (i \memberof {e1 .. e2}) && e3 - e4 + e5 <= i
 //  }
-//
-//  axiom linear_lt_1 {
-//    (i \memberof {e1 .. e2}) && i + (e3!i) < (e4!i)
-//    ==
-//    (i \memberof {e1 .. e2}) && i < e4 - e3
-//  }
-//
-//  axiom linear_lt_2 {
-//    (i \memberof {e1 .. e2}) && (e3!i) + i < (e4!i)
-//    ==
-//    (i \memberof {e1 .. e2}) && i < e4 - e3
-//  }
-//
-//  axiom linear_lt_3 {
-//    (i \memberof {e1 .. e2}) && (e3!i) + i + (e4!i) < (e5!i)
-//    ==
-//    (i \memberof {e1 .. e2}) && i < e5 - e3 - e4
-//  }
+
+  axiom linear_lt_l_1 {
+    (i \memberof {e1 .. e2}) && i + e3 < e4
+    ==
+    (i \memberof {e1 .. e2}) && i < e4 - e3
+  }
+
+  axiom linear_lt_l_2 {
+    (i \memberof {e1 .. e2}) && e3 + i < e4
+    ==
+    (i \memberof {e1 .. e2}) && i < e4 - e3
+  }
+
+  axiom linear_lt_l_3 {
+    (i \memberof {e1 .. e2}) && i - e3 < e4
+    ==
+    (i \memberof {e1 .. e2}) && i < e4 + e3
+  }
+
+  axiom linear_lt_r_1 {
+    (i \memberof {e1 .. e2}) && e3 < i + e4
+    ==
+    (i \memberof {e1 .. e2}) && e3 - e4 < i
+  }
+
+  axiom linear_lt_r_2 {
+    (i \memberof {e1 .. e2}) && e3 < e4 + i
+    ==
+    (i \memberof {e1 .. e2}) && e3 - e4 < i
+  }
+
+  axiom linear_lt_r_3 {
+    (i \memberof {e1 .. e2}) && e3 < i - e4
+    ==
+    (i \memberof {e1 .. e2}) && e3 + e4 < i
+  }
 
   axiom A5 {
 //  (i \memberof {e1 .. e2}) && i > (e3!i) gives invalid ASTs???
-    (i \memberof {e1 .. e2}) && i > e3
+    (i \memberof {e1 .. e2}) && e3 < i
     ==
     (i \memberof {e1<=e3?e3+1:e1 .. e2})
+  }
+
+axiom A5_2 {
+//  (i \memberof {e1 .. e2}) && i > (e3!i) gives invalid ASTs???
+    (i \memberof {e1 .. e2}) && e3 <= i
+    ==
+    (i \memberof {e1<=e3?e3:e1 .. e2})
   }
 
   axiom A6 {
@@ -159,6 +226,13 @@ class simplify_quant_pass1 {
     (i \memberof {e1 .. e2}) && i < e3
     ==
     (i \memberof {e1 .. e3<e2?e3:e2})
+  }
+
+  axiom A6_2 {
+//    (i \memberof {e1 .. e2}) && i < (e3!i) gives invalid ASTs???
+    (i \memberof {e1 .. e2}) && i <= e3
+    ==
+    (i \memberof {e1 .. e3<e2?e3+1:e2})
   }
 
   // SJ: repaired by adding the exist here.
