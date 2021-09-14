@@ -798,6 +798,7 @@ object Passes {
         val trs = RewriteSystems.getRewriteSystem("simplify_quant_pass1")
         var res = trs.normalize(arg)
         res = RewriteSystems.getRewriteSystem("simplify_quant_pass2").normalize(res)
+        res = new OptimizeQuantifiers(res).rewriteAll()
         res = new SimplifyQuantifiedRelations(res).rewriteAll()
         res
       },
