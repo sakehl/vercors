@@ -941,6 +941,9 @@ public class AbstractRewriter extends AbstractVisitor<ASTNode> {
 
   @Override
   public void visit(KernelInvocation ki) {
-    result = create.kernelInvocation(ki.method(), rewrite(ki.blockCount()), rewrite(ki.threadCount()), rewrite(ki.javaArgs()));
+    ASTNode rw_shared = null;
+    if(ki.sharedMemorySize() != null)
+      rw_shared = rewrite(ki.sharedMemorySize());
+    result = create.kernelInvocation(ki.method(), rewrite(ki.blockCount()), rewrite(ki.threadCount()), rw_shared , rewrite(ki.javaArgs()));
   }
 }

@@ -7,10 +7,7 @@ import vct.col.ast.expr.*;
 import vct.col.ast.generic.ASTNode;
 import vct.col.ast.stmt.composite.*;
 import vct.col.ast.stmt.decl.*;
-import vct.col.ast.type.PrimitiveSort;
-import vct.col.ast.type.PrimitiveType;
-import vct.col.ast.type.TypeExpression;
-import vct.col.ast.type.TypeOperator;
+import vct.col.ast.type.*;
 
 import java.util.Stack;
 import java.util.concurrent.atomic.AtomicReference;
@@ -39,13 +36,26 @@ public abstract class ASTFrame<T> {
      * Stores the kind of the variable.
      */
     public final NameExpressionKind kind;
+
+    /**
+     * Stores if this variable is a shared/local memory scalar for GPU programs, this is used in type checking,
+     * since their permission can be exchanged.
+     */
+    public final Boolean shared_scalar;
     
     /**
      * Constructor for a variable info record.
      */
+    public VariableInfo(ASTNode reference, NameExpressionKind kind, Boolean shared_scalar){
+      this.reference=reference;
+      this.kind=kind;
+      this.shared_scalar=shared_scalar;
+    }
+
     public VariableInfo(ASTNode reference, NameExpressionKind kind){
       this.reference=reference;
       this.kind=kind;
+      this.shared_scalar=false;
     }
   }
   
@@ -374,6 +384,44 @@ public abstract class ASTFrame<T> {
       }
     }
 
+    private Option<Type> get_shared_mem_type(DeclarationStatement d){
+      Type t=d.getType();
+      Stack<PrimitiveSort> pointer_stack = new Stack<>();
+      Boolean shared = false;
+
+      while(t instanceof PrimitiveType){
+        PrimitiveType e = (PrimitiveType)t;
+        if(e.sort == PrimitiveSort.Pointer || e.sort == PrimitiveSort.Array) {
+          t = (Type)e.firstarg();
+          pointer_stack.push(e.sort);
+        } else if(e.sort == PrimitiveSort.Cell){
+          t = (Type)e.firstarg();
+        } else if (e.sort == PrimitiveSort.Option) {
+          t = (Type) e.firstarg();
+        } else break;
+      }
+
+      while(t instanceof TypeExpression){
+        TypeExpression e=(TypeExpression)t;
+        switch (e.operator()) {
+          case Local:
+            shared=true;
+            t=e.firstType();
+            break;
+          default:
+            t=e.firstType();
+            break;
+        }
+      }
+      if(!shared) return Option.empty();
+
+      while(!pointer_stack.empty()){
+        t = new PrimitiveType(pointer_stack.pop(), t);
+      }
+
+      return Option.apply(t);
+    }
+
     @Override
     public void visit(Method node){
       switch(action){
@@ -384,10 +432,32 @@ public abstract class ASTFrame<T> {
           variables.add(decl.name(), new VariableInfo(decl, NameExpressionKind.Argument));
         }
         if(node.getReturnType() instanceof TypeExpression && ((TypeExpression) node.getReturnType()).operator() == TypeOperator.Kernel) {
-          for(String kernelArgument : new String[]{"opencl_lid", "opencl_gid", "opencl_gcount", "opencl_gsize"}) {
+          for(String kernelArgument : new String[]{"opencl_lid", "opencl_gid", "opencl_gcount", "opencl_gsize",
+                  "shared_mem_size_1", "shared_mem_size_2", "shared_mem_size_3", "shared_mem_size_4", "shared_mem_size_5",
+                  "shared_mem_size_6", "shared_mem_size_7", "shared_mem_size_8", "shared_mem_size_9", "shared_mem_size_10"}) {
             variables.add(kernelArgument, new VariableInfo(
                     new DeclarationStatement(kernelArgument, new PrimitiveType(PrimitiveSort.Integer)),
                     NameExpressionKind.Argument));
+          }
+          //Get shared memory declarations
+          ASTNode the_body = node.getBody();
+          if(the_body instanceof BlockStatement){
+            BlockStatement blocks = (BlockStatement) the_body;
+            for(ASTNode stmt : blocks.getStatements()){
+              if(stmt instanceof DeclarationStatement){
+                DeclarationStatement d = (DeclarationStatement) stmt;
+                Option<Type> local_type = get_shared_mem_type(d);
+                if(local_type.isDefined()){
+                  String name = d.name();
+                  Type t = local_type.get();
+                  Boolean shared_scalar = false;
+                  if(t instanceof PrimitiveType && ((PrimitiveType) t).isSimple()) shared_scalar = true;
+                  variables.add(name, new VariableInfo(
+                          new DeclarationStatement(name, t),
+                          NameExpressionKind.Argument, shared_scalar));
+                }
+              }
+            }
           }
         }
         add_contract_vars(node);

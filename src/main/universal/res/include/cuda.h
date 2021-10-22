@@ -1,7 +1,10 @@
+// Custom VerCors header for CUDA
 #ifndef CUDA_H
 #define CUDA_H
 
+// Keywords for CUDA
 #define __global__ __vercors_kernel__
+#define __shared__ __vercors_local_memory__
 
 #define cudaEvent_t int
 #define cudaMemcpyHostToDevice 0

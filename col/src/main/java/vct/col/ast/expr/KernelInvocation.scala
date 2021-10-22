@@ -3,9 +3,13 @@ package vct.col.ast.expr
 import vct.col.ast.generic.ASTNode
 import vct.col.ast.util.{ASTMapping, ASTMapping1, ASTVisitor}
 
-case class KernelInvocation(method: String, blockCount: ASTNode, threadCount: ASTNode, args: Seq[ASTNode]) extends ExpressionNode {
+case class KernelInvocation(method: String, blockCount: ASTNode, threadCount: ASTNode, sharedMemorySize: ASTNode, args: Seq[ASTNode]) extends ExpressionNode {
+  def this(method: String, blockCount: ASTNode, threadCount: ASTNode, args: Seq[ASTNode]) =
+    this(method, blockCount, threadCount, null, args)
   def this(method: String, blockCount: ASTNode, threadCount: ASTNode, args: Array[ASTNode]) =
-    this(method, blockCount, threadCount, args.clone().toSeq)
+    this(method, blockCount, threadCount, null, args.clone().toSeq)
+  def this(method: String, blockCount: ASTNode, threadCount: ASTNode, sharedMemorySize: ASTNode, args: Array[ASTNode]) =
+    this(method, blockCount, threadCount, sharedMemorySize, args.clone().toSeq)
 
   def javaArgs: Array[ASTNode] = args.toArray
 

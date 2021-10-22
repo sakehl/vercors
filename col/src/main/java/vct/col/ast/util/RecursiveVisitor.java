@@ -147,6 +147,9 @@ public class RecursiveVisitor<T> extends ASTFrame<T> implements ASTVisitor<T> {
   public void visit(KernelInvocation e) {
     e.blockCount().accept(this);
     e.threadCount().accept(this);
+    if(e.sharedMemorySize() != null){
+      e.sharedMemorySize().accept(this);
+    }
     dispatch(e.javaArgs());
   }
 

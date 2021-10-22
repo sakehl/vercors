@@ -651,6 +651,7 @@ object Passes {
         features.NotJavaEncoded,
         features.NotJavaResolved,
         features.NotStandardized,
+        features.ArrayOps
       ),
       removes=Set(features.TypeExpressions, features.KernelInvocations),
       introduces=Feature.DEFAULT_INTRODUCE ++ Set(

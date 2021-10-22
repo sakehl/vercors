@@ -36,6 +36,7 @@ import viper.api.SilverTypeMap;
 @SuppressWarnings("incomplete-switch")
 public class AbstractTypeCheck extends RecursiveVisitor<Type> {
   PassReport report;
+  Set<String> scalar_shared_memory_names = new HashSet<>();
 
   public void check(){
     for(ASTDeclaration entry:source().get()){
@@ -1820,6 +1821,7 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
                                          && (((NameExpression)arg).site().isStatic()))
     && !arg.getType().isPrimitive(PrimitiveSort.Location)
     && !arg.isa(StandardOperator.IndependentOf) // Ignore this check in jspec rules
+    && !((arg instanceof NameExpression) && variables.lookup(((NameExpression)arg).getName()).shared_scalar)
     ){
       Fail("%s is not a heap location",what);
     }

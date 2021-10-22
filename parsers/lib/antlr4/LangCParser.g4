@@ -236,6 +236,8 @@ storageClassSpecifier
     |   '_Thread_local'
     |   'auto'
     |   'register'
+    |   '__vercors_local_memory__'
+    |   '__vercors_global_memory__'
     ;
 
 typeSpecifier

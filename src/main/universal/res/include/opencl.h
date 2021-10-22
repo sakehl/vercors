@@ -1,8 +1,14 @@
+// Custom VerCors header for OpenCL
 #ifndef OPENCL_H
 #define OPENCL_H
 
+// Keywords for OpenCL
 #define __kernel __vercors_kernel__
-
+#define __global __vercors_global_memory__
+#define global __vercors_global_memory__
+#define __local __vercors_local_memory__
+#define local __vercors_local_memory__
+// Barriers
 #define CLK_GLOBAL_MEM_FENCE __vercors_global_barrier__
 #define CLK_LOCAL_MEM_FENCE __vercors_local_barrier__
 

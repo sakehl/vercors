@@ -371,6 +371,9 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
     object ThreadLocal extends StorageClass
     object Auto extends StorageClass
     object Register extends StorageClass
+    object LocalGPUMemory extends StorageClass
+    object LocalExternGPUMemory extends StorageClass
+    object GlobalGPUMemory extends StorageClass
 
     object ThreadLocalStatic extends StorageClass
     object ThreadLocalExtern extends StorageClass
@@ -410,6 +413,8 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
       case StorageClassSpecifier3("_Thread_local") => ThreadLocal
       case StorageClassSpecifier4("auto") => Auto
       case StorageClassSpecifier5("register") => Register
+      case StorageClassSpecifier6("__vercors_local_memory__") => LocalGPUMemory
+      case StorageClassSpecifier7("__vercors_global_memory__") => GlobalGPUMemory
     }
 
     def add(tree: StorageClassSpecifierContext): Unit = {
@@ -419,6 +424,7 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
         case Some(ThreadLocal) if cls == ExternSC => ThreadLocalExtern
         case Some(ThreadLocal) if cls == Static => ThreadLocalStatic
         case Some(ExternSC) if cls == ThreadLocal => ThreadLocalExtern
+        case Some(ExternSC) if cls == LocalGPUMemory => LocalExternGPUMemory
         case Some(Static) if cls == ThreadLocal => ThreadLocalStatic
         case Some(other) => fail(tree, "Encountered storage class %s before, so cannot also declare as %s", other, cls)
       })
@@ -459,9 +465,6 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
     }
 
     def getType: Either[String, Type] = {
-      if (typeQual.nonEmpty) {
-        return Left("Type qualifiers such as const are not supported.")
-      }
       if (funcSpec.nonEmpty) {
         return Left("Function specifiers such as inline are not supported.")
       }
@@ -484,13 +487,23 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
         case None => primitive
         case Some(Static) => create.__static(primitive)
         case Some(ExternSC) => create.__extern(primitive)
+        case Some(LocalGPUMemory) => create.__local(primitive)
+        case Some(LocalExternGPUMemory) => create.__extern(create.__local(primitive))
+        case Some(GlobalGPUMemory) => create.__global(primitive)
         case Some(sc) => return Left(s"Storage class ${sc.getClass.getSimpleName} not supported")
       }
 
+      var tq = sc;
+      for(qualifier <- typeQual){
+        tq = qualifier match {
+          case _ => return Left(s"Type qualifiers ${qualifier.getClass.getSimpleName} not supported.")
+        }
+      }
+
       Right(if(isKernel) {
-        create.__kernel(sc)
+        create.__kernel(tq)
       } else {
-        sc
+        tq
       })
     }
   }
@@ -887,6 +900,10 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
       ??(exp)
     case PostfixExpression11(GpgpuCudaKernelInvocation0(name, _, blockCount, _, threadCount, _, _, arguments, _, maybeWithThen)) =>
       val invocation = create.kernelInvocation(convertID(name), expr(blockCount), expr(threadCount), exprList(arguments):_*)
+      maybeWithThen.toSeq.flatMap(convertValWithThen).foreach(invocation.get_after.addStatement(_))
+      invocation
+    case PostfixExpression11(GpgpuCudaKernelInvocation1(name, _, blockCount, _, threadCount, _, sharedMemSize, _, _, arguments, _, maybeWithThen)) =>
+      val invocation = create.kernelInvocation(convertID(name), expr(blockCount), expr(threadCount), expr(sharedMemSize), exprList(arguments):_*)
       maybeWithThen.toSeq.flatMap(convertValWithThen).foreach(invocation.get_after.addStatement(_))
       invocation
   })

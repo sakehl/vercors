@@ -188,6 +188,10 @@ public class AbstractPrinter extends AbstractVisitor<Object> {
     e.blockCount().accept(this);
     out.printf(", ");
     e.threadCount().accept(this);
+    if(e.sharedMemorySize() != null){
+      out.printf(", ");
+      e.sharedMemorySize().accept(this);
+    }
     out.printf(">>>(");
     boolean first = true;
     for(ASTNode arg : e.javaArgs()) {
