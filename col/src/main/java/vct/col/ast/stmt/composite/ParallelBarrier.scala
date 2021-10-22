@@ -6,7 +6,7 @@ import vct.col.ast.generic.ASTNode
 import vct.col.ast.stmt.decl.Contract
 import vct.col.ast.util.{ASTMapping, ASTMapping1, ASTVisitor, VisitorHelper}
 
-class ParallelBarrier (val label:String, val contract:Contract, private[this] val fences:ArrayList[String], val body:BlockStatement) extends ASTNode with VisitorHelper {
+class ParallelBarrier (val label:String, val contract:Contract, private[this] val fences:ArrayList[String], val body:BlockStatement, val gpu_specifier:ASTNode) extends ASTNode with VisitorHelper {
   val invs = new ArrayList[String](fences)
     
   override def accept_simple[T,A](m:ASTMapping1[T,A], arg:A) = m.map(this, arg)

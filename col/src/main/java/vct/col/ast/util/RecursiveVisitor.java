@@ -322,6 +322,7 @@ public class RecursiveVisitor<T> extends ASTFrame<T> implements ASTVisitor<T> {
   public void visit(ParallelBarrier pb){
     dispatch(pb.contract());
     dispatch(pb.body());
+    dispatch(pb.gpu_specifier());
   }
 
   public void visit(ParallelBlock pb){

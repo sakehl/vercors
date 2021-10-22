@@ -5,6 +5,9 @@ import hre.ast.TrackingTree;
 import hre.lang.HREError;
 import hre.util.LambdaHelper;
 import org.apache.commons.lang3.StringEscapeUtils;
+import scala.Int;
+import scala.Option;
+import scala.Some;
 import vct.col.ast.expr.*;
 import vct.col.ast.expr.constant.ConstantExpression;
 import vct.col.ast.expr.constant.StringValue;
@@ -20,6 +23,7 @@ import vct.col.ast.syntax.JavaDialect;
 import vct.col.ast.syntax.PVLSyntax;
 import vct.col.ast.type.*;
 import vct.col.ast.util.ClassName;
+import vct.col.ast.util.ExpressionEquallityCheck;
 
 import java.io.PrintWriter;
 import java.util.*;
@@ -1172,7 +1176,26 @@ public class PVLPrinter extends AbstractPrinter{
         if (pb.contract() == null) {
             Fail("parallel barrier with null contract!");
         } else {
-            out.printf("barrier(%s;%s){", pb.label(), pb.invs());
+            if(pb.gpu_specifier() == null)
+                out.printf("barrier(%s;%s){", pb.label(), pb.invs());
+            else{
+                String specifier;
+                Option<Integer> specifier_val =
+                        ExpressionEquallityCheck.is_constant_int_java(pb.gpu_specifier());
+                if(specifier_val.isDefined()){
+                    switch(specifier_val.get()){
+                        case 0: specifier = "No memory fences"; break;
+                        case 1: specifier = "CLK_LOCAL_MEM_FENCE"; break;
+                        case 2: specifier = "CLK_GLOBAL_MEM_FENCE"; break;
+                        case 3: specifier = "CLK_LOCAL_MEM_FENCE|CLK_GLOBAL_MEM_FENCE"; break;
+                        default: specifier = String.format("Unknown memory fence (%s)", pb.gpu_specifier());
+                    }
+                } else {
+                    specifier = String.format("Unknown memory fence (%s)", pb.gpu_specifier());
+                }
+                out.printf("barrier(%s;%s;%s){", pb.label(), pb.invs(), specifier);
+            }
+
             out.println("");
             out.incrIndent();
             visit(pb.contract());

@@ -666,7 +666,7 @@ public class AbstractRewriter extends AbstractVisitor<ASTNode> {
   
   @Override
   public void visit(ParallelBarrier pb) {
-    result = create.barrier(pb.label(), rewrite(pb.contract()), pb.invs(), rewrite(pb.body()));
+    result = create.barrier(pb.label(), rewrite(pb.contract()), pb.invs(), rewrite(pb.body()), rewrite(pb.gpu_specifier()));
   }
 
   @Override

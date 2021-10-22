@@ -5,6 +5,8 @@
 // Keywords for CUDA
 #define __global__ __vercors_kernel__
 #define __shared__ __vercors_local_memory__
+// Barriers
+#define __syncthreads() __vercors_barrier__(1|2)
 
 #define cudaEvent_t int
 #define cudaMemcpyHostToDevice 0
@@ -45,8 +47,6 @@ extern /*@ pure @*/ int get_num_sub_groups (); // Number of subgroups
 extern /*@ pure @*/ int get_enqueued_num_sub_groups (); //
 
 extern /*@ pure @*/ int get_sub_group_id (); // Sub-group ID
-
-#define __syncthreads() __vercors_barrier__(__vercors_local_barrier__)
 
 extern /*@ pure @*/ int get_sub_group_local_id (); // Unique work-item ID
 

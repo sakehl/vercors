@@ -559,11 +559,9 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
       convertValStat(valStat)
     case BlockItem3(valStat) =>
       Seq(convertValStat(valStat))
-    case BlockItem4(GpgpuLocalBarrier0(maybeContract, _, _, _, _)) =>
-      Seq(create.barrier("group_block", getContract(convertValContract(maybeContract)), new util.ArrayList[String](), null))
-    case BlockItem5(GpgpuGlobalBarrier0(maybeContract, _, _, _, _)) =>
-      Seq(create.barrier("kernel_block", getContract(convertValContract(maybeContract)), new util.ArrayList[String](), null))
-    case BlockItem6(GpgpuAtomicBlock0(_, block, maybeWithThen)) =>
+    case BlockItem4(GpgpuBarrier0(maybeContract, _, _, e, _)) =>
+      Seq(create.barrier("group_block", getContract(convertValContract(maybeContract)), new util.ArrayList[String](), new BlockStatement(), expr(e)))
+    case BlockItem5(GpgpuAtomicBlock0(_, block, maybeWithThen)) =>
       val atomic = create.parallel_atomic(convertStat(block).asInstanceOf[BlockStatement], "__vercors_kernel_invariant__")
       maybeWithThen.map(convertValWithThen).foreach(_.foreach(atomic.get_after.addStatement(_)))
       Seq(atomic)

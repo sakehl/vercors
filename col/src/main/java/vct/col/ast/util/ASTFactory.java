@@ -182,13 +182,23 @@ public class ASTFactory<E> implements FrameControl {
   
   public ParallelBarrier barrier(String label, Contract c, ArrayList<String> fences, BlockStatement body){
      return barrier(origin_stack.get(),label,c,fences,body);
-   }
+  }
+
+  public ParallelBarrier barrier(String label, Contract c, ArrayList<String> fences, BlockStatement body,
+                                 ASTNode gpuSpecifier){
+    return barrier(origin_stack.get(),label,c,fences,body, gpuSpecifier);
+  }
+
+  public ParallelBarrier barrier(Origin origin,String label,Contract c,ArrayList<String> fences, BlockStatement body){
+    return barrier(origin,label,c,fences,body,null);
+  }
   
   /**
     * Create a new barrier node.
     */
-   public ParallelBarrier barrier(Origin origin,String label,Contract c,ArrayList<String> fences, BlockStatement body){
-     ParallelBarrier res = new ParallelBarrier(label, c, fences, body);
+   public ParallelBarrier barrier(Origin origin,String label,Contract c,ArrayList<String> fences, BlockStatement body,
+                                  ASTNode gpuSpecifier){
+     ParallelBarrier res = new ParallelBarrier(label, c, fences, body, gpuSpecifier);
      res.setOrigin(origin);
      res.accept_if(post);
      return res;

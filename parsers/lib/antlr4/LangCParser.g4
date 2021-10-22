@@ -520,8 +520,7 @@ blockItem
     |   statement
     |   valEmbedStatementBlock
     |   {specLevel>0}? valStatement
-    |   gpgpuLocalBarrier
-    |   gpgpuGlobalBarrier
+    |   gpgpuBarrier
     |   gpgpuAtomicBlock
     ;
 

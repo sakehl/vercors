@@ -9,9 +9,9 @@
 #define __local __vercors_local_memory__
 #define local __vercors_local_memory__
 // Barriers
-#define CLK_GLOBAL_MEM_FENCE __vercors_global_barrier__
-#define CLK_LOCAL_MEM_FENCE __vercors_local_barrier__
-
+#define CLK_IMAGE_MEM_FENCE 4
+#define CLK_GLOBAL_MEM_FENCE 2
+#define CLK_LOCAL_MEM_FENCE 1
 #define barrier(locality) __vercors_barrier__(locality)
 
 extern /*@ pure @*/ int get_work_dim(); // Number of dimensions in use

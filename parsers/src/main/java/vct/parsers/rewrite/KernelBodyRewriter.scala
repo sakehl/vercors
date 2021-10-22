@@ -233,7 +233,7 @@ class KernelBodyRewriter(override val source: ProgramUnit,
     case _ =>
       super.visit(e)
   }
-/* We commented this piece of code out before barrier changes
+
   override def visit(pb: ParallelBarrier): Unit = if ((pb.label eq "group_block") && pb.gpu_specifier != null) {
     //The gpu specifier has the value for the type of memory fence we can get.
     // 1 is for shared fence, 2 is for global fence. They can be ORed together (|), giving the value 3
@@ -355,5 +355,4 @@ class PermissionScanner() extends RecursiveVisitor[AnyRef](null, null) {
 
     my_dispatch(c.signals)
   }
- */
 }

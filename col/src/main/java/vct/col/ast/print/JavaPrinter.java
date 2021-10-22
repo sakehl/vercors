@@ -10,6 +10,7 @@ import java.util.List;
 
 import org.apache.commons.lang3.StringEscapeUtils;
 
+import scala.Option;
 import vct.col.ast.langspecific.c.*;
 import vct.col.ast.stmt.composite.Switch.Case;
 import vct.col.ast.expr.*;
@@ -27,6 +28,7 @@ import vct.col.ast.syntax.JavaDialect;
 import vct.col.ast.syntax.JavaSyntax;
 import vct.col.ast.util.ClassName;
 import hre.util.LambdaHelper;
+import vct.col.ast.util.ExpressionEquallityCheck;
 
 import static hre.lang.System.DebugException;
 
@@ -1321,7 +1323,25 @@ public class JavaPrinter extends AbstractPrinter {
     if (pb.contract() == null) {
       Fail("parallel barrier with null contract!");
     } else {
-      out.printf("barrier(%s;%s){", pb.label(), pb.invs());
+      if(pb.gpu_specifier() == null)
+        out.printf("barrier(%s;%s){", pb.label(), pb.invs());
+      else{
+        String specifier;
+        Option<Integer> specifier_val =
+                ExpressionEquallityCheck.is_constant_int_java(pb.gpu_specifier());
+        if(specifier_val.isDefined()){
+          switch(specifier_val.get()){
+            case 0: specifier = "No memory fences"; break;
+            case 1: specifier = "CLK_LOCAL_MEM_FENCE"; break;
+            case 2: specifier = "CLK_GLOBAL_MEM_FENCE"; break;
+            case 3: specifier = "CLK_LOCAL_MEM_FENCE|CLK_GLOBAL_MEM_FENCE"; break;
+            default: specifier = String.format("Unknown memory fence (%s)", pb.gpu_specifier());
+          }
+        } else {
+          specifier = String.format("Unknown memory fence (%s)", pb.gpu_specifier());
+        }
+        out.printf("barrier(%s;%s;%s){", pb.label(), pb.invs(), specifier);
+      }
       out.println("");
       out.incrIndent();
       visit(pb.contract());
