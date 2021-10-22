@@ -108,6 +108,10 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
       if (!rewritten) {
         expr.operator match {
           case Subscript =>
+            if(getNames(expr.second).intersect(bounds.names).isEmpty) {
+              super.visit(expr)
+              return;
+            };
             val linear_expr_finder = new FindLinearExpressions(bounds)
             expr.second.accept(linear_expr_finder)
             linear_expr_finder.can_rewrite() match {
@@ -149,9 +153,9 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
       // We can rewrite this to:
       // xs[i_fresh], and were we substitute every occurrence of i with:
       // i := (i_fresh - b) / a
-      // We need to add i_fresh % a == b to the forall precondition
-      // We assume that a>0
-      // TODO: Check for a or generalize
+      // We need to add (i_fresh - b) % a == 0 to the forall precondition
+      // We assume that a>0 or a<0
+      // TODO: Check for a!=0
       def rewrite_single_variable(): SubstituteForall ={
         val i_old = variable_bounds.names.head
         //Since we have only one variable, we reuse the old one
@@ -177,7 +181,7 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
 
         var bounds = (linear_factor, constant_expression) match {
           case (Some(a), Some(b)) =>
-            create expression(EQ, create expression(Mod, i_fresh, a), b)
+            create expression(EQ, create expression(Mod, create expression(Minus, i_fresh, b), a), create constant 0)
           case (Some(a), None) =>
             create expression(EQ, create expression(Mod, i_fresh, a), create constant 0)
           case _ => create constant true
@@ -202,9 +206,15 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
       // inner_var := i, outer_var := j
       def check_vars(inner_var: String , outer_var /*j*/: String): Option[SubstituteForall] = {
         // lin_inner := a
-        val lin_inner = linear_expressions(inner_var)
+        val lin_inner = linear_expressions.get(inner_var) match {
+          case Some(lin) => lin
+          case None => return None
+        }
         // lin_outer =?= a*n
-        val lin_outer = linear_expressions(outer_var)
+        val lin_outer = linear_expressions.get(outer_var) match {
+          case Some(lin) => lin
+          case None => return None
+        }
         for (bounds <- variable_bounds.upperExclusiveBounds.get(inner_var); upper <- bounds) {
           if (is_value(lin_inner, 1)) {
             if (equal_expressions(upper, lin_outer)) {
