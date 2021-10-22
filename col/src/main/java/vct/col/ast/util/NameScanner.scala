@@ -85,7 +85,7 @@ class NameScanner extends RecursiveVisitor[AnyRef](null, null) {
     .map(_.find(_.name == name))
     .collectFirst { case Some(decl) => decl }
 
-  private def getYieldsDecl(name: String): Option[DeclarationStatement] = yieldsStack
+  protected def getYieldsDecl(name: String): Option[DeclarationStatement] = yieldsStack
     .map(_.find(_.name == name))
     .collectFirst { case Some(decl) => decl }
 
@@ -118,7 +118,7 @@ class NameScanner extends RecursiveVisitor[AnyRef](null, null) {
     * @param additionalNames can be used to pass in given or yields scopes.
     * @return true if `name` is the name of a free variable.
     */
-  private def checkName(name: String, typ: Type, additionalNames: String => Option[DeclarationStatement]): Boolean =
+  protected def checkName(name: String, typ: Type, additionalNames: String => Option[DeclarationStatement]): Boolean =
     (additionalNames(name) orElse getDecl(name), freeNames.get(name)) match {
       case (Some(decl), _) =>
         if (typ != null && decl.`type` != typ) {
@@ -170,7 +170,7 @@ class NameScanner extends RecursiveVisitor[AnyRef](null, null) {
       checkName(e.getName, e.getType, getYieldsDecl)
 
     case Unresolved =>
-      if (Seq("tcount", "gsize", "tid", "gid", "lid", "threadIdx", "blockIdx", "blockDim").contains(e.getName)) {
+      if (Seq("tcount", "gsize", "tid", "gid", "lid", "threadIdx", "blockIdx", "blockDim", "gridDim").contains(e.getName)) {
         checkName(e.getName, e.getType, getYieldsDecl)
       }
     case _ =>

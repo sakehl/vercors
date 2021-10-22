@@ -816,7 +816,7 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
     if(e.isa(StandardOperator.StructSelect)) {
       boolean leftKernelVar = false;
 
-      for(String kernelVar : new String[]{"blockIdx", "threadIdx", "threadDim"}) {
+      for(String kernelVar : new String[]{"blockIdx", "threadIdx", "blockDim", "gridDim"}) {
         if(e.arg(0).isName(kernelVar)) {
           leftKernelVar = true;
         }
@@ -1017,7 +1017,7 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
         break;
       }
       case CurrentPerm: {
-        check_location(e.arg(0), "argument of CurrentPerm");
+        check_location(e.arg(0), String.format("argument of CurrentPerm: %s", e));
         tt[0] = e.arg(0).getType();
         if (tt[0] == null) Fail("type of argument unknown at %s", e.getOrigin());
         if (!((e.arg(0) instanceof Dereference) || tt[0].isPrimitive(PrimitiveSort.Resource))) {
@@ -1045,7 +1045,7 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
       case HistoryPerm:
       case ActionPerm:
       case Perm: {
-        check_location(e.arg(0), "first argument");
+        check_location(e.arg(0), String.format("first argument of %s", e));
         if (!tt[1].isBoolean() && !tt[1].isNumeric())
           Fail("type of right argument is %s rather than a numeric type at %s", tt[1], e.getOrigin());
         force_frac(e.arg(1));
@@ -1053,7 +1053,7 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
         break;
       }
       case PointsTo: {
-        check_location(e.arg(0), "first argument");
+        check_location(e.arg(0), String.format("first argument of %s", e));
         tt[0] = e.arg(0).getType();
         if (tt[0] == null) Fail("type of left argument unknown at %s", e.getOrigin());
         tt[1] = e.arg(1).getType();
@@ -1081,7 +1081,7 @@ public class AbstractTypeCheck extends RecursiveVisitor<Type> {
         break;
       }
       case Value:
-        check_location(e.arg(0), "argument");
+        check_location(e.arg(0), String.format("argument of %s", e));
         e.setType(new PrimitiveType(PrimitiveSort.Resource));
         break;
       case AddsTo:

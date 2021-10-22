@@ -38,11 +38,35 @@ public class Parsers {
     Fail("no parser for %s is known",extension);
     return null;
   }
+
+  public static ProgramUnit.SourceLanguage getLanguage(String extension){
+    switch(extension){
+      case "cl":
+      case "c":
+        return ProgramUnit.SourceLanguage.OpenCLorC;
+      case "cu":
+        return ProgramUnit.SourceLanguage.CUDA;
+      case "i":
+        return ProgramUnit.SourceLanguage.I;
+      case "java7":
+      case "java8":
+      case "java":
+      case "jspec":
+        return ProgramUnit.SourceLanguage.Java;
+      case "pvl":
+        return ProgramUnit.SourceLanguage.PVL;
+      case "sil":
+        return ProgramUnit.SourceLanguage.Silver;
+    }
+    Fail("no parser for %s is known",extension);
+    return null;
+  }
   
   public static ProgramUnit parseFile(Path filePath) {
     String name = filePath.toString();
     int dot = name.lastIndexOf('.');
-    if (dot < 0) {
+    int p = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+    if (dot < 0 || dot < p) {
       Fail("cannot deduce language of %s", filePath);
     }
     String lang = name.substring(dot + 1);
@@ -53,6 +77,8 @@ public class Parsers {
       return null;
     } else {
       ProgramUnit unit = Parsers.getParser(lang).parse(filePath.toFile());
+      ProgramUnit.SourceLanguage sourceLanguage = getLanguage(lang);
+      unit.sourceLanguage = sourceLanguage;
       Progress("Read %s successfully", name);
       return unit;
     }

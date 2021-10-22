@@ -35,6 +35,16 @@ public class ProgramUnit implements ASTSequence<ProgramUnit>, DebugNode {
     }
   }
 
+  public enum SourceLanguage {
+    Java,
+    OpenCLorC,
+    CUDA,
+    PVL,
+    Silver,
+    I,
+    Unknown
+  }
+
   public String toString(){
     return Configuration.getDiagSyntax().print(this).toString();
   }
@@ -50,6 +60,8 @@ public class ProgramUnit implements ASTSequence<ProgramUnit>, DebugNode {
   }
   
   private EnumMap<LanguageFlag, Boolean> languageFlags = new EnumMap<>(LanguageFlag.class);
+
+  public SourceLanguage sourceLanguage = SourceLanguage.Unknown;
 
   /**
    * A program is made up of declarations.
@@ -110,7 +122,7 @@ public class ProgramUnit implements ASTSequence<ProgramUnit>, DebugNode {
    * Create an empty program unit.
    */
   public ProgramUnit(){
-    
+
   }
 
   /**
@@ -121,6 +133,7 @@ public class ProgramUnit implements ASTSequence<ProgramUnit>, DebugNode {
   public ProgramUnit(ProgramUnit source) {
     if(source != null) {
       languageFlags.putAll(source.languageFlags);
+      sourceLanguage = source.sourceLanguage;
     }
   }
   
@@ -289,6 +302,7 @@ public class ProgramUnit implements ASTSequence<ProgramUnit>, DebugNode {
 
   public void add(ProgramUnit unit) {
     this.addFlags(unit);
+    this.sourceLanguage = unit.sourceLanguage;
 
     for(ASTDeclaration decl:unit.get()){
       add(decl);

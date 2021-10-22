@@ -27,7 +27,7 @@ case class TypeExpression(val operator:TypeOperator, val types:List[Type]) exten
   /** Constructs a new type expression from an array of types */
   def this(operator:TypeOperator, types:Array[Type]) = this(operator, types.toList)
 
-  private def isLeaky: Boolean = TypeExpression.LEAKY_OPERATORS.contains(operator)
+  def isLeaky: Boolean = TypeExpression.LEAKY_OPERATORS.contains(operator)
 
   /** Gives the heading type in the type list */
   def firstType = types.head

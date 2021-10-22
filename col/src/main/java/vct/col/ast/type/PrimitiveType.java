@@ -187,6 +187,13 @@ public final class PrimitiveType extends Type {
         }
         break;
     }
+    if (t instanceof TypeExpression){
+      TypeExpression te=(TypeExpression)t;
+      if( te.isLeaky() )
+        return supertypeof(context, te.firstType());
+      else
+        return false;
+    }
     if (t instanceof PrimitiveType){
       PrimitiveType pt=(PrimitiveType)t;
       //Warning("testing (%s/%s)",this.sort,pt.sort);
@@ -374,6 +381,26 @@ public final class PrimitiveType extends Type {
     switch(sort){
       case Float:
       case Double:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  public Boolean isSimple() {
+    switch (sort) {
+      case Boolean:
+      case Byte:
+      case Short:
+      case Integer:
+      case Long:
+      case UByte:
+      case UShort:
+      case UInteger:
+      case ULong:
+      case Float:
+      case Double:
+      case Char:
         return true;
       default:
         return false;

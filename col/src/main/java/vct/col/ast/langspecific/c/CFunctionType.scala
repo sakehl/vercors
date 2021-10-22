@@ -1,13 +1,18 @@
 package vct.col.ast.langspecific.c
 
+import hre.ast.Origin
 import vct.col.ast.`type`.Type
 import vct.col.ast.stmt.decl.{DeclarationStatement, ProgramUnit}
 import vct.col.ast.util.{ASTMapping, ASTMapping1, ASTVisitor, TypeMapping}
+
 import scala.jdk.CollectionConverters._
 
-case class ParamSpec(t: Option[Type], name: Option[String]) {
+case class ParamSpec(t: Option[Type], name: Option[String], origin: Origin) {
   def asDecl: Option[DeclarationStatement] = (t, name) match {
-    case (Some(t), Some(name)) => Some(new DeclarationStatement(name, t))
+    case (Some(t), Some(name)) =>
+      val decl = new DeclarationStatement(name, t)
+      decl.setOrigin(origin)
+      Some(decl)
     case _ => None
   }
 

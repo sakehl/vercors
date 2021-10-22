@@ -30,7 +30,7 @@ public class ColCParser extends ColIParser {
             Runtime runtime = Runtime.getRuntime();
 
             StringBuilder command = new StringBuilder(Configuration.cpp_command.get());
-            command.append(" -nostdinc -nocudainc -nocudalib --cuda-host-only -isystem ").append(Configuration.getCIncludePath().getAbsolutePath());
+            command.append(" -P -nostdinc -nocudainc -nocudalib --cuda-host-only -isystem ").append(Configuration.getCIncludePath().getAbsolutePath());
 
             Path filePath = Paths.get(file_name).toAbsolutePath().getParent();
 

@@ -12,7 +12,7 @@ import java.nio.file.Paths
 abstract class ToCOL(fileName: String, tokens: CommonTokenStream, parser: org.antlr.v4.runtime.Parser) {
   val create = new ASTFactory[ParserRuleContext]()
 
-  private def fileOrigin(tree: ParserRuleContext): FileOrigin = {
+  protected def fileOrigin(tree: ParserRuleContext): FileOrigin = {
     val startLine = tree.start.getLine
     val startCol = tree.start.getCharPositionInLine + 1
     val endLine = tree.stop.getLine

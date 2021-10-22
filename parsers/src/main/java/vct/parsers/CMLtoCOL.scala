@@ -1,8 +1,7 @@
 package vct.parsers
 
 import scala.annotation.nowarn
-
-import org.antlr.v4.runtime.{CommonTokenStream, ParserRuleContext}
+import org.antlr.v4.runtime.CommonTokenStream
 import vct.antlr4.generated.CParser
 import vct.antlr4.generated.CParser._
 import vct.antlr4.generated.CParserPatterns._
@@ -92,7 +91,7 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
       Seq(res)
   })
 
-  def convertPointer(ptr: Option[PointerContext]): (Type => Type) = ptr match {
+  def convertPointer(ptr: Option[PointerContext]): Type => Type = ptr match {
     case None => x => x
     case Some(ptr) => convertPointer(ptr)
   }
@@ -125,11 +124,19 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
     tOpt(result)
   }
 
+  def addArray(t: Type, size: Option[AssignmentExpressionContext]): Type = {
+    val result = size match{
+      case None => create.primitive_type(PrimitiveSort.Array, tCell(t))
+      case Some(e) => create.primitive_type(PrimitiveSort.Array, tCell(t), expr(e))
+    }
+    tOpt(result)
+  }
+
   def convertDeclaratorType(decl: DirectDeclaratorContext): (Type => Type) = decl match {
     case DirectDeclarator0(name) => t => t
-    case DirectDeclarator1(inner, "[", quals, _, "]") =>
+    case DirectDeclarator1(inner, "[", quals, size, "]") =>
       failIfDefined(quals, "Qualifiers in array dimensions are unsupported")
-      (t => convertDeclaratorType(inner)(addDims(t, 1)))
+      (t => convertDeclaratorType(inner)(addArray(t, size)))
     case DirectDeclarator2(_, _, _, _, _, _) =>
       ??(decl)
     case DirectDeclarator3(_, _, _, _, _, _) =>
@@ -150,7 +157,7 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
       convertParams(params)
     case ParameterTypeList1(params, ",", "...") =>
       convertParams(params) :+
-        ParamSpec(Some(create primitive_type PrimitiveSort.CVarArgs), Some("..."))
+        ParamSpec(Some(create primitive_type PrimitiveSort.CVarArgs), Some("..."), fileOrigin(tree))
   }
 
   def convertParams(tree: ParameterListContext): Seq[ParamSpec] = tree match {
@@ -171,7 +178,7 @@ class CMLtoCOL(fileName: String, tokens: CommonTokenStream, parser: CParser)
         case Declarator0(maybePtr, directDecl, Seq()) =>
           val t = convertPointer(maybePtr)(convertDeclaratorType(directDecl)(baseType))
           val name = convertDeclaratorName(directDecl)
-          ParamSpec(Some(t), Some(name))
+          ParamSpec(Some(t), Some(name),  fileOrigin(tree))
       }
     case ParameterDeclaration1(declSpecs, maybeDeclarator) =>
       ??(declSpecs)

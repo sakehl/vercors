@@ -87,6 +87,7 @@ public class Method extends ASTDeclaration {
     for(int i=0;i<args.length;i++){
       if (this.args[i].getParent()==null) this.args[i].setParent(this);
     }
+    if(body != null && body.getParent() == null) body.setParent(this);
     this.body=body;
     this.kind=kind;
     setContract(contract);

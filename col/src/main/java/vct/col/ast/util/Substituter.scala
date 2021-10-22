@@ -62,16 +62,24 @@ class Substituter(override val source: ProgramUnit, val var_substitutes: Map[Str
         // If free variable, check if we should replace it
         if (checkName(e.getName, e.getType, getYieldsDecl)) {
           var_substitutes.get(e.getName) match {
-            case Some(replacement) => result = replacement; return;
+            case Some(replacement) =>
+              result = replacement
+              if(result.getOrigin != null) result.clearOrigin()
+              result.setOrigin(e.getOrigin)
+              return
             case None =>
           }
         }
 
       case Unresolved =>
-        if (Seq("tcount", "gsize", "tid", "gid", "lid", "threadIdx", "blockIdx", "blockDim").contains(e.getName)) {
+        if (Seq("tcount", "gsize", "tid", "gid", "lid", "threadIdx", "blockIdx", "blockDim", "gridDim").contains(e.getName)) {
           if (checkName(e.getName, e.getType, getYieldsDecl)) {
             var_substitutes.get(e.getName) match {
-              case Some(replacement) => result = replacement; return;
+              case Some(replacement) =>
+                result = replacement
+                if(result.getOrigin != null) result.clearOrigin()
+                result.setOrigin(e.getOrigin)
+                return
               case None =>
             }
           }

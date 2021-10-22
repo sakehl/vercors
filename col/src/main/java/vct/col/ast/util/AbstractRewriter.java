@@ -883,7 +883,7 @@ public class AbstractRewriter extends AbstractVisitor<ASTNode> {
       } else {
         newType = Option.apply(rewrite(spec.t().get()));
       }
-      paramSpecs.add(new ParamSpec(newType, spec.name()));
+      paramSpecs.add(new ParamSpec(newType, spec.name(), spec.origin()));
     }
     result = new CFunctionType(CollectionConverters.asScala(paramSpecs).toSeq(), returnType);
   }
