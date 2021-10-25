@@ -594,7 +594,11 @@ pure bool simple_path_cost_lemma4(int V, int A, seq<int> start, seq<int> end, se
   context_everywhere 10 == opencl_gcount;
   context_everywhere source >= 0 && source < V;
   context_everywhere counter >= 0 && counter < V-1;
-  context_everywhere g_start.length == A && g_end.length == A && g_weight.length == A && g_cost.length == V;
+  context_everywhere \array(g_start, A);
+  context_everywhere \array(g_end, A);
+  context_everywhere \array(g_weight, A);
+  context_everywhere \array(g_cost, V);
+  //context_everywhere g_start.length == A && g_end.length == A && g_weight.length == A && g_cost.length == V;
   context_everywhere |start_seq| == A && |end_seq| == A && |weight_seq| == A && |cost_seq| == V && |contrib| == A;
 
   kernel_invariant (\forall* int i; 0 <= i && i < A; Perm(g_start[i], 1\4));

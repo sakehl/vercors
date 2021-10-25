@@ -1,4 +1,5 @@
 //:: cases BasicOpenCL
+//:: tools silicon
 //:: verdict Pass
 
 #include <opencl.h>
@@ -9,7 +10,7 @@
     context \pointer_index(a, \ltid*2+1, write);
     context \pointer_index(b, \ltid, write);
 @*/
-__kernel void example(int a[], int b[], int len) {
+__kernel void example(global int* a, global int* b, int len) {
     int tid = get_local_id(0);
     a[tid*2] = tid;
     /*@

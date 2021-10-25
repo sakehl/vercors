@@ -1,4 +1,5 @@
 //:: cases BasicCuda
+//:: tools silicon
 //:: verdict Pass
 
 #include <cuda.h>
@@ -6,7 +7,7 @@
 /*@
     context \pointer_index(a, threadIdx.x, write);
 @*/
-__global__ void example(int a[], int len) {
+__global__ void example(int* a, int len) {
     int tid = threadIdx.x;
     a[tid] = tid;
     /*@
