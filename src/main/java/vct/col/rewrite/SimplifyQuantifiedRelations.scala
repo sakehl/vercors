@@ -3,7 +3,7 @@ package vct.col.rewrite
 import vct.col.ast.`type`.{PrimitiveSort, PrimitiveType, Type}
 import vct.col.ast.expr.StandardOperator._
 import vct.col.ast.expr._
-import vct.col.ast.expr.constant.{ConstantExpression, IntegerValue}
+import vct.col.ast.expr.constant.ConstantExpression
 import vct.col.ast.generic.ASTNode
 import vct.col.ast.stmt.decl.ProgramUnit
 import vct.col.ast.util.{AbstractRewriter, NameScanner, RecursiveVisitor, Substituter}
@@ -70,10 +70,12 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
     }
   }
 
-  class Bounds(val names: Set[String]) {
-    val lowerBounds: mutable.Map[String, Seq[ASTNode]] = mutable.Map()
-    val upperBounds: mutable.Map[String, Seq[ASTNode]] = mutable.Map()
-    val upperExclusiveBounds: mutable.Map[String, Seq[ASTNode]] = mutable.Map()
+  class Bounds(val names: Set[String], val lowerBounds: mutable.Map[String, Seq[ASTNode]],
+               val upperBounds: mutable.Map[String, Seq[ASTNode]],
+               val upperExclusiveBounds: mutable.Map[String, Seq[ASTNode]] ) {
+    def this(names: Set[String]){
+      this(names, mutable.Map(), mutable.Map(), mutable.Map())
+    }
 
     def addLowerBound(name: String, bound: ASTNode): Unit =
       lowerBounds(name) = lowerBounds.getOrElse(name, Seq()) :+ bound
@@ -84,10 +86,10 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
     def addUpperExclusiveBound(name: String, bound: ASTNode): Unit =
       upperExclusiveBounds(name) = upperExclusiveBounds.getOrElse(name, Seq()) :+ bound
 
-    def extremeValue(name: String, maximizing: Boolean): Option[ASTNode] =
+    def extremeValue(name: String, maximizing: Boolean, add_to_extremes: Boolean = true): Option[ASTNode] =
       (if(maximizing) upperBounds else lowerBounds).get(name) match {
         case None => None
-        case Some(bounds) => Some(SimplifyQuantifiedRelations.this.extremeValue(bounds, !maximizing))
+        case Some(bounds) => Some(SimplifyQuantifiedRelations.this.extremeValue(bounds, !maximizing, add_to_extremes))
       }
 
     def selectNonEmpty: Seq[ASTNode] =
@@ -110,8 +112,8 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
           case Subscript =>
             if(getNames(expr.second).intersect(bounds.names).isEmpty) {
               super.visit(expr)
-              return;
-            };
+              return
+            }
             val linear_expr_finder = new FindLinearExpressions(bounds)
             expr.second.accept(linear_expr_finder)
             linear_expr_finder.can_rewrite() match {
@@ -418,6 +420,18 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
     }
   }
 
+  class rewritePerm(factor: ASTNode) extends AbstractRewriter(source) {
+    override def visit(expr: OperatorExpression): Unit = {
+      expr.operator match {
+        case Perm => result = create expression(Perm, expr.first, create expression(Mult, factor, expr.second))
+        case Value =>
+        case ArrayPerm | HistoryPerm | ActionPerm | CurrentPerm | PointsTo
+             => Fail("Permission operator not supported in rewriting quantified relations: %s", expr)
+        case _ => super.visit(expr)
+      }
+    }
+  }
+
   /* This function tries to look if we come across any linear terms in array accesses, which we can rewrite.
      Potentially new ideas or important issues (TODO):
      * We require that there is always a lower bound of zero present. This can be generalized. E.g then s <= i < n,
@@ -435,11 +449,71 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
      * The rewrite pass beforehand, handles the case when something like forall(i; 0<=i && i < n; (term!i)). We
        could potentially handle more here.
    */
-  def rewriteLinearArray(bounds: Bounds, main: ASTNode, old_select: Seq[ASTNode], binder: Binder, result_type: Type): Option[ASTNode] = {
+  def rewriteLinearArray(old_bounds: Bounds, old_main: ASTNode, old_indep_select: Seq[ASTNode], dep_select: Seq[ASTNode],
+                         binder: Binder, result_type: Type): Option[ASTNode] = {
+    var main = old_main
+    var bounds = old_bounds
+    var indep_select = old_indep_select
+    // Check if variables are independent in the main
+    var changed = false
+    for(name <- old_bounds.names){
+      if(independentOf(Set(name), main)){
+        var independent = true
+        dep_select.foreach(s => if(!independentOf(Set(name), s)) independent = false)
+        if(independent){
+          // We can freely remove this named variable
+          val max_bound = bounds.extremeValue(name, maximizing = true)
+          val min_bound = bounds.extremeValue(name, maximizing = false)
+          (max_bound,min_bound) match {
+            case (Some(max_bound), Some(min_bound)) =>
+              changed = true
+              bounds = new Bounds(bounds.names - name, bounds.lowerBounds -= name,
+                bounds.upperBounds -= name, bounds.upperExclusiveBounds -= name)
+              // We remove the forall variable i, but need to rewrite some expressions
+              // (forall i; a <= i <= b; ...Perm(ar, x)...) =====> b>=a ==> ...Perm(ar, x*(b-a+1))...
+              indep_select = indep_select.appended(create expression(StandardOperator.GTE, max_bound, min_bound))
+              val rp = new rewritePerm(
+                create expression(Plus, constant(1), create expression(Minus, max_bound, min_bound)))
+              main = rp.rewrite(main)
+            case _ =>
+          }
+        }
+      }
+    }
+    // Always return result, even if we could not rewrite further
+    val result : Option[ASTNode] = if(changed){
+      if(bounds.names.isEmpty){
+        val select = (indep_select ++ dep_select).reduce(and)
+        Some(create expression(Implies, select, main))
+      } else{
+        var select = indep_select ++ dep_select
+        bounds.upperExclusiveBounds.foreach {
+          case (n: String, upperBounds: Seq[ASTNode]) =>
+            val i = create local_name n
+            upperBounds.foreach(upperBound =>
+              select = select.appended(create expression(LT, i, upperBound))
+            )
+        }
+        bounds.lowerBounds.foreach {
+          case (n: String, lowerBounds: Seq[ASTNode]) =>
+            val i = create local_name n
+            lowerBounds.foreach(lowerBound =>
+              select = select.appended(create expression(LTE, lowerBound, i))
+            )
+        }
+        val declarations = bounds.names.toArray.map(create field_decl(_, new PrimitiveType(PrimitiveSort.Integer)))
+        val forall = create binder(binder, result_type, declarations, Array(), select.reduce(and), main)
+        Some(forall)
+      }
+    } else {
+      None
+    }
+
+
     // For now we only allow forall's with one or two variables
     // TODO: Generalize this
     if(bounds.names.size != 1 && bounds.names.size != 2){
-      return None
+      return result
     }
 
     //We need to check some preconditions for 2 vars
@@ -450,7 +524,7 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
       // Check if we can make a new nice name, which we will use, but this is only possible when it is not a free variable
       val possible_names = Set(bounds.names.head ++ "_" ++ bounds.names.tail.head, bounds.names.tail.head ++ "_" ++ bounds.names.head)
       if (scanner.freeNames.keySet.intersect(possible_names).nonEmpty)
-        return None
+        return result
     }
 
     // This allows only forall's to be rewritten, if they have at least one lower bound of zero
@@ -464,20 +538,22 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
         })
       //Exit when notAt least one zero, or no upper bounds
       if (!one_zero || bounds.upperBounds.getOrElse(name, Seq()).isEmpty) {
-        return None
+        return result
       }
     }
 
     val linear_accesses = new RewriteLinearArrayAccesses(source, bounds)
-    var new_main = linear_accesses.rewrite(main)
+    main = linear_accesses.rewrite(main)
     linear_accesses.substitute_forall match {
       case Some(substitute_forall) =>
-        new_main = substituteNode(substitute_forall.substitute_old_vars, new_main)
-        val select = (Seq(substitute_forall.new_bounds) ++ old_select.map(substituteNode(substitute_forall.substitute_old_vars,_))).reduce(and)
+        main = substituteNode(substitute_forall.substitute_old_vars, main)
+        val select = (Seq(substitute_forall.new_bounds) ++ indep_select ++
+            dep_select.map(substituteNode(substitute_forall.substitute_old_vars,_)))
+          .reduce(and)
         val declaration = create field_decl(substitute_forall.new_forall_var, new PrimitiveType(PrimitiveSort.Integer))
-        val forall = create binder(binder, result_type, Array(declaration), Array(), select, new_main)
+        val forall = create binder(binder, result_type, Array(declaration), Array(), select, main)
         Some(forall)
-      case None => None
+      case None => result
     }
   }
 
@@ -488,18 +564,18 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
    */
   val extremeOfListNode: mutable.Map[ASTNode, (Seq[ASTNode], Boolean)] = mutable.Map()
 
-  def extremeValue(values: Seq[ASTNode], maximizing: Boolean): ASTNode = {
+  def extremeValue(values: Seq[ASTNode], maximizing: Boolean, add_to_extremes : Boolean = true): ASTNode = {
     val result = if(values.size == 1) {
       values.head
     } else {
       val preferFirst = if(maximizing) GT else LT
       create.expression(ITE,
         create.expression(preferFirst, values(0), values(1)),
-        extremeValue(values(0) +: values.drop(2), maximizing),
-        extremeValue(values(1) +: values.drop(2), maximizing),
+        extremeValue(values(0) +: values.drop(2), maximizing, add_to_extremes),
+        extremeValue(values(1) +: values.drop(2), maximizing, add_to_extremes),
       )
     }
-    extremeOfListNode(result) = (values, maximizing)
+    if(add_to_extremes) extremeOfListNode(result) = (values, maximizing)
     result
   }
 
@@ -683,18 +759,19 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
         val (select, main) = splitSelect(rewrite(expr.select), rewrite(expr.main))
         val (independentSelect, potentialBounds) = select.partition(independentOf(bindings, _))
         val (bounds, dependent_bounds) = getBounds(bindings, potentialBounds)
-        rewriteLinearArray(bounds, main, independentSelect ++ dependent_bounds, expr.binder, expr.result_type) match {
-          case Some(new_forall) =>
-            result = new_forall; return
-          case None =>
-        }
         //Only rewrite main, when the dependent bounds are not existing
-        if(dependent_bounds.isEmpty){
+        if(dependent_bounds.isEmpty && expr.binder != Binder.Star){
           rewriteMain(bounds, main) match {
             case Some(main) =>
               result = create expression(Implies, (independentSelect ++ bounds.selectNonEmpty).reduce(and), main); return
             case None =>
           }
+        }
+        rewriteLinearArray(bounds, main, independentSelect, dependent_bounds, expr.binder, expr.result_type) match {
+          case Some(new_forall) =>
+            result = new_forall;
+            return
+          case None =>
         }
         super.visit(expr)
       case _ =>
