@@ -351,7 +351,7 @@ class RainbowVisitor(source: ProgramUnit) extends RecursiveVisitor(source, true)
         addFeature(ADTOperator, op)
       case StandardOperator.Empty =>
         addFeature(NotStandardized, op)
-      case StandardOperator.ValidPointer | StandardOperator.ValidPointerIndex =>
+      case StandardOperator.ValidPointer | StandardOperator.ValidPointerIndex | StandardOperator.PointsTo =>
         addFeature(ValidPointer, op)
       case StandardOperator.Member =>
         if(op.second.isa(StandardOperator.RangeSeq)) {

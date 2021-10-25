@@ -12,13 +12,15 @@ import vct.col.ast.stmt.decl.ProgramUnit;
 import vct.col.ast.util.AbstractRewriter;
 import vct.col.ast.util.ContractBuilder;
 
+import static vct.col.ast.stmt.decl.Contract.default_true;
+
 public class PropagateInvariants extends AbstractRewriter {
 
   public PropagateInvariants(ProgramUnit source) {
     super(source);
   }
   
-  private Stack<ASTNode> invariants=new Stack<ASTNode>();
+  private final Stack<ASTNode> invariants= new Stack<>();
   
   @Override
   public void visit(Method m){
@@ -47,7 +49,6 @@ public class PropagateInvariants extends AbstractRewriter {
               m.usesVarArgs(),
               rewrite(m.getBody())
       );
-
       invariants.pop();
     }
   }
@@ -72,7 +73,7 @@ public class PropagateInvariants extends AbstractRewriter {
       for(ASTNode inv:invariants) { cb.prependInvariant(inv); }
       rewrite(region.contract(), cb);
       invariants.push(region.contract().invariant);
-      ParallelBlock blocks[] = rewrite(region.blocksJava()).toArray(new ParallelBlock[0]);
+      ParallelBlock[] blocks = rewrite(region.blocksJava()).toArray(new ParallelBlock[0]);
       invariants.pop();
       result=create.region(cb.getContract(),blocks);
     } else {
@@ -90,7 +91,7 @@ public class PropagateInvariants extends AbstractRewriter {
   
   @Override
   public void visit(ParallelInvariant inv){
-    ArrayList <ASTNode> invs = new ArrayList<ASTNode>();
+    ArrayList <ASTNode> invs = new ArrayList<>();
     for (ASTNode n : invariants) { invs.add(rewrite(n)); }
     invs.add(rewrite(inv.inv()));
     result = create.invariant_block(inv.label(), create.fold(StandardOperator.Star,invs), rewrite(inv.block()));
@@ -100,7 +101,7 @@ public class PropagateInvariants extends AbstractRewriter {
     ContractBuilder cb=new ContractBuilder();
     for(ASTNode inv:invariants) { cb.prependInvariant(inv); }
     rewrite(pb.contract(), cb);
-    ParallelBlock res=create.parallel_block(
+    result= create.parallel_block(
         pb.label(),
         // Make sure the contract remains null if the original contract is null,
         // and non-null if the original contract is
@@ -109,6 +110,5 @@ public class PropagateInvariants extends AbstractRewriter {
         rewrite(pb.block()),
         rewrite(pb.deps())
     );
-    result=res;
   }
 }

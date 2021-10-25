@@ -22,6 +22,13 @@ public class ASTUtils {
     ArrayList<ASTNode> res=new ArrayList<ASTNode>();
     EnumSet<StandardOperator> allops=EnumSet.of(op,ops);
     scan_ops(res,allops,e);
+    // Will return empty list if ASTNode e was simply "true" (or combination of true's), so we just return true
+    if(res.isEmpty()){
+      ASTNode tt = new ConstantExpression(true);
+      tt.setOrigin(e.getOrigin());
+      res.add(tt);
+    }
+
     return res;
   }
 
