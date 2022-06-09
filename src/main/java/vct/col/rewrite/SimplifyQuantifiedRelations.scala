@@ -5,13 +5,15 @@ import vct.col.ast.expr.StandardOperator._
 import vct.col.ast.expr._
 import vct.col.ast.expr.constant.ConstantExpression
 import vct.col.ast.generic.ASTNode
-import vct.col.ast.stmt.decl.ProgramUnit
-import vct.col.ast.util.{AbstractRewriter, NameScanner, RecursiveVisitor, Substituter}
-import vct.col.ast.util.ExpressionEquallityCheck.{equal_expressions, is_constant_int}
+import vct.col.ast.stmt.composite.{ForEachLoop, LoopStatement}
+import vct.col.ast.stmt.decl.{ASTClass, ASTSpecial, Contract, DeclarationStatement, Method, ProgramUnit}
+import vct.col.ast.util.{ASTUtils, AbstractRewriter, AnnotationVariableInfoGetter, ContractBuilder, ExpressionEqualityCheck, NameScanner, RecursiveVisitor, Substituter}
+import vct.col.ast.util.ExpressionEqualityCheck.{equal_expressions, is_constant_int}
 
 import scala.annotation.nowarn
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.jdk.CollectionConverters.IterableHasAsScala
 
 /**
   * This rewrite pass simplifies expressions of roughly this form:
@@ -73,7 +75,7 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
   class Bounds(val names: Set[String], val lowerBounds: mutable.Map[String, Seq[ASTNode]],
                val upperBounds: mutable.Map[String, Seq[ASTNode]],
                val upperExclusiveBounds: mutable.Map[String, Seq[ASTNode]] ) {
-    def this(names: Set[String]){
+    def this(names: Set[String]) = {
       this(names, mutable.Map(), mutable.Map(), mutable.Map())
     }
 
@@ -150,187 +152,140 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
         return None
       }
 
-      //We are looking at an expression like:
-      // xs[a*i + b]
-      // We can rewrite this to:
-      // xs[i_fresh], and were we substitute every occurrence of i with:
-      // i := (i_fresh - b) / a
-      // We need to add (i_fresh - b) % a == 0 to the forall precondition
-      // We assume that a>0 or a<0
-      // TODO: Check for a!=0
-      def rewrite_single_variable(): SubstituteForall ={
-        val i_old = variable_bounds.names.head
-        //Since we have only one variable, we reuse the old one
-        val i_fresh = create identifier i_old
-        //Only consider the linear factor, if it is not equal to 1
-        val lin = linear_expressions(i_old)
-        val linear_factor = if(is_value(lin, 1)) None else Some(lin)
-        val base = (linear_factor, constant_expression) match{
-          // (i_fresh-b) / a
-          case (Some(a), Some(b)) => create expression(FloorDiv, create expression(Minus, i_fresh, b), a)
-          // i_fresh / a
-          case (Some(a), None) => create expression(FloorDiv, i_fresh, a)
-          // i_fresh - b
-          case (None, Some(b)) => create expression(Minus, i_fresh, b)
-          // i_fresh
-          case (None, None) => i_fresh
+      /**
+        * This function determines if the vars in this specific order allow the forall to be rewritten to one
+        * forall.
+        *
+        * Precondition:
+        *   * At least one var in `vars`
+        *   * linear_expressions has an expression for all `vars`
+        *   * variable_bounds.upperExclusiveBounds has a non-empty list for all `vars`
+        *
+        * We are looking for patterns:
+        *   /\_{0<=i<k} {0 <= x_i < n_i} : ... ar[Sum_{0<=i<k} {a_i * x_i} + b] ...
+        * and we require that for i>0
+        *   a_i == a_{i-1} * n_{i-1}
+        *   (or equivalent a_i == Prod_{0<=j<i} {n_j} * a_0 )
+        *
+        * Further more we require that n_i>0 and a_i>0 (although I think a_0<0 is also valid)
+        * TODO: We are not checking n_i and a_i on this
+        * We can than replace the forall with
+        *   b <= x_new < a_{k-1} * n_{k-1} + b && (x_new - b) % a_0 == 0 : ... ar[x_new] ...
+        * and each x_i gets replaced by
+        *   x_i -> ((x_new - b) / a_i) % n_i
+        *   And since we never go past a_{k-1} * n_{k-1} + b, no modulo needed here
+        * x_{k-1} -> (x_new - b) / a_{k-1} */
+      def check_vars_list(vars: List[String]): Option[SubstituteForall] = {
+        val x_0 = vars.head
+        val a_0 = linear_expressions(x_0)
+        // x_{i-1}, a_{i-1}, n_{i-1}
+        var x_i_last = x_0
+        var a_i_last = a_0
+        var n_i_last: ASTNode = null
+        val ns : mutable.Map[String, ASTNode] = mutable.Map();
+
+        val x_new = vars.mkString("_")
+        // x_base == (x_new -b)
+        val x_base = constant_expression match {
+          case None => create identifier x_new
+          case Some(b) => create expression(Minus, create identifier x_new, b)
         }
+        val replace_map:  mutable.Map[String, ExpressionNode] = mutable.Map()
 
-        val substitutions = Map(
-          // i := ((i_fresh - b) / a)
-          i_old -> base
-        )
+        for(x_i <- vars.tail){
+          val a_i = linear_expressions(x_i)
+          var found_valid_n = false
 
-        var bounds = (linear_factor, constant_expression) match {
-          case (Some(a), Some(b)) =>
-            create expression(EQ, create expression(Mod, create expression(Minus, i_fresh, b), a), create constant 0)
-          case (Some(a), None) =>
-            create expression(EQ, create expression(Mod, i_fresh, a), create constant 0)
-          case _ => create constant true
-        }
-
-        for(old_upper_bound <- variable_bounds.upperExclusiveBounds(i_old))
-          bounds = create expression(And, create expression(LT, base, old_upper_bound), bounds)
-
-        for(old_lower_bound <- variable_bounds.lowerBounds(i_old))
-          bounds = create expression(And, create expression(LTE, old_lower_bound, base), bounds)
-
-        SubstituteForall(i_old, bounds, substitutions)
-      }
-
-      // We are looking for patterns: 0 <= j < m && 0 <= i < n: xs[a*n*j + a*i + b]
-      // This can be rewritten to: b <= i_fresh <= a*n*m + b && i_fresh % a == b: xs[i_fresh]
-      // We can then substitute i and j:
-      // i := ((i_fresh - b) / a) % n
-      // j := ((i_fresh - b) /a) / n
-      // Given that n > 0, m > 0 and a > 0
-      // TODO: We are not checking n, m and a on this
-      // inner_var := i, outer_var := j
-      def check_vars(inner_var: String , outer_var /*j*/: String): Option[SubstituteForall] = {
-        // lin_inner := a
-        val lin_inner = linear_expressions.get(inner_var) match {
-          case Some(lin) => lin
-          case None => return None
-        }
-        // lin_outer =?= a*n
-        val lin_outer = linear_expressions.get(outer_var) match {
-          case Some(lin) => lin
-          case None => return None
-        }
-        for (bounds <- variable_bounds.upperExclusiveBounds.get(inner_var); upper <- bounds) {
-          if (is_value(lin_inner, 1)) {
-            if (equal_expressions(upper, lin_outer)) {
-                return Some(make_substitute(inner_var, outer_var, upper, None))
-              }
-          }
-          else {
-            if (equal_expressions(create expression(Mult, lin_inner, upper), lin_outer)) {
-              return Some(make_substitute(inner_var, outer_var, upper, Some(lin_inner)))
+          // Find a suitable upper bound
+          for (n_i_last_candidate <- variable_bounds.upperExclusiveBounds(x_i_last)) {
+            if( !found_valid_n && equality_checker.equal_expressions(a_i, simplified_mult(a_i_last, n_i_last_candidate)) ) {
+              found_valid_n = true
+              n_i_last = n_i_last_candidate
+              ns(x_i_last) = n_i_last_candidate
             }
           }
+
+          if(!found_valid_n) return None
+          // We now know the valid bound of x_{i-1}
+          //  x_{i-1} -> ((x_new -b) / a_{i-1}) % n_{i-1}
+          replace_map(x_i_last) =
+            if(is_value(a_i_last, 1))
+              create expression (Mod, x_base, n_i_last)
+          else
+              create expression (Mod, create expression(FloorDiv, x_base, a_i_last), n_i_last)
+
+          // Yay we are good up to now, go check out the next i
+          x_i_last = x_i
+          a_i_last = a_i
+          n_i_last = null
         }
-        None
+        // Add the last value, no need to do modulo
+        replace_map(x_i_last) = create expression(FloorDiv, x_base, a_i_last)
+        // Get a random upperbound for x_i_last;
+        n_i_last = variable_bounds.upperExclusiveBounds(x_i_last).head
+        ns(x_i_last) = n_i_last
+        // 0 <= x_new - b < a_{k-1} * n_{k-1}
+        var new_bounds = create expression(And,
+            create expression(LTE, create constant 0, x_base),
+            create expression(LT, x_base, simplified_mult(a_i_last, n_i_last))
+        )
+        // && (x_new - b) % a_0 == 0
+        new_bounds = if(is_value(a_0, 1)) new_bounds else
+          create expression(And, new_bounds,
+            create expression(EQ, create expression (Mod, x_base, a_0),
+              create constant 0)
+          )
+
+        for(x_i <- vars){
+          val n_i = ns(x_i)
+          // Remove the upper bound we used, but keep the others
+          for(old_upper_bound <- variable_bounds.upperExclusiveBounds(x_i)){
+            if(old_upper_bound != n_i){
+              new_bounds = create expression(And, create expression(LT, replace_map(x_i), old_upper_bound), new_bounds)
+            }
+          }
+
+          // Remove the lower zero bound, but keep the others
+          for(old_lower_bound <- variable_bounds.lowerBounds(x_i))
+            if(!is_value(old_lower_bound, 0))
+              new_bounds = create expression(And, create expression(LTE, old_lower_bound, replace_map(x_i)), new_bounds)
+
+          // Since we know the lower bound was also 0, and the we multiply the upper bounds,
+          // we do have to require that each upper bound is at least bigger than 0.
+          new_bounds = create expression(And, create expression (LT, create constant 0, n_i), new_bounds)
+        }
+
+        Some(SubstituteForall(x_new, new_bounds, replace_map.toMap))
       }
 
-      // inner_var := i, outer_var := j, max_bound_inner := n
-      def make_substitute(inner_var: String, outer_var: String, max_bound_inner: ASTNode,
-                          linear_factor: Option[ASTNode]): SubstituteForall ={
-
-        val i_fresh_string = inner_var ++ "_" ++ outer_var
-        val i_fresh = create identifier i_fresh_string
-        val base = (linear_factor, constant_expression) match{
-            // (i_fresh-b) / a
-          case (Some(a), Some(b)) => create expression(FloorDiv, create expression(Minus, i_fresh, b), a)
-            // i_fresh / a
-          case (Some(a), None) => create expression(FloorDiv, i_fresh, a)
-            // i_fresh - b
-          case (None, Some(b)) => create expression(Minus, i_fresh, b)
-            // i_fresh
-          case (None, None) => i_fresh
-        }
-
-        val substitutions = Map(
-          // i := ((i_fresh - b) / a) % n
-          inner_var -> (create expression(Mod, base, max_bound_inner)),
-          // j := ((i_fresh - b) /a) / n
-          outer_var -> (create expression(FloorDiv, base, max_bound_inner)),
-          )
-
-        val max_bound_outer = variable_bounds.upperExclusiveBounds(outer_var).head
-        val new_max_bound = linear_factor match {
-          case Some(a) => create expression(Mult, a, create expression(Mult, max_bound_inner, max_bound_outer))
-          case None => create expression(Mult, max_bound_inner, max_bound_outer)
-        }
-
-        var bounds = (linear_factor, constant_expression) match {
-          // b <= i_fresh && i_fresh < a * m * n + b && i_fresh % a == b
-          case (Some(a), Some(b)) => create expression (And,
-              create expression(LTE, b, i_fresh),
-              create expression(And,
-                create expression(LT, i_fresh, create expression(Plus, new_max_bound, b)),
-                create expression(EQ, create expression(Mod, i_fresh, a), b)
-              )
-            )
-          // 0 <= i_fresh && i_fresh < a * m * n && i_fresh % a == 0
-          case (Some(a), None) => create expression (And,
-            create expression(LTE, create constant 0, i_fresh),
-            create expression(And,
-              create expression(LT, i_fresh, new_max_bound),
-              create expression(EQ, create expression(Mod, i_fresh, a), create constant 0)
-            )
-          )
-          // b <= i_fresh && i_fresh < m * n + b
-          case (None, Some(b)) => create expression (And,
-            create expression(LTE, b, i_fresh),
-            create expression(LT, i_fresh, create expression(Plus, new_max_bound, b))
-          )
-          // 0 <= i_fresh && i_fresh < m * n
-          case (None, None) => create expression (And,
-            create expression(LTE, create constant 0, i_fresh),
-            create expression(LT, i_fresh, new_max_bound)
-          )
-        }
-
-        // The old bounds are independent, so we do not have to substitute them
-        for(old_upper_bound <- variable_bounds.upperExclusiveBounds(inner_var))
-          if(old_upper_bound != max_bound_inner)
-            bounds = create expression(And, create expression(LT, substitutions(inner_var), old_upper_bound), bounds)
-
-        for(old_upper_bound <- variable_bounds.upperExclusiveBounds(outer_var).tail)
-            bounds = create expression(And, create expression(LT, substitutions(outer_var), old_upper_bound), bounds)
-
-        for(old_lower_bound <- variable_bounds.lowerBounds(inner_var))
-          if(!is_value(old_lower_bound, 0))
-            bounds = create expression(And, create expression(LTE, old_lower_bound, substitutions(inner_var)), bounds)
-
-        for(old_lower_bound <- variable_bounds.lowerBounds(outer_var))
-          if(!is_value(old_lower_bound, 0))
-            bounds = create expression(And, create expression(LTE, old_lower_bound, substitutions(outer_var)), bounds)
-
-        // Since we know the lower bound was also 0, and the we multiply the upper bounds,
-        // we do have to require that each upper bound is at least bigger than 0.
-        // TODO: Generalize for non-zero lower bounds
-        bounds = create expression(And, create expression (LT, create constant 0, max_bound_inner), bounds)
-        bounds = create expression(And, create expression (LT, create constant 0, max_bound_outer), bounds)
-        SubstituteForall(i_fresh_string, bounds, substitutions)
+      def simplified_mult(lhs: ASTNode, rhs: ASTNode): ASTNode = {
+        if (is_value(lhs, 1)) rhs
+        else if (is_value(rhs, 1)) lhs
+        else create expression(Mult, lhs, rhs)
       }
 
-      if(variable_bounds.names.size == 1){
-        return Some(rewrite_single_variable())
-      } else if(variable_bounds.names.size != 2){
-        //Only support 1 and 2 variables at the moment
-        // TODO: Generalize this
-        return None
+      // Checking the preconditions
+      if(variable_bounds.names.isEmpty) return None
+      for(v <- variable_bounds.names){
+        if(!(linear_expressions.contains(v) &&
+          variable_bounds.upperExclusiveBounds.contains(v) &&
+          variable_bounds.upperExclusiveBounds(v).nonEmpty)
+        ) {
+          return None
+        }
       }
 
-      val v1 = variable_bounds.names.head
-      val v2 = variable_bounds.names.tail.head
-
-      check_vars(v1, v2) orElse check_vars(v2, v1)
+      for(vars <- variable_bounds.names.toList.reverse.permutations){
+        check_vars_list(vars) match {
+          case Some(subst) => return Some(subst)
+          case None =>
+        }
+      }
+      None
     }
 
     def is_value(e: ASTNode, x: Int): Boolean =
-      is_constant_int(e) match {
+      equality_checker.is_constant_int(e) match {
         case None => false
         case Some(y) => y == x
       }
@@ -449,14 +404,53 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
      * The rewrite pass beforehand, handles the case when something like forall(i; 0<=i && i < n; (term!i)). We
        could potentially handle more here.
    */
-  def rewriteLinearArray(old_bounds: Bounds, old_main: ASTNode, old_indep_select: Seq[ASTNode], dep_select: Seq[ASTNode],
+  def rewriteLinearArray(old_bounds: Bounds, old_main: ASTNode, old_indep_select: Seq[ASTNode], old_dep_select: Seq[ASTNode],
                          binder: Binder, result_type: Type): Option[ASTNode] = {
     var main = old_main
     var bounds = old_bounds
     var indep_select = old_indep_select
-    // Check if variables are independent in the main
+    var dep_select = old_dep_select
+
     var changed = false
+    // Check if a variable has an equal upper and lower bound, meaning it just takes on one value
     for(name <- old_bounds.names){
+      val equal_bounds = bounds.lowerBounds(name).toSet.intersect(bounds.upperBounds(name).toSet)
+      if(equal_bounds.nonEmpty){
+        changed = true
+        val new_value = equal_bounds.head
+        val replacer = substituteNode(Map(name -> new_value), _)
+        main = replacer(main)
+        indep_select = indep_select.map(replacer)
+        // Some dependent selects, might now have become independent or even bounds
+        val replaced_dep_select = dep_select.map(replacer)
+        val remaining_names = bounds.names - name
+
+        val (additional_indep_select, potentialBounds) = replaced_dep_select.partition(independentOf(remaining_names, _))
+        val (new_bounds, new_dep_select) = getBounds(remaining_names, potentialBounds)
+        dep_select = new_dep_select
+        indep_select ++= additional_indep_select
+        // Add the other bounds from the replaced variables to the indep_select
+        bounds.lowerBounds(name).foreach( lb =>
+          if(lb != new_value) indep_select ++= Seq(create expression(LTE, lb, new_value)) )
+        bounds.upperBounds(name).foreach( ub =>
+          if(ub != new_value) indep_select ++= Seq(create expression(LTE, new_value, ub)) )
+        // Finally add the bounds from the other variables again to the new bounds
+        for(other_name <- bounds.names){
+          if(name != other_name){
+            bounds.lowerBounds(other_name).foreach(new_bounds.addLowerBound(other_name, _))
+            bounds.upperBounds(other_name).foreach(new_bounds.addUpperBound(other_name, _))
+            bounds.upperExclusiveBounds(other_name).foreach(new_bounds.addUpperExclusiveBound(other_name, _))
+          }
+        }
+        bounds = new_bounds
+      }
+    }
+
+
+    // Check if variables are independent in the main
+    // This means we can remove variables from the forall (e.g. forall int i,j... to forall int i)
+    val new_old_bounds = bounds
+    for(name <- new_old_bounds.names){
       if(independentOf(Set(name), main)){
         var independent = true
         dep_select.foreach(s => if(!independentOf(Set(name), s)) independent = false)
@@ -483,8 +477,8 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
     // Always return result, even if we could not rewrite further
     val result : Option[ASTNode] = if(changed){
       if(bounds.names.isEmpty){
-        val select = (indep_select ++ dep_select).reduce(and)
-        Some(create expression(Implies, select, main))
+        val select = (indep_select ++ dep_select)
+        if (select.isEmpty) Some(main) else Some(create expression(Implies, select.reduce(and), main))
       } else{
         var select = indep_select ++ dep_select
         bounds.upperExclusiveBounds.foreach {
@@ -502,7 +496,8 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
             )
         }
         val declarations = bounds.names.toArray.map(create field_decl(_, new PrimitiveType(PrimitiveSort.Integer)))
-        val forall = create binder(binder, result_type, declarations, Array(), select.reduce(and), main)
+        val select_reduced = if(select.nonEmpty) select.reduce(and) else create constant(true)
+        val forall = create binder(binder, result_type, declarations, Array(), select_reduced, main)
         Some(forall)
       }
     } else {
@@ -512,17 +507,17 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
 
     // For now we only allow forall's with one or two variables
     // TODO: Generalize this
-    if(bounds.names.size != 1 && bounds.names.size != 2){
+    if(bounds.names.isEmpty){
       return result
     }
 
-    //We need to check some preconditions for 2 vars
-    if(bounds.names.size == 2) {
+    //We need to check some preconditions for more than 2 vars
+    if(bounds.names.size >= 2) {
 
       val scanner = new NameScanner()
       main.accept(scanner)
       // Check if we can make a new nice name, which we will use, but this is only possible when it is not a free variable
-      val possible_names = Set(bounds.names.head ++ "_" ++ bounds.names.tail.head, bounds.names.tail.head ++ "_" ++ bounds.names.head)
+      val possible_names = bounds.names.toList.permutations.map(_.mkString("_")).toSet
       if (scanner.freeNames.keySet.intersect(possible_names).nonEmpty)
         return result
     }
@@ -532,7 +527,7 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
     for (name <- bounds.names) {
       var one_zero = false
       bounds.lowerBounds.getOrElse(name, Seq())
-        .foreach(lower => is_constant_int(lower) match {
+        .foreach(lower => equality_checker.is_constant_int(lower) match {
           case Some(0) => one_zero = true
           case _ =>
         })
@@ -549,9 +544,9 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
         main = substituteNode(substitute_forall.substitute_old_vars, main)
         val select = (Seq(substitute_forall.new_bounds) ++ indep_select ++
             dep_select.map(substituteNode(substitute_forall.substitute_old_vars,_)))
-          .reduce(and)
+        val select_non_empty = if (select.nonEmpty) select.reduce(and) else create constant(true)
         val declaration = create field_decl(substitute_forall.new_forall_var, new PrimitiveType(PrimitiveSort.Integer))
-        val forall = create binder(binder, result_type, Array(declaration), Array(), select, main)
+        val forall = create binder(binder, result_type, Array(declaration), Array(), select_non_empty, main)
         Some(forall)
       case None => result
     }
@@ -750,6 +745,148 @@ class SimplifyQuantifiedRelations(source: ProgramUnit) extends AbstractRewriter(
     } else {
       None
     }
+  }
+
+  var equality_checker: ExpressionEqualityCheck = ExpressionEqualityCheck()
+
+  override def visit(special: ASTSpecial): Unit = {
+    if(special.kind == ASTSpecial.Kind.Inhale){
+      val info_getter = new AnnotationVariableInfoGetter()
+      val annotations = ASTUtils.conjuncts(special.args(0), StandardOperator.Star).asScala
+      equality_checker = ExpressionEqualityCheck(Some(info_getter.get_info(annotations)))
+
+      result = create special(special.kind, rewrite(special.args):_*)
+
+      equality_checker = ExpressionEqualityCheck()
+
+    } else {
+      result = create special(special.kind, rewrite(special.args): _*)
+    }
+  }
+
+  override def visit(c: ASTClass): Unit = { //checkPermission(c);
+    val name = c.getName
+    if (name == null) Abort("illegal class without name")
+    else {
+      Debug("rewriting class " + name)
+      val new_pars = rewrite(c.parameters)
+      val new_supers = rewrite(c.super_classes)
+      val new_implemented = rewrite(c.implemented_classes)
+      val res = new ASTClass(name, c.kind, new_pars, new_supers, new_implemented)
+      res.setOrigin(c.getOrigin)
+      currentTargetClass = res
+      val contract = c.getContract
+      if (currentContractBuilder == null) currentContractBuilder = new ContractBuilder
+      if (contract != null) {
+        val info_getter = new AnnotationVariableInfoGetter()
+        val annotations = LazyList(ASTUtils.conjuncts(contract.pre_condition, StandardOperator.Star).asScala
+          , ASTUtils.conjuncts(contract.invariant, StandardOperator.Star).asScala).flatten
+
+        equality_checker = ExpressionEqualityCheck(Some(info_getter.get_info(annotations)))
+        rewrite(contract, currentContractBuilder)
+        equality_checker = ExpressionEqualityCheck()
+      }
+      res.setContract(currentContractBuilder.getContract)
+      currentContractBuilder = null
+
+      for (i <- 0 until c.size()) {
+        res.add(rewrite(c.get(i)))
+      }
+      result = res
+      currentTargetClass = null
+    }
+  }
+
+  override def visit(s: ForEachLoop): Unit = {
+    val new_decl = rewrite(s.decls)
+    val res = create.foreach(new_decl, rewrite(s.guard), rewrite(s.body))
+
+    val mc = s.getContract
+    if (mc != null) {
+      val info_getter = new AnnotationVariableInfoGetter()
+      val annotations = LazyList(ASTUtils.conjuncts(mc.pre_condition, StandardOperator.Star).asScala
+        , ASTUtils.conjuncts(mc.invariant, StandardOperator.Star).asScala).flatten
+
+      equality_checker = ExpressionEqualityCheck(Some(info_getter.get_info(annotations)))
+      res.setContract(rewrite(mc))
+      equality_checker = ExpressionEqualityCheck()
+    } else {
+      res.setContract(rewrite(mc))
+    }
+
+
+    res.set_before(rewrite(s.get_before))
+    res.set_after(rewrite(s.get_after))
+    result = res
+  }
+
+  override def visit(s: LoopStatement): Unit = { //checkPermission(s);
+    val res = new LoopStatement
+    var tmp = s.getInitBlock
+    if (tmp != null) res.setInitBlock(tmp.apply(this))
+    tmp = s.getUpdateBlock
+    if (tmp != null) res.setUpdateBlock(tmp.apply(this))
+    tmp = s.getEntryGuard
+    if (tmp != null) res.setEntryGuard(tmp.apply(this))
+    tmp = s.getExitGuard
+    if (tmp != null) res.setExitGuard(tmp.apply(this))
+    val mc = s.getContract
+    if (mc != null) {
+      val info_getter = new AnnotationVariableInfoGetter()
+      val annotations = LazyList(ASTUtils.conjuncts(mc.pre_condition, StandardOperator.Star).asScala
+        , ASTUtils.conjuncts(mc.invariant, StandardOperator.Star).asScala).flatten
+
+      equality_checker = ExpressionEqualityCheck(Some(info_getter.get_info(annotations)))
+      res.appendContract(rewrite(mc))
+      equality_checker = ExpressionEqualityCheck()
+    } else {
+      res.appendContract(rewrite(mc))
+    }
+
+
+    tmp = s.getBody
+    res.setBody(tmp.apply(this))
+    res.set_before(rewrite(s.get_before))
+    res.set_after(rewrite(s.get_after))
+    res.setOrigin(s.getOrigin)
+    result = res
+  }
+
+  override def visit(m: Method): Unit = { //checkPermission(m);
+    val name = m.getName
+    if (currentContractBuilder == null) {
+      currentContractBuilder = new ContractBuilder
+    }
+    val args = rewrite(m.getArgs)
+    val mc = m.getContract
+
+    var c: Contract = null
+    // Ensure we maintain the type of emptiness of mc
+    // If the contract was null previously, the new contract can also be null
+    // If the contract was non-null previously, the new contract cannot be null
+    if (mc != null) {
+      val info_getter = new AnnotationVariableInfoGetter()
+      val annotations = LazyList(ASTUtils.conjuncts(mc.pre_condition, StandardOperator.Star).asScala
+        , ASTUtils.conjuncts(mc.invariant, StandardOperator.Star).asScala).flatten
+
+      equality_checker = ExpressionEqualityCheck(Some(info_getter.get_info(annotations)))
+
+      rewrite(mc, currentContractBuilder)
+      c = currentContractBuilder.getContract(false)
+      equality_checker = ExpressionEqualityCheck()
+    }
+    else {
+      c = currentContractBuilder.getContract(true)
+    }
+    if (mc != null && c != null && c.getOrigin == null) {
+      c.setOrigin(mc.getOrigin)
+    }
+    currentContractBuilder = null
+    val kind = m.kind
+    val rt = rewrite(m.getReturnType)
+    val signals = rewrite(m.signals)
+    val body = rewrite(m.getBody)
+    result = create.method_kind(kind, rt, signals, c, name, args, m.usesVarArgs, body)
   }
 
   override def visit(expr: BindingExpression): Unit = {

@@ -28,7 +28,7 @@ import vct.col.ast.syntax.JavaDialect;
 import vct.col.ast.syntax.JavaSyntax;
 import vct.col.ast.util.ClassName;
 import hre.util.LambdaHelper;
-import vct.col.ast.util.ExpressionEquallityCheck;
+import vct.col.ast.util.ExpressionEqualityCheck;
 
 import static hre.lang.System.DebugException;
 
@@ -1328,7 +1328,7 @@ public class JavaPrinter extends AbstractPrinter {
       else{
         String specifier;
         Option<Integer> specifier_val =
-                ExpressionEquallityCheck.is_constant_int_java(pb.gpu_specifier());
+                ExpressionEqualityCheck.is_constant_int_java(pb.gpu_specifier());
         if(specifier_val.isDefined()){
           switch(specifier_val.get()){
             case 0: specifier = "No memory fences"; break;

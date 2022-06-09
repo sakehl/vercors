@@ -5,9 +5,7 @@ import hre.ast.TrackingTree;
 import hre.lang.HREError;
 import hre.util.LambdaHelper;
 import org.apache.commons.lang3.StringEscapeUtils;
-import scala.Int;
 import scala.Option;
-import scala.Some;
 import vct.col.ast.expr.*;
 import vct.col.ast.expr.constant.ConstantExpression;
 import vct.col.ast.expr.constant.StringValue;
@@ -23,7 +21,7 @@ import vct.col.ast.syntax.JavaDialect;
 import vct.col.ast.syntax.PVLSyntax;
 import vct.col.ast.type.*;
 import vct.col.ast.util.ClassName;
-import vct.col.ast.util.ExpressionEquallityCheck;
+import vct.col.ast.util.ExpressionEqualityCheck;
 
 import java.io.PrintWriter;
 import java.util.*;
@@ -1181,7 +1179,7 @@ public class PVLPrinter extends AbstractPrinter{
             else{
                 String specifier;
                 Option<Integer> specifier_val =
-                        ExpressionEquallityCheck.is_constant_int_java(pb.gpu_specifier());
+                        ExpressionEqualityCheck.is_constant_int_java(pb.gpu_specifier());
                 if(specifier_val.isDefined()){
                     switch(specifier_val.get()){
                         case 0: specifier = "No memory fences"; break;
