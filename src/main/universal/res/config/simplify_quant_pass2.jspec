@@ -7,13 +7,13 @@ class simplify_quant_pass2 {
   int i,j,k;
   rational p1,p2;
   int[] ar;
-
+  
   axiom aunitr { e1+0 == e1 }
   axiom aunitl { 0+e1 == e1 }
-
+  
   axiom munitr { e1*1 == e1 }
   axiom munitl { 1*e1 == e1 }
-
+  
   axiom I2 {
     0 * e1 == 0
   }
@@ -28,41 +28,41 @@ class simplify_quant_pass2 {
      ==
     (\forall* int i; (i \memberof {e1*e3+e4..e2*e3+e4}) && (i-e4) % e3 == 0; Perm(ar[i], p1))
   }
-
+  
   // completion for b==0.
   axiom simplify_linear_a {
     (\forall* int i; (i \memberof {e1..e2}); Perm(ar[i*(e3!i)], (p1!i)))
      ==
     (\forall* int i; (i \memberof {e1*e3..e2*e3}) && i % e3 == 0; Perm(ar[i], p1))
   }
-
+  
   // completion for a==1.
   axiom simplify_linear_b {
     (\forall* int i; (i \memberof {e1..e2}) ; Perm(ar[i + (e4!i)], (p1!i)))
      ==
     (\forall* int i; (i \memberof {e1+e4..e2+e4}); Perm(ar[i], p1))
   }
-
+  
+  axiom simplify_shift_1 {
+    (\forall* int i; b1; Perm(ar[(e1!i) + i] , (p1!i)))
+      ==
+    (\forall* int k_fresh; (\let int i=k_fresh-e1; b1); Perm(ar[k_fresh], p1))
+  }
+  
   axiom simplify_shift_2 {
     (\forall* int i; b1; Perm(ar[i + (e1!i)], (p1!i)))
       ==
     (\forall* int k_fresh; (\let int i=k_fresh-e1; b1); Perm(ar[k_fresh], p1))
   }
-
+  
   axiom simplify_shift_3 {
     (\forall* int i; b1; Perm(ar[i - (e1!i)], (p1!i)))
       ==
     (\forall* int k_fresh; (\let int i=k_fresh+e1; b1); Perm(ar[k_fresh], p1))
   }
-
-  axiom simplify_scale_1 {
-    (\forall* int i; b1; Perm(ar[i * (e1!i)], (p1!i)))
-      ==
-    (\forall* int k_fresh; (\let int i=(k_fresh/e1); b1) && k_fresh % e1 == 0; Perm(ar[k_fresh], p1))
-  }
-
-  axiom simplify_shift_scale_2 {
-    (\forall* int i; b1; Perm(ar[i * (e2!i) + (e1!i)], (p1!i)))
+  
+  axiom simplify_shift_scale_1 {
+    (\forall* int i; b1; Perm(ar[(e1!i) + i * (e2!i)], (p1!i)))
       ==
     (\forall* int k_fresh; (\let int i=(k_fresh/e2)-e1; b1) && k_fresh % e2 == 0; Perm(ar[k_fresh], p1))
   }
@@ -78,7 +78,7 @@ class simplify_quant_pass2 {
     ==
     (\let int i=0; r1) ** (\let int i=1; r1) ** (\let int i=2; r1) ** (\let int i=3; r1)
   }
-
+  
   axiom simplify_distributed_perm {
     (\forall* int i; (i \memberof {0 .. e1} ); (\forall* int j;(j \memberof {i*e2 .. (i+1)*e2} ); (r1!i) ))
     ==
