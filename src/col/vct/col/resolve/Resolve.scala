@@ -180,11 +180,18 @@ case object ResolveReferences extends LazyLogging {
       case _ => false
     })
 
-    val innerCtx = enterContext(node, ctx, inGPU)
-
-    val childErrors = node.checkContextRecursor(ctx.checkContext, { (ctx, node) =>
-      resolve(node, innerCtx.copy(checkContext = ctx), inGPU)
-    }).flatten
+    val childErrors = node match {
+      case l @ Let(binding, value, main) =>
+        val innerCtx = enterContext(node, ctx, inGPU).copy(checkContext = l.enterCheckContext(ctx.checkContext))
+        resolve(binding, innerCtx) ++
+        resolve(value, ctx) ++
+        resolve(main, innerCtx)
+      case _ =>
+        val innerCtx = enterContext(node, ctx, inGPU)
+        node.checkContextRecursor(ctx.checkContext, { (ctx, node) =>
+          resolve(node, innerCtx.copy(checkContext = ctx), inGPU)
+        }).flatten
+    }
 
     if(childErrors.nonEmpty) childErrors
     else {
@@ -287,10 +294,16 @@ case object ResolveReferences extends LazyLogging {
       if(func.decl.contract.nonEmpty && func.decl.inits.size > 1) {
         throw MultipleForwardDeclarationContractError(func)
       }
-      ctx
-        .declare(C.paramsFromDeclarator(func.decl.inits.head.decl) ++ func.decl.contract.givenArgs ++ func.decl.contract.yieldsArgs)
-        .copy(currentResult=C.getDeclaratorInfo(func.decl.inits.head.decl)
-          .params.map(_ => RefCGlobalDeclaration(func, initIdx = 0)))
+
+      func.decl.inits.zipWithIndex.foldLeft(
+        ctx.declare(func.decl.contract.givenArgs ++ func.decl.contract.yieldsArgs)
+      ) {
+        case (ctx, (init, idx)) =>
+          val info = C.getDeclaratorInfo(init.decl)
+          ctx
+            .declare(info.params.getOrElse(Nil))
+            .copy(currentResult=info.params.map(_ => RefCGlobalDeclaration(func, idx)))
+      }
     case par: ParStatement[G] => ctx
       .declare(scanBlocks(par.impl).map(_.decl))
     case Scope(locals, body) => ctx

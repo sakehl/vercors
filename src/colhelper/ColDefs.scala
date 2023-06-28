@@ -18,6 +18,7 @@ object ColDefs {
     q"import vct.col.ref.Ref",
     q"import vct.col.resolve.ctx.Referrable",
     q"import vct.col.origin.ExpectedError",
+    q"import hre.data.BitString",
   )
 
   /**
@@ -51,7 +52,7 @@ object ColDefs {
     "ModelDeclaration" -> Seq("Program"),
     "EnumConstant" -> Seq("Program"),
     "Variable" -> Seq(
-      "ParBlock", "VecBlock", "CatchClause", "Scope", "SignalsClause", // Explicit declarations
+      "ParBlock", "VecBlock", "CatchClause", "Scope", "SignalsClause", "RangedForLoop", // Explicit declarations
       "AxiomaticDataType", "JavaClass", "JavaInterface", // Type arguments
       "Predicate", "InstancePredicate", // Arguments
       "ModelProcess", "ModelAction", "ADTFunction",
