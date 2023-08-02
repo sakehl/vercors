@@ -1042,12 +1042,21 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]() extends Rewriter[Pre] 
             case (None, None, value) => return IntegerValue[Pre](value)
           }
 
-          (lhs, rhs) match {
+          val res: Option[Expr[Pre]] = (lhs, rhs) match {
             case (Mult(l1, r1), Mult(l2, r2)) =>
-              if(equalityChecker.equalExpressions(l1 ,l2)) return Mult(l1, simplifiedMinus(r1, r2, value))
-              else if(equalityChecker.equalExpressions(l1 ,r2)) return Mult(l1, simplifiedMinus(r1, l2, value))
-              else if(equalityChecker.equalExpressions(r1 ,l2)) return Mult(r1, simplifiedMinus(l1, r2, value))
-              else if(equalityChecker.equalExpressions(r1 ,r2)) return Mult(r1, simplifiedMinus(l1, l2, value))
+              if(equalityChecker.equalExpressions(l1 ,l2)) Some(simplifiedMult(l1, simplifiedMinus(r1, r2)))
+              else if(equalityChecker.equalExpressions(l1 ,r2)) Some(simplifiedMult(l1, simplifiedMinus(r1, l2)))
+              else if(equalityChecker.equalExpressions(r1 ,l2)) Some(simplifiedMult(r1, simplifiedMinus(l1, r2)))
+              else if(equalityChecker.equalExpressions(r1 ,r2)) Some(simplifiedMult(r1, simplifiedMinus(l1, l2)))
+              else None
+            case _ => None
+          }
+          res match {
+            case Some(res) =>
+              if(value != 0)
+                return IntegerValue[Pre](value) + res
+              else
+                return res
             case _ =>
           }
 
