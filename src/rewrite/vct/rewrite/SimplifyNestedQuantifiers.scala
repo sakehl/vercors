@@ -1,6 +1,9 @@
 package vct.col.rewrite
 
 import com.typesafe.scalalogging.LazyLogging
+import org.sosy_lab.common.{NativeLibraries, ShutdownNotifier}
+import org.sosy_lab.common.configuration.Configuration
+import org.sosy_lab.common.log.LogManager
 import org.sosy_lab.java_smt.SolverContextFactory
 import org.sosy_lab.java_smt.SolverContextFactory.Solvers
 import org.sosy_lab.java_smt.api.BooleanFormula
@@ -836,7 +839,13 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]() extends Rewriter[Pre] 
 
         case class askSMTSolver(constraints: Iterable[Expr[Pre]], test: Expr[Pre]) {
           def check(): Boolean = {
-            Using(SolverContextFactory.createSolverContext(Solvers.SMTINTERPOL)) { ctx =>
+            val options =
+              Configuration.builder().setOption("solver.nonLinearArithmetic", "APPROXIMATE_FALLBACK");
+            val config = options.build()
+            val logManager = LogManager.createNullLogManager
+            val shutDown = ShutdownNotifier.createDummy
+
+            Using(SolverContextFactory.createSolverContext(config, logManager, shutDown, Solvers.SMTINTERPOL)) { ctx =>
               Using(ctx.newProverEnvironment()) { prover =>
                 val fmgr = ctx.getFormulaManager
                 val varIntMap: mutable.Map[Variable[Pre], IntegerFormula] = mutable.Map()
