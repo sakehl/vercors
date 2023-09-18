@@ -214,6 +214,7 @@ abstract class CoercingRewriter[Pre <: Generation]() extends AbstractRewriter[Pr
     case node: SignalsClause[Pre] => node
     case node: FieldFlag[Pre] => node
     case node: IterVariable[Pre] => node
+    case node: CDeclaration[Pre] => node
     case node: CDeclarator[Pre] => node
     case node: CDeclarationSpecifier[Pre] => node
     case node: CTypeQualifier[Pre] => node
@@ -881,11 +882,16 @@ abstract class CoercingRewriter[Pre <: Generation]() extends AbstractRewriter[Pr
       case Cast(value, typeValue) =>
         Cast(value, typeValue)
       case CastFloat(e, t) =>
-        CastFloat(float(e), t)
+        firstOk(e, s"Can only cast between integer and float or float and float.",
+          CastFloat(float(e), t),
+          CastFloat(int(e), t),
+        )
       case CCast(e, t) => CCast(e, t)
       case c @ CharValue(_) => c
       case inv @ CInvocation(applicable, args, givenArgs, yields) =>
         CInvocation(applicable, args, givenArgs, yields)(inv.blame)
+      case CLiteralArray(exprs) =>
+        CLiteralArray(exprs)
       case CLocal(name) => e
       case c @ Committed(obj) =>
         Committed(cls(obj))(c.blame)
@@ -911,8 +917,8 @@ abstract class CoercingRewriter[Pre <: Generation]() extends AbstractRewriter[Pr
         StringConcat(string(left), string(right))
       case acc @ CStructAccess(struct, field) =>
         CStructAccess(struct, field)(acc.blame)
-      case CStructDeref(struct, field) =>
-        CStructDeref(struct, field)
+      case deref @ CStructDeref(struct, field) =>
+        CStructDeref(struct, field)(deref.blame)
       case CurPerm(loc) =>
         CurPerm(loc)
       case CurrentThreadId() =>
@@ -955,7 +961,10 @@ abstract class CoercingRewriter[Pre <: Generation]() extends AbstractRewriter[Pr
           Exp(rat(left), rat(right)),
         )
       case div @ FloorDiv(left, right) =>
-        FloorDiv(int(left), int(right))(div.blame)
+        firstOk(e, s"Expected both operands to be numeric, but got ${left.t} and ${right.t}.",
+          FloorDiv(int(left), int(right))(div.blame),
+          FloorDiv(float(left), float(right))(div.blame),
+        )
       case Forall(bindings, triggers, body) =>
         Forall(bindings, triggers, bool(body))
       case ForPerm(bindings, loc, body) =>
@@ -1017,6 +1026,7 @@ abstract class CoercingRewriter[Pre <: Generation]() extends AbstractRewriter[Pr
       case JavaNewDefaultArray(baseType, specifiedDims, moreDims) => e
       case JavaNewLiteralArray(baseType, dims, initializer) => e
       case str @ JavaStringValue(_, _) => str
+      case sizeof @ SizeOf(_) => sizeof
       case str @ StringValue(_) => str
       case JoinToken(thread) =>
         JoinToken(cls(thread))
@@ -1114,6 +1124,12 @@ abstract class CoercingRewriter[Pre <: Generation]() extends AbstractRewriter[Pr
           Mod(int(left), int(right))(div.blame),
           Mod(rat(left), rat(right))(div.blame),
         )
+      case div@TMod(left, right) => TMod(int(left), int(right))(div.blame)
+      case div@TDiv(left, right) =>
+        firstOk(e, s"Expected both operands to be numeric, but got ${left.t} and ${right.t}.",
+          TDiv(int(left), int(right))(div.blame),
+          TDiv(float(left), float(right))(div.blame),
+        )
       case ModelAbstractState(m, state) =>
         ModelAbstractState(model(m)._1, bool(state))
       case ModelChoose(m, perm, totalProcess, choice) =>
@@ -1148,8 +1164,10 @@ abstract class CoercingRewriter[Pre <: Generation]() extends AbstractRewriter[Pr
       case Neq(left, right) =>
         val sharedType = Types.leastCommonSuperType(left.t, right.t)
         Neq(coerce(left, sharedType), coerce(right, sharedType))
-      case na @ NewArray(element, dims, moreDims) =>
-        NewArray(element, dims.map(int), moreDims)(na.blame)
+      case na @ NewArray(element, dims, moreDims, initialize) =>
+        NewArray(element, dims.map(int), moreDims, initialize)(na.blame)
+      case na@NewPointerArray(element, size) =>
+        NewPointerArray(element, size)(na.blame)
       case NewObject(cls) =>
         NewObject(cls)
       case NoPerm() =>
@@ -1365,6 +1383,17 @@ abstract class CoercingRewriter[Pre <: Generation]() extends AbstractRewriter[Pr
       case SmtlibFpToReal(arg) => SmtlibFpToReal(fp(arg)._1)
       case SmtlibFpToSInt(arg, bits) => SmtlibFpToSInt(fp(arg)._1, bits)
       case SmtlibFpToUInt(arg, bits) => SmtlibFpToUInt(fp(arg)._1, bits)
+      case SmtlibToInt(arg) => SmtlibToInt(rat(arg))
+      case SmtlibIsInt(arg) =>
+        firstOk(e, s"Expected operand to be floating, but got ${arg.t}.",
+          SmtlibIsInt(float(arg)),
+          SmtlibIsInt(rat(arg)),
+        )
+      case SmtlibPow(left, right) =>
+        firstOk(e, s"Expected args to be floating, but got ${left.t} and ${right.t}.",
+          SmtlibPow(float(left), float(right)),
+          SmtlibPow(rat(left), rat(right)),
+        )
       case SmtlibLiteralString(data) => SmtlibLiteralString(data)
       case SmtlibReAll() => SmtlibReAll()
       case SmtlibReAllChar() => SmtlibReAllChar()
@@ -1660,6 +1689,8 @@ abstract class CoercingRewriter[Pre <: Generation]() extends AbstractRewriter[Pr
         definition
       case declaration: CGlobalDeclaration[Pre] =>
         declaration
+      case declaration: CStructMemberDeclarator[Pre] =>
+        declaration
       case definition: CPPFunctionDefinition[Pre] =>
         definition
       case namespace: CPPNamespaceDefinition[Pre] =>
@@ -1916,6 +1947,8 @@ abstract class CoercingRewriter[Pre <: Generation]() extends AbstractRewriter[Pr
         CTypeQualifierDeclarationSpecifier(typeQual)
       case specifier: CFunctionSpecifier[Pre] => specifier
       case specifier: CAlignmentSpecifier[Pre] => specifier
+      case specifier: CStructDeclaration[Pre] => specifier
+      case specifier: CStructSpecifier[Pre] => specifier
       case ck @ CUDAKernel() => CUDAKernel()(ck.blame)
       case ok @ OpenCLKernel() => OpenCLKernel()(ok.blame)
     }
@@ -1929,6 +1962,12 @@ abstract class CoercingRewriter[Pre <: Generation]() extends AbstractRewriter[Pr
       case CVolatile() => CVolatile()
       case CAtomic() => CAtomic()
     }
+  }
+
+  def coerce(node: CStructMemberDeclarator[Pre]): CStructMemberDeclarator[Pre] = {
+    implicit val o: Origin = node.o
+    val CStructMemberDeclarator(specs, decls) = node
+    CStructMemberDeclarator(specs, decls)
   }
 
   def coerce(node: CPointer[Pre]): CPointer[Pre] = {

@@ -29,6 +29,7 @@ class FeatureRainbow[G] {
 
     case node: ArrayLocation[G] => Arrays
     case node: NewArray[G] => Arrays
+    case node: NewPointerArray[G] => Arrays
     case node: ArraySubscript[G] => Arrays
     case node: Length[G] => Arrays
     case node: TArray[G] => Arrays
@@ -501,6 +502,8 @@ class FeatureRainbow[G] {
     case node: Local[G] => SmtOperators
     case node: Minus[G] => SmtOperators
     case node: Mod[G] => SmtOperators
+    case node: TMod[G] => SmtOperators
+    case node: TDiv[G] => SmtOperators
     case node: Mult[G] => SmtOperators
     case node: Neq[G] => SmtOperators
     case node: NoPerm[G] => SmtOperators
@@ -665,6 +668,7 @@ class FeatureRainbow[G] {
     case node: ValidMatrix[G] => return Seq(SugarPermissionOperator, Arrays)
     case node: PermPointer[G] => return Seq(SugarPermissionOperator, Pointers)
     case node: PermPointerIndex[G] => return Seq(SugarPermissionOperator, Pointers)
+    case node: CLiteralArray[G] => return Seq(CSpecific, Arrays)
     case node: CCast[G] => return Seq(CSpecific, TypeValuesAndGenerics)
     case node: CChar[G] => return Seq(CSpecific, TextTypes)
     case node: CDeclarationStatement[G] => return Seq(CSpecific, UnscopedDeclaration)

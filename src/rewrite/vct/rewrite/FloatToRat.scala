@@ -32,6 +32,31 @@ case class FloatToRat[Pre <: Generation]() extends Rewriter[Pre] {
     case TFloat(e, m) => s"f${e}_$m"
   }
 
+
+  case object NonDetFloatOrigin extends Origin {
+    override def preferredName: String = "nonDetFloat"
+    override def shortPosition: String = "generated non-det float"
+
+    override def context: String = "[At node generated for float to rational conversion]"
+
+    override def inlineContext: String = "[At node generated for float to rational conversion]"
+  }
+
+  val nonDetFloat: mutable.Map[Unit, Function[Post]] = mutable.Map()
+
+  def getNonDetFloat(): Expr[Post] = {
+    val nondetFunc = nonDetFloat.getOrElseUpdate((), makeNondetFloatFunc())
+    FunctionInvocation[Post](nondetFunc.ref, Seq(), Nil, Nil, Nil)(TrueSatisfiable)(NonDetFloatOrigin)
+  }
+
+  def makeNondetFloatFunc(): Function[Post] = {
+    globalDeclarations.declare(withResult((result: Result[Post]) => function[Post](
+      blame = AbstractApplicable,
+      contractBlame = TrueSatisfiable,
+      returnType = TRational(),
+    )(NonDetFloatOrigin))(NonDetFloatOrigin))
+  }
+
   def makeCast(from: Type[Pre], to: Type[Pre]): Function[Post] = {
     globalDeclarations.declare(function[Post](
       args = Seq(new Variable(dispatch(from))(DiagnosticOrigin)),
@@ -43,17 +68,19 @@ case class FloatToRat[Pre <: Generation]() extends Rewriter[Pre] {
   val casts: mutable.Map[(Type[Pre], Type[Pre]), Function[Post]] = mutable.Map()
 
   override def dispatch(expr: Expr[Pre]): Expr[Post] = expr match {
+    case CastFloat(e, t) if e.t == t => dispatch(e)
+    case CastFloat(e, t: TFloat[Pre]) if e.t.isInstanceOf[TFloat[Pre]] => dispatch(e)
+    case c@CastFloat(e, t: TFloat[Pre]) if e.t == TInt[Pre]() =>
+      implicit val o: Origin = c.o
+      dispatch(e) /:/ const(1)
+    case c@CastFloat(e, t: TInt[Pre]) if e.t.isInstanceOf[TFloat[Pre]] =>
+      SmtlibToInt[Post](dispatch(e))(CastFuncOrigin("to_int"))
     case CastFloat(e, t) =>
-      if (e.t == t) {
-        dispatch(e)
-      } else {
         val f: Function[Post] = casts.getOrElseUpdate((e.t, t), makeCast(e.t, t))
         implicit val o: Origin = expr.o
         FunctionInvocation(f.ref[Function[Post]], Seq(dispatch(e)), Nil, Nil, Nil)(PanicBlame("Can always call cast on float"))
-      }
-
     case f @ FloatValue(num, _) =>
-      implicit val o = f.o
+      implicit val o: Origin = f.o
       var numerator = num
       var denominator = BigInt(1)
       while (!numerator.isWhole) {
@@ -61,6 +88,12 @@ case class FloatToRat[Pre <: Generation]() extends Rewriter[Pre] {
         denominator = denominator * 10
       }
       const[Post](numerator.toBigIntExact.get) /:/ const(denominator)
+    case div @ FloorDiv(left, right) if left.t.isInstanceOf[TFloat[Pre]] =>
+      // Normally floats don't fail on division by zero, they get the `inf` value. Rewriting this to not fail on division by zero.
+      implicit val o: Origin = div.o
+      val newRight = dispatch(right)
+//      Div(dispatch(left), newRight)(div.blame)
+      Select(newRight !== const[Post](0) /:/ const(1), Div(dispatch(left), newRight)(div.blame)(div.o), getNonDetFloat())(div.o)
     case e => rewriteDefault(e)
   }
 

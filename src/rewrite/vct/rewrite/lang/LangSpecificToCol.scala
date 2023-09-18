@@ -113,7 +113,6 @@ case class LangSpecificToCol[Pre <: Generation]() extends Rewriter[Pre] with Laz
     case CPPDeclarationStatement(decl) => cpp.rewriteLocal(decl)
     case goto: CGoto[Pre] => c.rewriteGoto(goto)
     case barrier: GpgpuBarrier[Pre] => c.gpuBarrier(barrier)
-
     case other => rewriteDefault(other)
   }
 
@@ -158,7 +157,16 @@ case class LangSpecificToCol[Pre <: Generation]() extends Rewriter[Pre] with Laz
 
     case local: CLocal[Pre] => c.local(local)
     case deref: CStructAccess[Pre] => c.deref(deref)
+    case deref: CStructDeref[Pre] => c.deref(deref)
     case inv: CInvocation[Pre] => c.invocation(inv)
+    case mod: TMod[Pre] => c.tmod(mod)
+    case mod: TDiv[Pre] => c.tdiv(mod)
+    case assign: PreAssignExpression[Pre] =>
+      assign.target.t match {
+        case CPrimitiveType(specs) if specs.collectFirst { case CSpecificationType(_: CTStruct[Pre]) => () }.isDefined =>
+          c.assignStruct(assign)
+        case _ => rewriteDefault(assign)
+      }
     case shared: SharedMemSize[Pre] => c.sharedSize(shared)
     case kernel: GpgpuCudaKernelInvocation[Pre] => c.cudaKernelInvocation(kernel)
     case local: LocalThreadId[Pre] => c.cudaLocalThreadId(local)
@@ -182,6 +190,7 @@ case class LangSpecificToCol[Pre <: Generation]() extends Rewriter[Pre] with Laz
     case t: JavaTClass[Pre] => java.classType(t)
     case t: CTPointer[Pre] => c.pointerType(t)
     case t: CTArray[Pre] => c.arrayType(t)
+    case t: CTStruct[Pre] => c.structType(t)
     case t: CPPTArray[Pre] => cpp.arrayType(t)
     case other => rewriteDefault(other)
   }

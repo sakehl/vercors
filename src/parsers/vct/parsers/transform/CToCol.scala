@@ -64,7 +64,7 @@ case class CToCol[G](override val originProvider: OriginProvider, override val b
     case DeclarationSpecifier0(storageClass) => convert(storageClass)
     case DeclarationSpecifier1(typeSpec) => convert(typeSpec)
     case DeclarationSpecifier2(typeQual) => CTypeQualifierDeclarationSpecifier(convert(typeQual))
-    case DeclarationSpecifier3(functionSpecifier) => ??(functionSpecifier)
+    case DeclarationSpecifier3(functionSpecifier) => convert(functionSpecifier)
     case DeclarationSpecifier4(alignmentSpecifier) => ??(alignmentSpecifier)
     case DeclarationSpecifier5(kernelSpecifier) => convert(kernelSpecifier)
     case DeclarationSpecifier6(valEmbedModifier) => withModifiers(valEmbedModifier, m => {
@@ -75,6 +75,13 @@ case class CToCol[G](override val originProvider: OriginProvider, override val b
       else
         fail(m.nodes.head, "This modifier cannot be attached to a declaration in C")
     })
+  }
+
+  def convert(implicit functionSpec: FunctionSpecifierContext): CDeclarationSpecifier[G] = functionSpec match {
+    case FunctionSpecifier0("inline") => CInline[G]()
+    case FunctionSpecifier0(_) => ??(functionSpec)
+    case FunctionSpecifier1(_) => ??(functionSpec)
+    case FunctionSpecifier2(_) => ??(functionSpec)
   }
 
   def convert(implicit storageClass: StorageClassSpecifierContext): CStorageClassSpecifier[G] = storageClass match {
@@ -105,12 +112,38 @@ case class CToCol[G](override val originProvider: OriginProvider, override val b
     case TypeSpecifier1(_, _, _, _) => ??(typeSpec)
     case TypeSpecifier2(valType) => CSpecificationType(convert(valType))
     case TypeSpecifier3(_) => ??(typeSpec)
-    case TypeSpecifier4(_) => ??(typeSpec)
+    case TypeSpecifier4(struct) => convert(struct)
     case TypeSpecifier5(_) => ??(typeSpec)
     case TypeSpecifier6(name) => name match {
       case TypedefName0(name) => CTypedefName(convert(name))
     }
     case TypeSpecifier7(_, _, _, _) => ??(typeSpec)
+  }
+
+  def convert(implicit struct: StructOrUnionSpecifierContext): CTypeSpecifier[G] = struct match {
+    case StructOrUnionSpecifier0(StructOrUnion0(_), name, _, declarations, _) => CStructDeclaration(name.map(convert), convert(declarations))
+    case StructOrUnionSpecifier1(StructOrUnion0(_), name) => CStructSpecifier(convert(name))
+  }
+
+  def convert(implicit specifiers: StructDeclarationListContext): Seq[CStructMemberDeclarator[G]] = specifiers match {
+    case StructDeclarationList0(decl) => Seq(convert(decl))
+    case StructDeclarationList1(decls, decl) => convert(decls) :+ convert(decl)
+  }
+
+  def convert(implicit decl: StructDeclarationContext): CStructMemberDeclarator[G] = decl match {
+    case StructDeclaration0(specs, decls, _) => CStructMemberDeclarator(convert(specs), convert(decls))
+    case StructDeclaration1(specs, _) => ??(decl) // Quite complicated use case, lets not allow it for now
+    case StructDeclaration2(_) => ??(decl)
+  }
+
+  def convert(implicit decl: StructDeclaratorListContext): Seq[CDeclarator[G]] = decl match {
+    case StructDeclaratorList0(decl) => Seq(convert(decl))
+    case StructDeclaratorList1(decls, _, decl) => convert(decls) :+ convert(decl)
+  }
+
+  def convert(implicit decl:  StructDeclaratorContext): CDeclarator[G] = decl match {
+    case StructDeclarator0(decl) => convert(decl)
+    case StructDeclarator1(_, _, _) => ??(decl)
   }
 
   def convert(implicit quals: TypeQualifierListContext): Seq[CTypeQualifier[G]] =
@@ -301,9 +334,16 @@ case class CToCol[G](override val originProvider: OriginProvider, override val b
   }
 
   def convert(implicit expr: InitializerContext): Expr[G] = expr match {
-    case Initializer0(_, _, _) => ??(expr)
-    case Initializer1(_, _, _, _) => ??(expr)
+    case Initializer0(_, list, _) => CLiteralArray(convert(list))
+    case Initializer1(_, list, _, _) => CLiteralArray(convert(list))
     case Initializer2(inner) => convert(inner)
+  }
+
+  def convert(implicit list: InitializerListContext): Seq[Expr[G]] = list match {
+    case InitializerList0(None, init) => Seq(convert(init))
+    case InitializerList0(Some(_), init) => ??(list)
+    case InitializerList1(inits, _, None, last) => convert(inits) :+ convert(last)
+    case InitializerList1(inits, _, Some(_), last) => ??(list)
   }
 
   def convert(implicit expr: AssignmentExpressionContext): Expr[G] = expr match {
@@ -316,8 +356,8 @@ case class CToCol[G](override val originProvider: OriginProvider, override val b
       val e = PreAssignExpression(target, op match {
         case "=" => value
         case "*=" => AmbiguousMult(target, value)
-        case "/=" => FloorDiv(target, value)(blame(expr))
-        case "%=" => col.Mod(target, value)(blame(expr))
+        case "/=" => TDiv(target, value)(blame(expr))
+        case "%=" => TMod(target, value)(blame(expr))
         case "+=" => col.AmbiguousPlus(target, value)(blame(valueNode))
         case "-=" => col.AmbiguousMinus(target, value)((blame(valueNode)))
         case "<<=" => BitShl(target, value)
@@ -404,8 +444,8 @@ case class CToCol[G](override val originProvider: OriginProvider, override val b
     case MultiplicativeExpression0(inner) => convert(inner)
     case MultiplicativeExpression1(left, op, right) => op match {
       case MultiplicativeOp0(_) => AmbiguousMult(convert(left), convert(right))
-      case MultiplicativeOp1(_) => FloorDiv(convert(left), convert(right))(blame(expr))
-      case MultiplicativeOp2(_) => col.Mod(convert(left), convert(right))(blame(expr))
+      case MultiplicativeOp1(_) => TDiv(convert(left), convert(right))(blame(expr))
+      case MultiplicativeOp2(_) => TMod(convert(left), convert(right))(blame(expr))
       case MultiplicativeOp3(_) => col.Div(convert(left), convert(right))(blame(expr))
     }
   }
@@ -417,6 +457,7 @@ case class CToCol[G](override val originProvider: OriginProvider, override val b
 
   def convert(implicit typeName: TypeNameContext): Type[G] = typeName match {
     case TypeName0(specifiers, None) => CPrimitiveType(convert(specifiers))
+    case TypeName0(specifiers, Some(AbstractDeclarator0(Pointer0(_, None)))) => CTPointer(CPrimitiveType(convert(specifiers)))
     case TypeName0(_, _) => ??(typeName)
   }
 
@@ -449,7 +490,7 @@ case class CToCol[G](override val originProvider: OriginProvider, override val b
       case "!" => col.Not(convert(arg))
     }
     case UnaryExpression4(_, _) => ??(expr)
-    case UnaryExpression5(_, _, _, _) => ??(expr)
+    case UnaryExpression5(_, _, tname, _) => SizeOf(convert(tname))
     case UnaryExpression6(_, _, _, _) => ??(expr)
     case UnaryExpression7(_, _) => ??(expr)
     case UnaryExpression8(SpecPrefix0(op), inner) => convert(expr, op, convert(inner))
@@ -462,7 +503,7 @@ case class CToCol[G](override val originProvider: OriginProvider, override val b
       CInvocation(convert(f), args.map(convert(_)) getOrElse Nil,
         convertEmbedGiven(given), convertEmbedYields(yields))(blame(expr))
     case PostfixExpression3(struct, _, field) => CStructAccess(convert(struct), convert(field))(blame(expr))
-    case PostfixExpression4(struct, _, field) => CStructDeref(convert(struct), convert(field))
+    case PostfixExpression4(struct, _, field) => CStructDeref(convert(struct), convert(field))(blame(expr))
     case PostfixExpression5(targetNode, _) =>
       val target = convert(targetNode)
       PostAssignExpression(target, col.AmbiguousPlus(target, const(1))(blame(expr)))(blame(expr))
@@ -536,7 +577,13 @@ case class CToCol[G](override val originProvider: OriginProvider, override val b
   }
 
   def convert(implicit t: LangTypeContext): Type[G] = t match {
-    case LangType0(typeSpec) => CPrimitiveType(Seq(convert(typeSpec)))
+    case LangType0(typeSpec) => convert(typeSpec)
+  }
+
+  def convert(t: TypeSpecifierWithPointerOrArrayContext): Type[G] = t match {
+    case TypeSpecifierWithPointerOrArray0(typeSpec) => CPrimitiveType(Seq(convert(typeSpec)))
+    case TypeSpecifierWithPointerOrArray1(typeSpec, _, _) => CTArray(None, CPrimitiveType(Seq(convert(typeSpec))))(blame(t))
+    case TypeSpecifierWithPointerOrArray2(typeSpec, _) => CTPointer(CPrimitiveType(Seq(convert(typeSpec))))
   }
 
   def convert(id: LangIdContext): String = id match {
