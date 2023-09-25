@@ -13,12 +13,14 @@ import vct.main.modes.Transform
 import vct.main.stages.Transformation
 import vct.options.types.{Mode, Verbosity}
 import vct.options.Options
-import vct.result.VerificationError.UserError
+import vct.result.VerificationError.{UserError, TimeOut}
+import viper.api.backend.Backend
 
 case object Main extends LazyLogging {
   val EXIT_CODE_SUCCESS = 0
   val EXIT_CODE_VERIFICATION_FAILURE = 1
   val EXIT_CODE_ERROR = 2
+  val EXIT_CODE_TIMEOUT = 3
 
   case class TemporarilyUnsupported(feature: String, examples: Seq[Node[_]]) extends UserError {
     override def code: String = "unsupported"

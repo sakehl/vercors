@@ -4,7 +4,7 @@ import com.typesafe.scalalogging.LazyLogging
 import hre.io.RWFile
 import vct.col.origin.AccountedDirection
 import vct.col.{ast => col, origin => blame}
-import vct.result.VerificationError.SystemError
+import vct.result.VerificationError.{SystemError, TimeOut}
 import viper.api.SilverTreeCompare
 import viper.api.transform.{ColToSilver, NodeInfo, NopViperReporter, SilverParserDummyFrontend}
 import viper.silver.ast.Infoed
@@ -278,6 +278,8 @@ trait SilverBackend extends Backend with LazyLogging {
     case AbortedExceptionally(throwable) =>
       throwable.printStackTrace()
       throw ViperCrashed(s"Viper has crashed: $throwable")
+    case TimeoutOccurred(t, text) =>
+      throw TimeOut(s"Time out occurred after $t seconds")
     case other =>
       throw NotSupported(s"Viper returned an error that VerCors does not recognize: $other")
   }

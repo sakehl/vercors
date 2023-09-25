@@ -7,11 +7,12 @@ import sun.misc.{Signal, SignalHandler}
 import vct.col.origin.{BlameCollector, TableEntry, VerificationFailure}
 import vct.col.rewrite.bip.BIP
 import vct.col.rewrite.bip.BIP.Standalone.VerificationReport
-import vct.main.Main.{EXIT_CODE_ERROR, EXIT_CODE_SUCCESS, EXIT_CODE_VERIFICATION_FAILURE}
+import vct.main.Main.{EXIT_CODE_ERROR, EXIT_CODE_SUCCESS, EXIT_CODE_TIMEOUT, EXIT_CODE_VERIFICATION_FAILURE}
 import vct.main.stages.Stages
 import vct.options.types.PathOrStd
 import vct.parsers.transform.ConstantBlameProvider
 import vct.result.VerificationError
+import vct.result.VerificationError.TimeOut
 import viper.api.backend.silicon.SiliconLogListener
 import viper.silicon.logger.SymbExLogger
 
@@ -73,6 +74,10 @@ case object Verify extends LazyLogging {
 
     verifyWithOptions(options, options.inputs) match {
       case Left(err) =>
+        if(err.isInstanceOf[TimeOut]){
+          logger.info(err.text)
+          return EXIT_CODE_TIMEOUT
+        }
         logger.error(err.text)
         EXIT_CODE_ERROR
       case Right((Nil, report)) =>

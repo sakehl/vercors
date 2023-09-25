@@ -28,6 +28,8 @@ object VerificationError {
    * should be a (documented) UserError. */
   abstract class SystemError extends VerificationError
 
+  case class TimeOut(text: String) extends VerificationError
+
   case class Unreachable(text: String) extends SystemError
 
   trait Context
