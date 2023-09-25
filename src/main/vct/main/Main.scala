@@ -45,7 +45,7 @@ case object Main extends LazyLogging {
   } catch {
     case t: Throwable =>
       logger.error(s"Unrecoverable error: ${t.getMessage}", t)
-      throw t
+      System.exit(EXIT_CODE_ERROR)
   }
 
   /**
