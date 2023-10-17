@@ -7,6 +7,7 @@ import scalalib.{ScalaModule => BaseScalaModule, JavaModule => BaseJavaModule, _
 import os._
 
 import release.ReleaseModule
+import fetchJars.{z3 => z3Jar}
 
 object Dir {
   val root = implicitly[define.Ctx].millSourcePath / os.up
@@ -30,7 +31,7 @@ object Deps {
 }
 
 trait JavaModule extends BaseJavaModule {
-  def forkArgs = Seq("-Xmx2G", "-Xss32m")
+  def forkArgs = Seq("-Xmx2G", "-Xss128m")
 
   def classPathFileElements = T { runClasspath().map(_.path.toString) }
 
@@ -111,11 +112,18 @@ trait VercorsJavaModule extends JavaModule with ReleaseModule { outer =>
   def sources = T.sources { sourcesDir() }
   def packedResources = T.sources { Dir.res / key }
   def docResources = T.sources { Dir.docs / key }
+//  def unmanagedClasspath = T {
+//    if(os.exists(Dir.lib / key))
+//      Agg.from(os.list(Dir.lib / key).filter(_.ext == "jar").map(PathRef(_)))
+//    else Agg.empty
+//  }
+
   def unmanagedClasspath = T {
-    if(os.exists(Dir.lib / key))
-      Agg.from(os.list(Dir.lib / key).filter(_.ext == "jar").map(PathRef(_)))
-    else Agg.empty
+    if (os.exists(Dir.lib / key))
+      Agg.from( os.list(Dir.lib / key).filter(_.ext == "jar").map(PathRef(_)) :+ z3Jar.classPath())
+    else Agg.from(Seq(z3Jar.classPath()))
   }
+
   def ivyDeps = Deps.common ++ deps()
 
   def classPathFileElements = T { runClasspathElements() }

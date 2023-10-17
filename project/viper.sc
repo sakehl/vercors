@@ -26,6 +26,10 @@ object viper extends ScalaModule {
       ivy"com.google.guava:guava:29.0-jre",
       ivy"org.jgrapht:jgrapht-core:1.5.0",
     )
+
+    override def resources = T.sources {
+      repo.repo() / "src" / "main" / "resources"
+    }
   }
 
   object silicon extends ScalaModule {

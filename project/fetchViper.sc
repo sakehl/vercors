@@ -10,15 +10,15 @@ import git.GitModule
 
 object silverGit extends GitModule {
   def url = T { "https://github.com/viperproject/silver.git" }
-  def commitish = T { "ae4a12399cd0b42bedabf01be2cda93700244bd6" }
+  def commitish = T { "65ec3412bb9118a8c465462c94dab6d0d53da5f4" }
 }
 
 object siliconGit extends GitModule {
   def url = T { "https://github.com/viperproject/silicon.git" }
-  def commitish = T { "a60324dd46923b861bae7b4a40f807227d693fc3" }
+  def commitish = T { "4cdc6b91cfea8ee217976837ad6167f2bef9babd" }
 }
 
 object carbonGit extends GitModule {
   def url = T { "https://github.com/viperproject/carbon.git" }
-  def commitish = T { "ba130077713a427213a331a3dc1d92898b4bdf9e" }
+  def commitish = T { "1a8e5c703da87a0e4205347d68e2c2ee6481e71d" }
 }

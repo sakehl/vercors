@@ -4,7 +4,7 @@ import vct.col.ast.util.ExpressionEqualityCheck.isConstantInt
 import vct.col.ast._
 import vct.col.origin.Origin
 import vct.col.typerules.CoercionUtils
-import vct.col.util.AstBuildHelpers.ExprBuildHelpers
+import vct.col.util.AstBuildHelpers._
 import vct.result.VerificationError.UserError
 
 import scala.collection.mutable
@@ -164,7 +164,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
 
   def isNonZero(e: Expr[G]):Boolean = e match {
     case v: Local[G] => info.exists(_.variableNotZero.contains(v))
-    case _ => isConstantInt(e).getOrElse(0) != 0
+    case _ => lessThenEq(const(1)(e.o), e).getOrElse(false)
   }
 
   def unfoldComm[B <: BinExpr[G]](e: Expr[G], base: B): Seq[Expr[G]] = {
@@ -303,6 +303,10 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
         replaceVariable(name1, e2)
       case (e1, name2: Local[G]) =>
         replaceVariable(name2, e1)
+
+      // Methods are often inpure
+      case (inv: MethodInvocation[G], _) if !inv.ref.decl.pure => false
+      case (_, inv: MethodInvocation[G]) if !inv.ref.decl.pure => false
 
       // In the general case, we are just interested in syntactic equality
       case (e1, e2) => e1 == e2

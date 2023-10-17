@@ -74,6 +74,12 @@ object viperApi extends VercorsModule {
   )
   def moduleDeps = Seq(hre, col, parsers, viper)
 
+  override def unmanagedClasspath = Agg.from(Seq(PathRef(os.root / "usr" / "share" / "java" / "com.microsoft.z3.jar")))
+
+  override def runClasspath = T.sources {
+    (os.root / "usr" / "share" / "java" / "com.microsoft.z3.jar")
+  }
+
   object test extends Tests
 }
 
