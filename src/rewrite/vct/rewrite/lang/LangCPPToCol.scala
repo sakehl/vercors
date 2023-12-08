@@ -3,6 +3,7 @@ package vct.rewrite.lang
 import com.typesafe.scalalogging.LazyLogging
 import hre.util.ScopedStack
 import vct.col.ast.{CPPLocalDeclaration, Expr, InstanceField, Perm, TInt, _}
+import vct.col.ast.util.ExpressionEqualityCheck.isConstantInt
 import vct.col.origin._
 import vct.col.ref.Ref
 import vct.col.resolve.NotApplicable
@@ -767,7 +768,13 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre]) extends L
         case _ => throw NotApplicable(inv)
       }
       case "sycl::range::get" => (classInstance, args) match {
-        case (Some(seq: LiteralSeq[Post]), Seq(arg)) => SeqSubscript(seq, rw.dispatch(arg))(SYCLRequestedRangeIndexOutOfBoundsBlame(seq, arg)) // Range coming from calling get_range() on a (local)accessor
+        case (Some(seq: LiteralSeq[Post]), Seq(arg)) =>
+        
+        isConstantInt(arg) match {
+          case Some(i) if 0<= i && i < seq.values.size => seq.values(i.toInt)
+          case _ => ???
+        }
+        //  SeqSubscript(seq, rw.dispatch(arg))(SYCLRequestedRangeIndexOutOfBoundsBlame(seq, arg)) // Range coming from calling get_range() on a (local)accessor
         case _ => throw NotApplicable(inv)
       }
 
@@ -1265,11 +1272,28 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre]) extends L
   }
 
   private def getSimpleWorkItemId(inv: CPPInvocation[Pre], level: KernelScopeLevel) (implicit o: Origin) : Expr[Post] = {
-    SeqSubscript[Post](LiteralSeq(TInt(), currentDimensionIterVars(level).map(iterVar => iterVar.variable.get).toSeq), rw.dispatch(inv.args.head))(SYCLItemMethodSeqBoundFailureBlame(inv))
+    val dim = inv.args match {
+      case Seq(dim) => dim
+      case _ => ???
+    }
+    isConstantInt(dim) match {
+      case Some(i) if 0<= i && i < currentDimensionIterVars(level).size => currentDimensionIterVars(level)(i.toInt).variable.get
+      case _ => ???
+    }
+
+    // SeqSubscript[Post](LiteralSeq(TInt(), currentDimensionIterVars(level).map(iterVar => iterVar.variable.get).toSeq), rw.dispatch(inv.args.head))(SYCLItemMethodSeqBoundFailureBlame(inv))
   }
 
   private def getSimpleWorkItemRange(inv: CPPInvocation[Pre], level: KernelScopeLevel)(implicit o: Origin): Expr[Post] = {
-    SeqSubscript[Post](LiteralSeq(TInt(), currentDimensionIterVars(level).map(iterVar => iterVar.to).toSeq), rw.dispatch(inv.args.head))(SYCLItemMethodSeqBoundFailureBlame(inv))
+    val dim = inv.args match {
+      case Seq(dim) => dim
+      case _ => ???
+    }
+    isConstantInt(dim) match {
+      case Some(i) if 0<= i && i < currentDimensionIterVars(level).size => currentDimensionIterVars(level)(i.toInt).variable.get
+      case _ => ???
+    }
+    // SeqSubscript[Post](LiteralSeq(TInt(), currentDimensionIterVars(level).map(iterVar => iterVar.to).toSeq), rw.dispatch(inv.args.head))(SYCLItemMethodSeqBoundFailureBlame(inv))
   }
 
   private def getSimpleWorkItemLinearId(inv: CPPInvocation[Pre], level: KernelScopeLevel)(implicit o: Origin): Expr[Post] = {
