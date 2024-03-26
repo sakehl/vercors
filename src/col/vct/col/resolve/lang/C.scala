@@ -134,6 +134,8 @@ case object C {
       }
       case CPrimitiveType(Seq(CSpecificationType(CTArray(_, struct: CTStruct[G])))) =>
         getCStructDeref(struct.ref.decl, name)
+      case CTPointer(struct: CTStruct[G]) => getCStructDeref(struct.ref.decl, name)
+      case CTArray(_, struct: CTStruct[G]) => getCStructDeref(struct.ref.decl, name)
       case _ => None
     }
 

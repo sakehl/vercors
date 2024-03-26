@@ -5,6 +5,7 @@ import ImportADT.typeText
 import vct.col.origin._
 import vct.col.ref.Ref
 import vct.col.rewrite.Generation
+import vct.col.rewrite.adt.ImportPointer.{DerefPointerBoundsPreconditionFailed, PointerBoundsPreconditionFailed, PointerFieldInsufficientPermission, PointerNullOptNone}
 import vct.col.util.AstBuildHelpers.{ExprBuildHelpers, const}
 
 import scala.collection.mutable
@@ -145,3 +146,141 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter) extends
 }
 
 
+object ImportArrayPointer extends ImportADTBuilder("array") {
+  private def ArrayField(t: Type[_]): Origin = Origin(
+    Seq(
+      PreferredName(Seq(typeText(t))),
+      LabelContext("array pointer field"),
+    )
+  )
+
+  case class ArrayNullOptNone(inner: Blame[ArrayNull], expr: Expr[_]) extends Blame[OptionNone] {
+    override def blame(error: OptionNone): Unit =
+      inner.blame(ArrayNull(expr))
+  }
+
+  case class ArrayBoundsPreconditionFailed(inner: Blame[ArrayBounds], subscript: Node[_]) extends Blame[PreconditionFailed] {
+    override def blame(error: PreconditionFailed): Unit =
+      inner.blame(ArrayBounds(subscript))
+  }
+
+  case class ArrayFieldInsufficientPermission(inner: Blame[ArrayInsufficientPermission], expr: Expr[_]) extends Blame[InsufficientPermission] {
+    override def blame(error: InsufficientPermission): Unit =
+      inner.blame(ArrayInsufficientPermission(expr))
+  }
+}
+
+case class ImportArrayPointer[Pre <: Generation](importer: ImportADTImporter) extends ImportADT[Pre](importer) {
+  import ImportArrayPointer._
+
+  var inTriggers: Boolean = false
+
+  private lazy val arrayFile = parse("array")
+
+  private lazy val arrayAdt = find[AxiomaticDataType[Post]](arrayFile, "array")
+  private lazy val arrayAxLoc = find[ADTFunction[Post]](arrayAdt, "array_loc")
+  private lazy val arrayLen = find[ADTFunction[Post]](arrayAdt, "alen")
+  private lazy val arrayLoc = find[Function[Post]](arrayFile, "aloc")
+
+  val arrayField: mutable.Map[Type[Post], SilverField[Post]] = mutable.Map()
+
+  private def getArrayField(ptr: Expr[Pre]): Ref[Post, SilverField[Post]] = {
+    val tElement = dispatch(ptr.t.asPointer.get.element)
+    arrayField.getOrElseUpdate(tElement, {
+      globalDeclarations.declare(new SilverField(tElement)(ArrayField(tElement)))
+    }).ref
+  }
+
+  override def applyCoercion(e: => Expr[Post], coercion: Coercion[Pre])(implicit o: Origin): Expr[Post] = coercion match {
+    case CoerceNullPointer(_) => OptNoneTyped(TAxiomatic(arrayAdt.ref, Nil))
+    case other => super.applyCoercion(e, other)
+  }
+
+  override def postCoerce(t: Type[Pre]): Type[Post] = t match {
+    case TPointer(_) => TOption(TAxiomatic(arrayAdt.ref, Nil))
+    case other => rewriteDefault(other)
+  }
+
+  override def postCoerce(location: Location[Pre]): Location[Post] = location match {
+    case loc@PointerLocation(pointer) =>
+      val pointerInner = pointer match {
+        case ApplyCoercion(inner, CoerceIdentity(_)) => inner
+        case _ => ???
+      }
+
+      val (arr, index, boundsBlame) = pointerInner match {
+        case add@PointerAdd(arr, index) => (arr, index, PointerBoundsPreconditionFailed(add.blame, pointer)) // Maybe just do not support PointerAdd, since that could lead to problems
+        case AddrOf(deref@DerefPointer(arr)) => (arr, const[Pre](0)(location.o), DerefPointerBoundsPreconditionFailed(deref.blame, pointer))
+        case AddrOf(sub@PointerSubscript(arr, index)) => (arr, index, PointerBoundsPreconditionFailed(sub.blame, index))
+        case l: Local[Pre] => (l, const[Pre](0)(location.o), PanicBlame("TODO: PointerLocation zero"))
+        case _ => ???
+      }
+
+      SilverFieldLocation(
+        obj = FunctionInvocation[Post](
+          ref = arrayLoc.ref,
+          args = Seq(
+            OptGet(dispatch(arr))(PointerNullOptNone(loc.blame, pointer))(arr.o),
+            dispatch(index)),
+          typeArgs = Nil, Nil, Nil)(NoContext(boundsBlame))(loc.o),
+        field = getArrayField(arr),
+      )(loc.o)
+    case other => rewriteDefault(other)
+  }
+  override def postCoerce(e: Expr[Pre]): Expr[Post] = {
+    implicit val o: Origin = e.o
+    e match {
+      case sub@PointerSubscript(arr, index) =>
+        SilverDeref(
+          FunctionInvocation[Post](
+            ref = arrayLoc.ref,
+            args = Seq(
+              OptGet(dispatch(arr))(PointerNullOptNone(sub.blame, arr))(arr.o),
+              dispatch(index)),
+            typeArgs = Nil, Nil, Nil)(NoContext(PointerBoundsPreconditionFailed(sub.blame, sub))),
+          field = getArrayField(arr))(PointerFieldInsufficientPermission(sub.blame, sub))
+      case s@Starall(bindings, triggers, body) =>
+        inTriggers = true
+        val newTriggers = triggers.map(s => s.map(t => dispatch(t)))
+        inTriggers = false
+        Starall(variables.dispatch(bindings), newTriggers, dispatch(body))(s.blame)(s.o)
+      case f@Forall(bindings, triggers, body) =>
+        inTriggers = true
+        val newTriggers = triggers.map(s => s.map(t => dispatch(t)))
+        inTriggers = false
+        Forall(variables.dispatch(bindings), newTriggers, dispatch(body))(f.o)
+
+      case add@PointerAdd(pointer, offset) if inTriggers =>
+        SilverDeref(
+          FunctionInvocation[Post](
+            ref = arrayLoc.ref,
+            args = Seq(
+              OptGet(dispatch(pointer))(PointerNullOptNone(add.blame, pointer))(pointer.o),
+              dispatch(offset)),
+            typeArgs = Nil, Nil, Nil)(NoContext(PointerBoundsPreconditionFailed(add.blame, add))),
+          field = getArrayField(pointer))(PanicBlame("TODO: Get array field no permission?"))
+      case add@PointerAdd(pointer, offset) =>
+        ???
+      case deref@DerefPointer(arr) => SilverDeref(
+        FunctionInvocation[Post](
+          ref = arrayLoc.ref,
+          args = Seq(
+            OptGet(dispatch(arr))(PointerNullOptNone(deref.blame, arr))(arr.o),
+            dispatch(const(0))),
+          typeArgs = Nil, Nil, Nil)(NoContext(DerefPointerBoundsPreconditionFailed(deref.blame, deref))),
+        field = getArrayField(arr))(PointerFieldInsufficientPermission(deref.blame, deref))
+      case length@PointerLength(arr) =>
+        ADTFunctionInvocation(None, arrayLen.ref, Seq(
+          OptGet(dispatch(arr))(PointerNullOptNone(length.blame, arr))(arr.o)
+        ))
+      case length@PointerBlockLength(arr) =>
+        ADTFunctionInvocation(None, arrayLen.ref, Seq(
+          OptGet(dispatch(arr))(PointerNullOptNone(length.blame, arr))(arr.o)
+        ))
+      case length@PointerBlockOffset(arr) =>
+        const[Post](0)(length.o)
+      case other => rewriteDefault(other)
+    }
+  }
+
+}
