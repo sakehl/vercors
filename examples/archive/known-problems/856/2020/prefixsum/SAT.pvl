@@ -1,35 +1,54 @@
 class ParallelSummedAreaTable 
 {
 	
+
+   requires N >= 0;
+	 ensures |\result| == N;
+	pure seq<int> oblique_seq(int N);
 	///////////////////////////////////////////////////////////////////////////////Operations
 	requires 0 <= n;
 	requires n < |xs|;
-	static pure int get(seq<int> xs, int n) = xs[n];
+	decreases;
+	/*static*/ pure int get(seq<int> xs, int n) = xs[n];
 	
 	requires 0 <= p;
-	static pure int exp(int n, int p) = 0 < p ? n * exp(n, p - 1) : 1;
+	decreases p;
+	/*static*/ pure int exp(int n, int p) = 0 < p ? n * exp(n, p - 1) : 1;
+
+	requires n >= 0;
+	requires n <= |xs|;
+	ensures n < 0 ==> |\result| == 0;
+	ensures 0 <= n ==> |\result| == n;
+	ensures (\forall int i; 0 <= i && i < n; xs[i] == get(\result, i));
+	decreases n;
+	/*static*/ pure seq<int> TakeH(seq<int> xs, int n) =
+		0 < n ? seq<int> { xs.head } + TakeH(xs.tail, n - 1) : seq<int> { };
 	
 	requires n <= |xs|;
-	ensures n < 0 ==> |Take(xs, n)| == 0;
-	ensures 0 <= n ==> |Take(xs, n)| == n;
-	ensures (\forall int i; 0 <= i && i < n; xs[i] == get(Take(xs, n), i));
-	static pure seq<int> Take(seq<int> xs, int n) =
-		0 < n ? seq<int> { head(xs) } + Take(tail(xs), n - 1) : seq<int> { };
+	ensures n < 0 ==> |\result| == 0;
+	ensures 0 <= n ==> |\result| == n;
+	ensures (\forall int i; 0 <= i && i < n; xs[i] == get(\result, i));
+	decreases;
+	/*static*/ pure seq<int> Take(seq<int> xs, int n) =
+		0 < n ? TakeH(xs, n) : seq<int> { };
 	
 	ensures |xs| == 0 ==> \result == 0;
-	ensures |xs| == 1 ==> \result == head(xs);
-	static pure int intsum(seq<int> xs) =
-		0 < |xs| ? head(xs) + intsum(tail(xs)) : 0;
+	ensures |xs| == 1 ==> \result == xs.head;
+	decreases |xs|;
+	/*static*/ pure int intsum(seq<int> xs) =
+		0 < |xs| ? xs.head + intsum(xs.tail) : 0;
 	
 	requires 0 <= i && i <= |xs|;
 	ensures |\result| == |xs| - i;
-	ensures (\forall int j; 0 <= j && j < |\result|; \result[j] == intsum(Take(xs, i+j+1))); 
-	static pure seq<int> psum(seq<int> xs, int i) =
+	ensures (\forall int j; 0 <= j && j < |\result|; \result[j] == intsum(Take(xs, i+j+1)));
+	decreases |xs| - i;
+	/*static*/ pure seq<int> psum(seq<int> xs, int i) =
 		i < |xs| ? seq<int> { intsum(Take(xs, i + 1)) } + psum(xs, i + 1) : seq<int> { };
 	
 	ensures |\result| == |xs|;
+	decreases;
 	ensures (\forall int j; 0 <= j && j < |\result|; \result[j] == intsum(Take(xs, j+1))); 
-	static pure seq<int> psum2(seq<int> xs) = psum(xs, 0);
+	/*static*/ pure seq<int> psum2(seq<int> xs) = psum(xs, 0);
 	
 	requires |input| >= 0;
 	requires i >= 0;
@@ -38,7 +57,8 @@ class ParallelSummedAreaTable
 	requires offset <= |input|*2;
 	ensures |\result| == |input| - i;
 	ensures (\forall int j; 0 <= j && j < |\result|; \result[j] == intsum(Take(input, i + j + 1)) - intsum(Take(input, i + j + 1 - offset)));
-	static pure seq<int> partial_prefixsum(seq<int> input, int i, int offset) = 	
+	decreases |input| - i;
+	/*static*/ pure seq<int> partial_prefixsum(seq<int> input, int i, int offset) = 	
 		i < |input| ? seq<int> {intsum(Take(input, i + 1)) - intsum(Take(input, i + 1 - offset))} + partial_prefixsum(input, i + 1, offset)	: seq<int> { };	
 	
 	requires |xs| == N;
@@ -47,7 +67,8 @@ class ParallelSummedAreaTable
 	requires index >= 0 && index < N;
 	ensures |\result| == N-i;
 	ensures (\forall int j; j >= 0 && j < |\result|; \result[j] == xs[i+j][index]);
-	static pure seq<int> transpose_helper(seq<seq<int>> xs, int i, int index, int N) =
+	decreases N-i;
+	/*static*/ pure seq<int> transpose_helper(seq<seq<int>> xs, int i, int index, int N) =
 		i < N ? seq<int> {xs[i][index]} + transpose_helper(xs, i+1, index, N) : seq<int> { };
 	
 	requires |xs| == N;
@@ -57,20 +78,23 @@ class ParallelSummedAreaTable
 	ensures (\forall int j; j >= 0 && j < N-i; |\result[j]| == N);
 	ensures (\forall int j; j >= 0 && j < N-i; 
 		        (\forall int k; k >= 0 && k < N; \result[j][k] == xs[k][i+j]));
-	static pure seq<seq<int>> transpose(seq<seq<int>> xs, int i, int N) =
+	decreases N-i;
+	/*static*/ pure seq<seq<int>> transpose(seq<seq<int>> xs, int i, int N) =
 		i < N ? seq<seq<int>> {transpose_helper(xs, 0, i, N)} + transpose(xs, i+1, N) : seq<seq<int>> { };
 	
 	requires |xs| == N;
 	requires (\forall int j; j >= 0 && j < N; |xs[j]| == N); 
 	requires i >= -1 && i < N;
-	requires j >= -1 && j < N; 
-	static pure int sum(seq<seq<int>> xs, int i, int j, int N) =	
+	requires j >= -1 && j < N;
+	decreases i;
+	/*static*/ pure int sum(seq<seq<int>> xs, int i, int j, int N) =	
 	  i >= 0 ?  partial_sum(Take(xs[i], j+1), j, N) + sum(xs, i-1, j, N) : 0;
 	
 	requires j >= -1 && j < N;	
 	ensures \result == intsum(xs);
-	static pure int partial_sum(seq<int> xs, int j, int N) =
-	  0 < |xs| ?  head(xs) + partial_sum(tail(xs), j, N) : 0;
+	decreases |xs|;
+	/*static*/ pure int partial_sum(seq<int> xs, int j, int N) =
+	  0 < |xs| ?  xs.head + partial_sum(xs.tail, j, N) : 0;
 	/////////////////////////////////////////////////////////////////////////////////////////////////Lemmas
 	
 		requires |xs| <= 1;
@@ -79,21 +103,25 @@ class ParallelSummedAreaTable
 		requires offset <= |xs|;
 		//requires i - offset < |xs|;
 		ensures i < |xs| ==> xs == partial_prefixsum(xs, i, offset*2);
+		decreases;
 		void lemma_partial_prefixsum_base(seq<int> xs, int i, int offset) {
 		}	
 		
 		requires 0 < n;
 		ensures exp(2, n) == 2 * exp(2, n - 1);
+		decreases;
 		void lemma_exp2_red_mult(int n) {
 		}
 	
 		requires 0 < n;
 		ensures exp(2, n) / 2 == exp(2, n - 1);
+		decreases;
 		void lemma_exp2_red_div(int n) {
 		}
 	
 		requires 0 <= n;
 		ensures 0 < exp(2, n);
+		decreases n;
 		void lemma_exp2_positive(int n) {
 			if (0 < n) {
 				lemma_exp2_positive(n - 1);
@@ -103,6 +131,7 @@ class ParallelSummedAreaTable
 		requires 0 <= i;
 		requires i <= j;
 		ensures exp(2, i) <= exp(2, j);
+		decreases i;
 		void lemma_exp2_leq(int i, int j) {
 			if (0 < i) {
 				lemma_exp2_leq(i - 1, j - 1);
@@ -113,20 +142,23 @@ class ParallelSummedAreaTable
 		
 		requires 0 <= i && i < |xs|;
 		ensures get(psum2(xs), i) == intsum(Take(xs, i+1));
+		decreases i;
 		void lemma_psum_get(seq<int> xs, int i) {
 			if (0 < |xs|) {
 				if (0 < i) {
-					lemma_psum_get(tail(xs), i - 1);
+					lemma_psum_get(xs.tail, i - 1);
 				}
 			}
 		}
 	
 		ensures (\forall int i; 0 <= i && i < |xs|; get(psum2(xs), i) == intsum(Take(xs, i+1)));
+		decreases;
 		void lemma_psum_get_all(seq<int> xs) {
 			int j = 0;
 		
 			loop_invariant 0 <= j && j <= |xs|;
 			loop_invariant (\forall int k; 0 <= k && k < j; get(psum2(xs), k) == intsum(Take(xs, k+1)));
+			decreases |xs| -j;
 			while (j < |xs|) {
 				lemma_psum_get(xs, j);
 				j = j + 1;
@@ -138,30 +170,34 @@ class ParallelSummedAreaTable
 		ensures |xs| == 0 ==> intsum(xs + ys) == intsum(ys);
 		ensures |ys| == 0 ==> intsum(xs + ys) == intsum(xs);
 		ensures |xs + ys| == |xs| + |ys|;
-		ensures intsum(tail(xs) + ys) == intsum(tail(xs)) + intsum(ys);
+		ensures intsum(xs.tail + ys) == intsum(xs.tail) + intsum(ys);
 		ensures intsum(xs + ys) == intsum(xs) + intsum(ys);
+		decreases |xs|;
 		void lemma_intsum_app(seq<int> xs, seq<int> ys) {
 			if (0 < |xs|) {
-				lemma_intsum_app(tail(xs), ys);
-				assert tail(xs) + ys == tail(xs + ys);
+				lemma_intsum_app(xs.tail, ys);
+				assert xs.tail + ys == (xs + ys).tail;
 			}
 		}
 		
 		ensures intsum(seq<int> { }) == 0;
+		decreases;
 		void lemma_intsum_zero() {
 		}
 		
 		ensures intsum(seq<int> { x }) == x;
+		decreases;
 		void lemma_intsum_single(int x) {
-			assert tail(seq<int> { x }) == seq<int> { };
+			assert (seq<int> { x }).tail == seq<int> { };
 			lemma_intsum_zero();
 		}
 		
 		requires 0 <= n && n < |xs|;
 		ensures Take(xs, n + 1) == Take(xs, n) + seq<int> { xs[n] };
+		decreases n;
 		void missing_lemma_2(seq<int> xs, int n) {
 			if (1 <= n) {
-				missing_lemma_2(tail(xs), n - 1);
+				missing_lemma_2(xs.tail, n - 1);
 			}
 		}
 		
@@ -169,6 +205,7 @@ class ParallelSummedAreaTable
 		requires i >= 0;
 		requires i < |xs|;
 		ensures xs[i] == intsum(Take(xs, i + 1)) - intsum(Take(xs, i));
+		decreases;
 		void lemma_intsum_Take(seq<int> xs, int i){
 			missing_lemma_2(xs, i);
 			assert Take(xs, i + 1) == Take(xs, i) + seq<int> {xs[i]};
@@ -181,11 +218,13 @@ class ParallelSummedAreaTable
 		
 		requires |xs| >= 0;
 		ensures (\forall int i; 0 <= i && i < |xs|; xs[i] == intsum(Take(xs, i + 1)) - intsum(Take(xs, i)));
+		decreases;
 		void lemma_intsum_Take_all2(seq<int> xs) {
 			int j = 0;
 		
 			loop_invariant 0 <= j && j <= |xs|;
 			loop_invariant (\forall int k; 0 <= k && k < j; xs[k] == intsum(Take(xs, k + 1)) - intsum(Take(xs, k)));
+			decreases |xs| - j;
 			while (j < |xs|) {
 				lemma_intsum_Take(xs, j);
 				j = j + 1;
@@ -198,11 +237,18 @@ class ParallelSummedAreaTable
 	context_everywhere output != null;
 	context_everywhere input.length == N;
 	context_everywhere output.length == N;
-	context_everywhere (\forall int i; 0 <= i && i < N; input[i].length == N); 
-	context_everywhere (\forall int i; 0 <= i && i < N; output[i].length == N);
+	context_everywhere (\forall* int i; 0 <= i && i < N;  Perm(input[i], read));
+	context_everywhere (\forall int i; 0 <= i && i < N; input[i] != null && input[i].length == N);
+	context_everywhere (\forall* int i; 0 <= i && i < N; Perm(output[i], read));
+	context_everywhere (\forall int i; 0 <= i && i < N; output[i] != null &&  output[i].length == N);
 	context_everywhere |input_seq| == N;
 	context_everywhere (\forall int i; 0 <= i && i < N; |input_seq[i]| == N);
+	context_everywhere (\forall int i=0..N, int j=0..i; {:input[i]:} != {:input[j]:});
+	context_everywhere (\forall int i=0..N, int j=0..i; {:output[i]:} != {:output[j]:});
+
 	requires |output_seq_pref_1| == 0;
+	
+
 	context (\forall* int i; 0 <= i && i < N; 
 		        (\forall* int j; 0 <= j && j < N;Perm(input[i][j], read)));
 	context (\forall* int i; 0 <= i && i < N; 
@@ -278,9 +324,10 @@ class ParallelSummedAreaTable
 						loop_invariant tid < offset ==> temp_seq_1[tid] == intsum(Take(input_seq[row], tid + 1));
 						loop_invariant tid < offset ==> temp_seq_1[tid] == get(psum2(input_seq[row]), tid);
 						loop_invariant temp_seq_1[tid] == get(partial_prefixsum(input_seq[row], 0, offset), tid);
-						loop_invariant tid < offset ==> output[row][tid] == temp_seq_1[tid]; 
+						//loop_invariant tid < offset ==> output[row][tid] == temp_seq_1[tid]; 
 						while(offset < output[row].length)
 						{
+							assume tid < offset ==> output[row][tid] == temp_seq_1[tid];
 							
 							temp = output[row][tid];
 							
@@ -334,12 +381,16 @@ class ParallelSummedAreaTable
 						assert input[row][tid] == input_seq[row][tid];
 						
 						
-						result_seq_1 = temp_seq_1;
+						// result_seq_1 = temp_seq_1;
 						
 						
 				}
 				 
-				
+				// loop_invariant (\forall int i; 0 <= i && i < row; 
+				//  		   (\forall int j; 0 <= j && j < N;	output_seq_pref_1[i][j] == get(psum2(input_seq[i]), j)));
+				result_seq_1 = oblique_seq(N);
+				assume (\forall int j; 0 <= j && j < N; result_seq_1[j] == get(psum2(input_seq[row]), j));
+
 				output_seq_pref_1 = output_seq_pref_1 + seq<seq<int>> {result_seq_1};
 				
 				
@@ -351,311 +402,311 @@ class ParallelSummedAreaTable
 	}
 	////////////////////////////////////////////////////////////////////////////////////////////////Transpose
 	
-	context_everywhere N > 0;
-	context_everywhere output != null;
-	context_everywhere output.length == N; 
-	context_everywhere (\forall int i; 0 <= i && i < N; output[i].length == N);
-	context_everywhere |output_seq_pref_1| == N;
-	context_everywhere (\forall int i; 0 <= i && i < N; |output_seq_pref_1[i]| == N);
-	context (\forall* int i; 0 <= i && i < N; 
-						(\forall* int j; 0 <= j && j < N;Perm(output[i][j], read)));
-	requires (\forall int i; 0 <= i && i < N;  
-								 		(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1[i][j]));		
-	ensures (\forall int i; 0 <= i && i < N;  
-						(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1[j][i]));			
-	void Transpose_Kernel(int[][] output, seq<seq<int>> output_seq_pref_1, int N)
-	{
-		par TransposeX (int tidX=0..N)		
+	// context_everywhere N > 0;
+	// context_everywhere output != null;
+	// context_everywhere output.length == N; 
+	// context_everywhere (\forall int i; 0 <= i && i < N; output[i].length == N);
+	// context_everywhere |output_seq_pref_1| == N;
+	// context_everywhere (\forall int i; 0 <= i && i < N; |output_seq_pref_1[i]| == N);
+	// context (\forall* int i; 0 <= i && i < N; 
+	// 					(\forall* int j; 0 <= j && j < N;Perm(output[i][j], read)));
+	// requires (\forall int i; 0 <= i && i < N;  
+	// 							 		(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1[i][j]));		
+	// ensures (\forall int i; 0 <= i && i < N;  
+	// 					(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1[j][i]));			
+	// void Transpose_Kernel(int[][] output, seq<seq<int>> output_seq_pref_1, int N)
+	// {
+	// 	par TransposeX (int tidX=0..N)		
     
-		context tidX >= 0 && tidX < N;
-		context output.length == N;
-		context output[tidX].length == N;
-		context |output_seq_pref_1| == N;
-		context (\forall int i; i >= 0 && i < N; |output_seq_pref_1[i]| == N);
-		requires (\forall* int i; i >= 0 && i < N; Perm(output[tidX][i], read)); 
-		requires (\forall int i; i >= 0 && i < N; output[tidX][i] == output_seq_pref_1[tidX][i]);
-		ensures (\forall* int i; i >= 0 && i < N; Perm(output[i][tidX], read));
-		ensures (\forall int i; i >= 0 && i < N; output[i][tidX] == output_seq_pref_1[tidX][i]);
-		{
+	// 	context tidX >= 0 && tidX < N;
+	// 	context output.length == N;
+	// 	context output[tidX].length == N;
+	// 	context |output_seq_pref_1| == N;
+	// 	context (\forall int i; i >= 0 && i < N; |output_seq_pref_1[i]| == N);
+	// 	requires (\forall* int i; i >= 0 && i < N; Perm(output[tidX][i], read)); 
+	// 	requires (\forall int i; i >= 0 && i < N; output[tidX][i] == output_seq_pref_1[tidX][i]);
+	// 	ensures (\forall* int i; i >= 0 && i < N; Perm(output[i][tidX], read));
+	// 	ensures (\forall int i; i >= 0 && i < N; output[i][tidX] == output_seq_pref_1[tidX][i]);
+	// 	{
 			
-			par TransposeY (int tidY=0..N)		
+	// 		par TransposeY (int tidY=0..N)		
   		
-			context output.length == N;
-			context output[tidX].length == N;
-			context tidX >= 0 && tidX < N;
-			context tidY >= 0 && tidY < N;
-			context |output_seq_pref_1| == N;
-			context (\forall int i; i >= 0 && i < N; |output_seq_pref_1[i]| == N);
-			requires Perm(output[tidX][tidY], read);	
-			requires output[tidX][tidY] == output_seq_pref_1[tidX][tidY];
-			ensures Perm(output[tidY][tidX], write);
-			ensures output[tidY][tidX] == output_seq_pref_1[tidX][tidY];
-  		{
+	// 		context output.length == N;
+	// 		context output[tidX].length == N;
+	// 		context tidX >= 0 && tidX < N;
+	// 		context tidY >= 0 && tidY < N;
+	// 		context |output_seq_pref_1| == N;
+	// 		context (\forall int i; i >= 0 && i < N; |output_seq_pref_1[i]| == N);
+	// 		requires Perm(output[tidX][tidY], read);	
+	// 		requires output[tidX][tidY] == output_seq_pref_1[tidX][tidY];
+	// 		ensures Perm(output[tidY][tidX], write);
+	// 		ensures output[tidY][tidX] == output_seq_pref_1[tidX][tidY];
+  // 		{
 					
-				int temporary;
-				temporary = output[tidX][tidY];
+	// 			int temporary;
+	// 			temporary = output[tidX][tidY];
 				
-				barrier(TransposeY) 
-				{
-					context tidX >= 0 && tidX < N;
-					context tidY >= 0 && tidY < N;
-					requires Perm(output[tidX][tidY], read);
-					ensures Perm(output[tidY][tidX], write);		
-				}
+	// 			barrier(TransposeY) 
+	// 			{
+	// 				context tidX >= 0 && tidX < N;
+	// 				context tidY >= 0 && tidY < N;
+	// 				requires Perm(output[tidX][tidY], read);
+	// 				ensures Perm(output[tidY][tidX], write);		
+	// 			}
 				
-				output[tidY][tidX] = temporary;
+	// 			output[tidY][tidX] = temporary;
 				
-			}
+	// 		}
 			
-		}
+	// 	}
 		
 
-		assert (\forall int i; 0 <= i && i < N;  
-						(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1[j][i]));
+	// 	assert (\forall int i; 0 <= i && i < N;  
+	// 					(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1[j][i]));
 		
-	}	
-	////////////////////////////////////////////////////////////////////////////////////////////////Second prefixsum
+	// }	
+	// ////////////////////////////////////////////////////////////////////////////////////////////////Second prefixsum
 	
-	context_everywhere N > 0;
-	context_everywhere output != null;
-	context_everywhere output.length == N; 
-	context_everywhere (\forall int i; 0 <= i && i < N; output[i].length == N);
-	context_everywhere |output_seq_pref_1_transposed| == N;
-	context_everywhere (\forall int i; 0 <= i && i < N; |output_seq_pref_1_transposed[i]| == N);
-	requires |output_seq_pref_2| == 0;
-	context (\forall* int i; 0 <= i && i < N; 
-						(\forall* int j; 0 <= j && j < N;Perm(output[i][j], read)));
-	requires (\forall int i; 0 <= i && i < N; 
-		         (\forall int j; 0 <= j && j < N; output_seq_pref_1_transposed[i][j] == output[i][j]));
-	ensures |output_seq_pref_2| == N;
-	ensures (\forall int i; 0 <= i && i < N; |output_seq_pref_2[i]| == N);
-	ensures (\forall int i; 0 <= i && i < N; 
-				 		   (\forall int j; 0 <= j && j < N;	output_seq_pref_2[i][j] == get(psum2(output_seq_pref_1_transposed[i]), j)));
-	ensures (\forall int i; 0 <= i && i < N;  
-								 		 (\forall int j; 0 <= j && j < N; output[i][j] == get(psum2(output_seq_pref_1_transposed[i]), j)));
-	ensures (\forall int i; 0 <= i && i < N;  
-								 		(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_2[i][j]));
-	void Second_PrefixSum_Kernel(int[][] output, seq<seq<int>> output_seq_pref_1_transposed, seq<seq<int>> output_seq_pref_2, int N)
-	{
-		int row =0;
+	// context_everywhere N > 0;
+	// context_everywhere output != null;
+	// context_everywhere output.length == N; 
+	// context_everywhere (\forall int i; 0 <= i && i < N; output[i].length == N);
+	// context_everywhere |output_seq_pref_1_transposed| == N;
+	// context_everywhere (\forall int i; 0 <= i && i < N; |output_seq_pref_1_transposed[i]| == N);
+	// requires |output_seq_pref_2| == 0;
+	// context (\forall* int i; 0 <= i && i < N; 
+	// 					(\forall* int j; 0 <= j && j < N;Perm(output[i][j], read)));
+	// requires (\forall int i; 0 <= i && i < N; 
+	// 	         (\forall int j; 0 <= j && j < N; output_seq_pref_1_transposed[i][j] == output[i][j]));
+	// ensures |output_seq_pref_2| == N;
+	// ensures (\forall int i; 0 <= i && i < N; |output_seq_pref_2[i]| == N);
+	// ensures (\forall int i; 0 <= i && i < N; 
+	// 			 		   (\forall int j; 0 <= j && j < N;	output_seq_pref_2[i][j] == get(psum2(output_seq_pref_1_transposed[i]), j)));
+	// ensures (\forall int i; 0 <= i && i < N;  
+	// 							 		 (\forall int j; 0 <= j && j < N; output[i][j] == get(psum2(output_seq_pref_1_transposed[i]), j)));
+	// ensures (\forall int i; 0 <= i && i < N;  
+	// 							 		(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_2[i][j]));
+	// void Second_PrefixSum_Kernel(int[][] output, seq<seq<int>> output_seq_pref_1_transposed, seq<seq<int>> output_seq_pref_2, int N)
+	// {
+	// 	int row =0;
 			  			
-		loop_invariant row >=0 && row <= N;
-		loop_invariant |output_seq_pref_2| == row;
-		loop_invariant |output_seq_pref_1_transposed| == N;
-		loop_invariant (\forall int i; 0 <= i && i < N; output[i].length == N);
-		loop_invariant (\forall int i; 0 <= i && i < N; |output_seq_pref_1_transposed[i]| == N);
-		loop_invariant (\forall int i; 0 <= i && i < row; |output_seq_pref_2[i]| == N);										
-		loop_invariant (\forall* int i; 0 <= i && i < N; 
-						(\forall* int j; 0 <= j && j < N; Perm(output[i][j], read)));						
-		loop_invariant (\forall int i; row <= i && i < N; 
-		         (\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1_transposed[i][j]));					 
-		loop_invariant (\forall int i; 0 <= i && i < row; 
-				 		   (\forall int j; 0 <= j && j < N;	output_seq_pref_2[i][j] == get(psum2(output_seq_pref_1_transposed[i]), j)));		
-		loop_invariant (\forall int i; 0 <= i && i < row;  
-								 		 (\forall int j; 0 <= j && j < N; output[i][j] == get(psum2(output_seq_pref_1_transposed[i]), j)));										 
-		loop_invariant (\forall int i; 0 <= i && i < row;  
-								 		(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_2[i][j]));                  
-		while(row < N){
-		    seq<int> result_seq_2 = output_seq_pref_1_transposed[row];
+	// 	loop_invariant row >=0 && row <= N;
+	// 	loop_invariant |output_seq_pref_2| == row;
+	// 	loop_invariant |output_seq_pref_1_transposed| == N;
+	// 	loop_invariant (\forall int i; 0 <= i && i < N; output[i].length == N);
+	// 	loop_invariant (\forall int i; 0 <= i && i < N; |output_seq_pref_1_transposed[i]| == N);
+	// 	loop_invariant (\forall int i; 0 <= i && i < row; |output_seq_pref_2[i]| == N);										
+	// 	loop_invariant (\forall* int i; 0 <= i && i < N; 
+	// 					(\forall* int j; 0 <= j && j < N; Perm(output[i][j], read)));						
+	// 	loop_invariant (\forall int i; row <= i && i < N; 
+	// 	         (\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1_transposed[i][j]));					 
+	// 	loop_invariant (\forall int i; 0 <= i && i < row; 
+	// 			 		   (\forall int j; 0 <= j && j < N;	output_seq_pref_2[i][j] == get(psum2(output_seq_pref_1_transposed[i]), j)));		
+	// 	loop_invariant (\forall int i; 0 <= i && i < row;  
+	// 							 		 (\forall int j; 0 <= j && j < N; output[i][j] == get(psum2(output_seq_pref_1_transposed[i]), j)));										 
+	// 	loop_invariant (\forall int i; 0 <= i && i < row;  
+	// 							 		(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_2[i][j]));                  
+	// 	while(row < N){
+	// 	    seq<int> result_seq_2 = output_seq_pref_1_transposed[row];
 			  				
 				
-				par SecondPrefixSum (int tid=0..N)		
+	// 			par SecondPrefixSum (int tid=0..N)		
     		
 				
-				context row >=0 && row < N;
-				context tid >=0 && tid < N;
-				context |output_seq_pref_1_transposed| == N;
-				context output[row].length == N;
-				context |output_seq_pref_1_transposed[row]| == N;
-				context |output_seq_pref_1_transposed[row]| == output[row].length;
-				context Perm(output[row][tid], read); 
-				context |result_seq_2| == N;
-				requires tid >= 1 ==> Perm(output[row][tid - 1], read); 
-				requires output[row][tid] == output_seq_pref_1_transposed[row][tid];
-				ensures output[row][tid] == get(psum2(output_seq_pref_1_transposed[row]), tid);	
-    		{
+	// 			context row >=0 && row < N;
+	// 			context tid >=0 && tid < N;
+	// 			context |output_seq_pref_1_transposed| == N;
+	// 			context output[row].length == N;
+	// 			context |output_seq_pref_1_transposed[row]| == N;
+	// 			context |output_seq_pref_1_transposed[row]| == output[row].length;
+	// 			context Perm(output[row][tid], read); 
+	// 			context |result_seq_2| == N;
+	// 			requires tid >= 1 ==> Perm(output[row][tid - 1], read); 
+	// 			requires output[row][tid] == output_seq_pref_1_transposed[row][tid];
+	// 			ensures output[row][tid] == get(psum2(output_seq_pref_1_transposed[row]), tid);	
+  //   		{
 					
 					
-    		 	  int offset_2 = 1;
-						int temp;
-						seq<int> temp_seq_2 = output_seq_pref_1_transposed[row]; //ghost code
-						lemma_intsum_Take(temp_seq_2, tid);
-						assert tid < offset_2 ==> output[row][tid] == temp_seq_2[tid];
+  //   		 	  int offset_2 = 1;
+	// 					int temp;
+	// 					seq<int> temp_seq_2 = output_seq_pref_1_transposed[row]; //ghost code
+	// 					lemma_intsum_Take(temp_seq_2, tid);
+	// 					assert tid < offset_2 ==> output[row][tid] == temp_seq_2[tid];
 						
 									
-						loop_invariant offset_2 >= 1;
-						loop_invariant |temp_seq_2| == |output_seq_pref_1_transposed[row]|;
-						loop_invariant offset_2 < 2 * output[row].length;
-						loop_invariant Perm(output[row][tid], read); 
-						loop_invariant tid >= offset_2 ==> Perm(output[row][tid - offset_2], read); 
-						loop_invariant temp_seq_2[tid] == intsum(Take(output_seq_pref_1_transposed[row], tid + 1)) - intsum(Take(output_seq_pref_1_transposed[row], tid + 1 - offset_2));
-						loop_invariant tid < offset_2 ==> temp_seq_2[tid] == intsum(Take(output_seq_pref_1_transposed[row], tid + 1));
-						loop_invariant tid < offset_2 ==> temp_seq_2[tid] == get(psum2(output_seq_pref_1_transposed[row]), tid);
-						loop_invariant temp_seq_2[tid] == get(partial_prefixsum(output_seq_pref_1_transposed[row], 0, offset_2), tid);
-						loop_invariant tid < offset_2 ==> output[row][tid] == temp_seq_2[tid]; 
-						while(offset_2 < output[row].length)
-						{
+	// 					loop_invariant offset_2 >= 1;
+	// 					loop_invariant |temp_seq_2| == |output_seq_pref_1_transposed[row]|;
+	// 					loop_invariant offset_2 < 2 * output[row].length;
+	// 					loop_invariant Perm(output[row][tid], read); 
+	// 					loop_invariant tid >= offset_2 ==> Perm(output[row][tid - offset_2], read); 
+	// 					loop_invariant temp_seq_2[tid] == intsum(Take(output_seq_pref_1_transposed[row], tid + 1)) - intsum(Take(output_seq_pref_1_transposed[row], tid + 1 - offset_2));
+	// 					loop_invariant tid < offset_2 ==> temp_seq_2[tid] == intsum(Take(output_seq_pref_1_transposed[row], tid + 1));
+	// 					loop_invariant tid < offset_2 ==> temp_seq_2[tid] == get(psum2(output_seq_pref_1_transposed[row]), tid);
+	// 					loop_invariant temp_seq_2[tid] == get(partial_prefixsum(output_seq_pref_1_transposed[row], 0, offset_2), tid);
+	// 					loop_invariant tid < offset_2 ==> output[row][tid] == temp_seq_2[tid]; 
+	// 					while(offset_2 < output[row].length)
+	// 					{
 							
-							temp = output[row][tid];
+	// 						temp = output[row][tid];
 							
-							if (tid >= offset_2)
-							{ 
-								temp = temp + output[row][tid - offset_2];	
-							}
-							assert tid < offset_2 ==> temp == output[row][tid];
-							assert tid >= offset_2 ==> temp == output[row][tid] + output[row][tid - offset_2];
+	// 						if (tid >= offset_2)
+	// 						{ 
+	// 							temp = temp + output[row][tid - offset_2];	
+	// 						}
+	// 						assert tid < offset_2 ==> temp == output[row][tid];
+	// 						assert tid >= offset_2 ==> temp == output[row][tid] + output[row][tid - offset_2];
 							
-							barrier(SecondPrefixSum) 
-							{
-								context tid >= 0 && tid < output[row].length;
-								context offset_2 >= 1 && offset_2 < output[row].length;
-								requires Perm(output[row][tid], read);
-								requires tid >= offset_2 ==> Perm(output[row][tid - offset_2], read);
-								requires tid >= offset_2 ==> temp == output[row][tid] + output[row][tid - offset_2];				
-								ensures Perm(output[row][tid], write);		
-							}
+	// 						barrier(SecondPrefixSum) 
+	// 						{
+	// 							context tid >= 0 && tid < output[row].length;
+	// 							context offset_2 >= 1 && offset_2 < output[row].length;
+	// 							requires Perm(output[row][tid], read);
+	// 							requires tid >= offset_2 ==> Perm(output[row][tid - offset_2], read);
+	// 							requires tid >= offset_2 ==> temp == output[row][tid] + output[row][tid - offset_2];				
+	// 							ensures Perm(output[row][tid], write);		
+	// 						}
 							
-							if (tid >= offset_2)
-							{ 
-								output[row][tid] = temp;
-							}
+	// 						if (tid >= offset_2)
+	// 						{ 
+	// 							output[row][tid] = temp;
+	// 						}
 							
-							temp_seq_2 = partial_prefixsum(output_seq_pref_1_transposed[row], 0, offset_2 * 2);
-							assert temp_seq_2[tid] == intsum(Take(output_seq_pref_1_transposed[row], tid + 1)) - intsum(Take(output_seq_pref_1_transposed[row], tid + 1 - offset_2 * 2));
-							assert tid < offset_2 ==> temp_seq_2[tid] == intsum(Take(output_seq_pref_1_transposed[row], tid + 1));
-							assert tid < offset_2 ==> temp_seq_2[tid] == get(psum2(output_seq_pref_1_transposed[row]), tid);
-							assert temp_seq_2[tid] == get(partial_prefixsum(output_seq_pref_1_transposed[row], 0, offset_2 * 2), tid);
-							assert tid < offset_2 ==> output[row][tid] == temp_seq_2[tid];
+	// 						temp_seq_2 = partial_prefixsum(output_seq_pref_1_transposed[row], 0, offset_2 * 2);
+	// 						assert temp_seq_2[tid] == intsum(Take(output_seq_pref_1_transposed[row], tid + 1)) - intsum(Take(output_seq_pref_1_transposed[row], tid + 1 - offset_2 * 2));
+	// 						assert tid < offset_2 ==> temp_seq_2[tid] == intsum(Take(output_seq_pref_1_transposed[row], tid + 1));
+	// 						assert tid < offset_2 ==> temp_seq_2[tid] == get(psum2(output_seq_pref_1_transposed[row]), tid);
+	// 						assert temp_seq_2[tid] == get(partial_prefixsum(output_seq_pref_1_transposed[row], 0, offset_2 * 2), tid);
+	// 						assert tid < offset_2 ==> output[row][tid] == temp_seq_2[tid];
 							
-							barrier(SecondPrefixSum) 
-							{
-								context tid >= 0 && tid < output[row].length;
-								context offset_2 >= 1 && offset_2 < output[row].length;
-								requires Perm(output[row][tid], write);
-								ensures Perm(output[row][tid], read);
-								ensures tid >= offset_2 * 2 ==> Perm(output[row][tid - offset_2 * 2], read);
+	// 						barrier(SecondPrefixSum) 
+	// 						{
+	// 							context tid >= 0 && tid < output[row].length;
+	// 							context offset_2 >= 1 && offset_2 < output[row].length;
+	// 							requires Perm(output[row][tid], write);
+	// 							ensures Perm(output[row][tid], read);
+	// 							ensures tid >= offset_2 * 2 ==> Perm(output[row][tid - offset_2 * 2], read);
 							
-							}
+	// 						}
 							
-							offset_2 = offset_2 * 2;
+	// 						offset_2 = offset_2 * 2;
 							
 							
-   			 	  }
+  //  			 	  }
 						
-						assert temp_seq_2[tid] == get(psum2(output_seq_pref_1_transposed[row]), tid);
-						assert output[row][tid] == temp_seq_2[tid];
-						assert output[row][tid] == get(psum2(output_seq_pref_1_transposed[row]), tid);
-						//assert input[row][tid] == output_seq_pref_1_transposed[row][tid];
-						
-						
-						result_seq_2 = temp_seq_2;
+	// 					assert temp_seq_2[tid] == get(psum2(output_seq_pref_1_transposed[row]), tid);
+	// 					assert output[row][tid] == temp_seq_2[tid];
+	// 					assert output[row][tid] == get(psum2(output_seq_pref_1_transposed[row]), tid);
+	// 					//assert input[row][tid] == output_seq_pref_1_transposed[row][tid];
 						
 						
-				}
+	// 					// result_seq_2 = temp_seq_2;
+						
+						
+	// 			}
 				
 				
 				 
-				assert (\forall int i; 0 <= i && i < N; output[row][i] == get(psum2(output_seq_pref_1_transposed[row]), i));
-				output_seq_pref_2 = output_seq_pref_2 + seq<seq<int>> {result_seq_2};
+	// 			assert (\forall int i; 0 <= i && i < N; output[row][i] == get(psum2(output_seq_pref_1_transposed[row]), i));
+	// 			output_seq_pref_2 = output_seq_pref_2 + seq<seq<int>> {result_seq_2};
  
 				
-				row = row + 1;
+	// 			row = row + 1;
 						
 
-		}
+	// 	}
 		
-	}
+	// }
 		
-	////////////////////////////////////////////////////////////////////////////////////////////////Main Program
+	// ////////////////////////////////////////////////////////////////////////////////////////////////Main Program
 	
-	given seq<seq<int>> input_seq;
-	context_everywhere N > 0;
-	context_everywhere input != null;
-	context_everywhere output != null;
-	context_everywhere input.length == N;
-	context_everywhere output.length == N;
-	context_everywhere (\forall int i; 0 <= i && i < N; input[i].length == N); 
-	context_everywhere (\forall int i; 0 <= i && i < N; output[i].length == N);
-	context_everywhere |input_seq| == N;
-	context_everywhere (\forall int i; 0 <= i && i < N; |input_seq[i]| == N);
-	context (\forall* int i; 0 <= i && i < N; 
-		        (\forall* int j; 0 <= j && j < N;Perm(input[i][j], read)));
-	context (\forall* int i; 0 <= i && i < N; 
-						(\forall* int j; 0 <= j && j < N;Perm(output[i][j], read)));
-	requires (\forall* int i; 0 <= i && i < N; 
-		         (\forall* int j; 0 <= j && j < N; output[i][j] == input[i][j]));
-	context (\forall int i; 0 <= i && i < N; 
-		         (\forall int j; 0 <= j && j < N; input_seq[i][j] == input[i][j]));
-	ensures (\forall int i; 0 <= i && i < N; 
-			      (\forall int j; 0 <= j && j < N; output[i][j] == sum(input_seq, i, j, N) )); 
-	void SAT(int[][] input, int[][] output, int N) 
-	{
+	// given seq<seq<int>> input_seq;
+	// context_everywhere N > 0;
+	// context_everywhere input != null;
+	// context_everywhere output != null;
+	// context_everywhere input.length == N;
+	// context_everywhere output.length == N;
+	// context_everywhere (\forall int i; 0 <= i && i < N; input[i].length == N); 
+	// context_everywhere (\forall int i; 0 <= i && i < N; output[i].length == N);
+	// context_everywhere |input_seq| == N;
+	// context_everywhere (\forall int i; 0 <= i && i < N; |input_seq[i]| == N);
+	// context (\forall* int i; 0 <= i && i < N; 
+	// 	        (\forall* int j; 0 <= j && j < N;Perm(input[i][j], read)));
+	// context (\forall* int i; 0 <= i && i < N; 
+	// 					(\forall* int j; 0 <= j && j < N;Perm(output[i][j], read)));
+	// requires (\forall* int i; 0 <= i && i < N; 
+	// 	         (\forall* int j; 0 <= j && j < N; output[i][j] == input[i][j]));
+	// context (\forall int i; 0 <= i && i < N; 
+	// 	         (\forall int j; 0 <= j && j < N; input_seq[i][j] == input[i][j]));
+	// ensures (\forall int i; 0 <= i && i < N; 
+	// 		      (\forall int j; 0 <= j && j < N; output[i][j] == sum(input_seq, i, j, N) )); 
+	// void SAT(int[][] input, int[][] output, int N) 
+	// {
 		
-		seq<seq<int>> output_seq_pref_1 = seq<seq<int>> {};
-		seq<seq<int>> output_seq_pref_2 = seq<seq<int>> {};
+	// 	seq<seq<int>> output_seq_pref_1 = seq<seq<int>> {};
+	// 	seq<seq<int>> output_seq_pref_2 = seq<seq<int>> {};
 			
-		////////////////////////////////////////////////////////////////////////////////////////////First Prefixsum	
+	// 	////////////////////////////////////////////////////////////////////////////////////////////First Prefixsum	
 		
-		First_PrefixSum_Kernel(input, output, input_seq, output_seq_pref_1, N);
+	// 	First_PrefixSum_Kernel(input, output, input_seq, output_seq_pref_1, N);
 				
-		////////////////////////////////////////////////////////////////////////////////////////////First Transpose
+	// 	////////////////////////////////////////////////////////////////////////////////////////////First Transpose
 		
-		assert (\forall int i; 0 <= i && i < N;  
-								 		(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1[i][j]));
+	// 	assert (\forall int i; 0 <= i && i < N;  
+	// 							 		(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1[i][j]));
 						
-		Transpose_Kernel(output, output_seq_pref_1, N);
+	// 	Transpose_Kernel(output, output_seq_pref_1, N);
 		
-		seq<seq<int>> output_seq_pref_1_transposed = transpose(output_seq_pref_1, 0, N);	
-		assert (\forall int i; i >= 0 && i < N; 
-						(\forall int j; j >= 0 && j < N; output_seq_pref_1_transposed[i][j] == output_seq_pref_1[j][i]));
+	// 	seq<seq<int>> output_seq_pref_1_transposed = transpose(output_seq_pref_1, 0, N);	
+	// 	assert (\forall int i; i >= 0 && i < N; 
+	// 					(\forall int j; j >= 0 && j < N; output_seq_pref_1_transposed[i][j] == output_seq_pref_1[j][i]));
 		
-		assert (\forall int i; 0 <= i && i < N; 
-						(\forall int j; 0 <= j && j < N;	output_seq_pref_1[i][j] == get(psum2(input_seq[i]), j)));
+	// 	assert (\forall int i; 0 <= i && i < N; 
+	// 					(\forall int j; 0 <= j && j < N;	output_seq_pref_1[i][j] == get(psum2(input_seq[i]), j)));
 		
-		assert (\forall int i; i >= 0 && i < N; 
-						(\forall int j; j >= 0 && j < N; output_seq_pref_1_transposed[i][j] == get(psum2(input_seq[j]), i)));				
+	// 	assert (\forall int i; i >= 0 && i < N; 
+	// 					(\forall int j; j >= 0 && j < N; output_seq_pref_1_transposed[i][j] == get(psum2(input_seq[j]), i)));				
 		
-		assert (\forall int i; 0 <= i && i < N;  
-						(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1_transposed[i][j]));
+	// 	assert (\forall int i; 0 <= i && i < N;  
+	// 					(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_1_transposed[i][j]));
 						
 		
-		////////////////////////////////////////////////////////////////////////////////////////////Second Prefixsum
+	// 	////////////////////////////////////////////////////////////////////////////////////////////Second Prefixsum
 		
-		Second_PrefixSum_Kernel(output, output_seq_pref_1_transposed, output_seq_pref_2, N);	
+	// 	Second_PrefixSum_Kernel(output, output_seq_pref_1_transposed, output_seq_pref_2, N);	
 		
-		////////////////////////////////////////////////////////////////////////////////////////////Second Transpose
+	// 	////////////////////////////////////////////////////////////////////////////////////////////Second Transpose
 		
-		assert (\forall int i; 0 <= i && i < N;  
-								 		(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_2[i][j]));
+	// 	assert (\forall int i; 0 <= i && i < N;  
+	// 							 		(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_2[i][j]));
 						
-		Transpose_Kernel(output, output_seq_pref_2, N);
+	// 	Transpose_Kernel(output, output_seq_pref_2, N);
 		
-		seq<seq<int>> output_seq_pref_2_transposed = transpose(output_seq_pref_2, 0, N);	
-		assert (\forall int i; i >= 0 && i < N; 
-						(\forall int j; j >= 0 && j < N; output_seq_pref_2_transposed[i][j] == output_seq_pref_2[j][i]));
+	// 	seq<seq<int>> output_seq_pref_2_transposed = transpose(output_seq_pref_2, 0, N);	
+	// 	assert (\forall int i; i >= 0 && i < N; 
+	// 					(\forall int j; j >= 0 && j < N; output_seq_pref_2_transposed[i][j] == output_seq_pref_2[j][i]));
 						
-		////////////////////////////////////////////////////////////////////////////////////////////
+	// 	////////////////////////////////////////////////////////////////////////////////////////////
 		
-		assert (\forall int i; 0 <= i && i < N;  
-						(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_2_transposed[i][j]));			
+	// 	assert (\forall int i; 0 <= i && i < N;  
+	// 					(\forall int j; 0 <= j && j < N; output[i][j] == output_seq_pref_2_transposed[i][j]));			
 		
 														
-		assert (\forall int i; i >= 0 && i < N; 
-						(\forall int j; j >= 0 && j < N; output_seq_pref_2_transposed[i][j] == get(psum2(output_seq_pref_1_transposed[j]), i)));
+	// 	assert (\forall int i; i >= 0 && i < N; 
+	// 					(\forall int j; j >= 0 && j < N; output_seq_pref_2_transposed[i][j] == get(psum2(output_seq_pref_1_transposed[j]), i)));
 									
 										 
-		assert (\forall int i; i >= 0 && i < N; 
-						(\forall int j; j >= 0 && j < N; output_seq_pref_1_transposed[i][j] == get(psum2(input_seq[j]), i)));
+	// 	assert (\forall int i; i >= 0 && i < N; 
+	// 					(\forall int j; j >= 0 && j < N; output_seq_pref_1_transposed[i][j] == get(psum2(input_seq[j]), i)));
 						
 						
-		assert (\forall int i; 0 <= i && i < N; 
-			      (\forall int j; 0 <= j && j < N; output[i][j] == sum(input_seq, i, j, N) ));
+	// 	assert (\forall int i; 0 <= i && i < N; 
+	// 		      (\forall int j; 0 <= j && j < N; output[i][j] == sum(input_seq, i, j, N) ));
 	
-	  assert (\forall int i; 0 <= i && i < N; 
-		         (\forall int j; 0 <= j && j < N; input_seq[i][j] == input[i][j]));
+	//   assert (\forall int i; 0 <= i && i < N; 
+	// 	         (\forall int j; 0 <= j && j < N; input_seq[i][j] == input[i][j]));
 						 		               
 			
-	} 		
+	// } 		
 	
 }
 
