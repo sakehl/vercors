@@ -38,7 +38,9 @@ case class PVLToCol[G](
   def convert(implicit enum: EnumDeclContext): Enum[G] =
     enum match {
       case EnumDecl0(_, name, _, Some(constants), _, _) =>
-        new vct.col.ast.Enum[G](convertConstants(constants))(origin(enum).sourceName(convert(name)))
+        new vct.col.ast.Enum[G](convertConstants(constants))(
+          origin(enum).sourceName(convert(name))
+        )
       case _ =>
         fail(enum, "This enumeration must specify at least one constant")
     }
@@ -476,6 +478,7 @@ case class PVLToCol[G](
         )
       case PvlLongChorExpr(_, _, inner, _) => ChorExpr(convert(inner))
       case PvlShortChorExpr(_, _, _, _, inner, _) => ChorExpr(convert(inner))
+      case PvlCastExpr(_, t, _, e) => Cast(convert(e), TypeValue(convert(t)))
       case PvlSender(_) => PVLSender()
       case PvlReceiver(_) => PVLReceiver()
       case PvlMessage(_) => PVLMessage()

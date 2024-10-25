@@ -62,6 +62,8 @@ case class Progress() extends Middleware {
   private var newLayoutAfterTimeout = false
 
   private def delayNextUpdate(longDelay: Boolean): Unit = {
+    if (blockLayoutUpdateTimer.isEmpty)
+      return
     blockLayoutUpdate = true
     blockLayoutUpdateTask.foreach(_.cancel())
     blockLayoutUpdateTimer.get.purge()

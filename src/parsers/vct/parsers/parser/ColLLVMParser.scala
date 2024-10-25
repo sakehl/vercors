@@ -82,6 +82,8 @@ case class ColLLVMParser(
       )
     }
 
+    // TODO: Print warnings emitted by frontend
+
     // Use the origin in the blame provider
     val COLProgram = Deserialize
       .deserializeProgram[G](protoProgram, _ => blameProvider.apply())
