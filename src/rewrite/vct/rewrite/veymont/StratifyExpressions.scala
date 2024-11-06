@@ -88,7 +88,7 @@ case class StratifyExpressions[Pre <: Generation]()
           cond = stratifyExpr(l.cond),
           contract = dispatch(l.contract),
           body = dispatch(l.body),
-        ) /*(loop.blame)*/ (l.o)
+        )(l.o)
 
       case InChor(_, branch @ Branch(Seq((cond, yes)))) =>
         branch.rewrite(Seq((stratifyExpr(cond), dispatch(yes))))
@@ -117,10 +117,8 @@ case class StratifyExpressions[Pre <: Generation]()
 
   def dumbUnfoldStar[G](expr: Expr[G]): Seq[Expr[G]] =
     expr match {
-      case Star(left, right) =>
-        AstBuildHelpers.unfoldStar(left) ++ AstBuildHelpers.unfoldStar(right)
-      case And(left, right) =>
-        AstBuildHelpers.unfoldStar(left) ++ AstBuildHelpers.unfoldStar(right)
+      case Star(left, right) => dumbUnfoldStar(left) ++ dumbUnfoldStar(right)
+      case And(left, right) => dumbUnfoldStar(left) ++ dumbUnfoldStar(right)
       case other => Seq(other)
     }
 

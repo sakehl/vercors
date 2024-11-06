@@ -105,14 +105,21 @@ object Transformation extends LazyLogging {
   def loadPVLLibraryFileStage[G](
       readable: Readable,
       debugOptions: DebugOptions,
-  ): Program[G] =
-    Progress.stages(Seq((
-      s"Loading PVL library file ${readable.underlyingPath.getOrElse("<unknown>")}",
-      0,
-    ))) { _ =>
-      val x: Program[G] = Util.loadPVLLibraryFile(readable, debugOptions)
-      x
-    }
+  ): Program[G] = {
+    /* This is currently a hacky way to make time spent in the pvl simplification rule parser visible in the
+    CLI interface. Instead, we should follow the advice in the docs of `Progress.hiddenStage`:
+    A better design would be that the pvl library files are parsed when the appropriate
+    simplification pass is encountered. Then the transformation pass could, for user friendliness, check if the
+    simplification files exists before doing all the other transformations. This moves the time spent for loading
+    the files to the same place where the file is actually used, which sounds right.
+
+    Of course, this all while still retaining the functionality of making it possible to pass more simplification rules
+    using command line flags.
+     */
+    Progress.hiddenStage(
+      s"Loading PVL library file ${readable.underlyingPath.getOrElse("<unknown>")}"
+    ) { Util.loadPVLLibraryFile(readable, debugOptions) }
+  }
 
   def simplifierFor(path: PathOrStd, options: Options): RewriterBuilder =
     ApplyTermRewriter.BuilderFor(
