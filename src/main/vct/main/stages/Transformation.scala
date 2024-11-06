@@ -376,7 +376,6 @@ case class SilverTransformation(
         BranchToIfElse,
         GenerateSingleOwnerPermissions.withArg(generatePermissions),
         InferEndpointContexts,
-        PushInChor.withArg(generatePermissions),
         StratifyExpressions,
         StratifyUnpointedExpressions,
         DeduplicateChorGuards,
