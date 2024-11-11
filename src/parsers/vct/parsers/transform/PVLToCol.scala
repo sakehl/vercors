@@ -1580,6 +1580,8 @@ case class PVLToCol[G](
       case ValOperatorName0("+") => OperatorLeftPlus()
       case ValOperatorName1(id, "+") if convert(id) == "right" =>
         OperatorRightPlus()
+      case ValOperatorName1(_, _) =>
+        fail(operator, "only operator name `right` is currently supported")
     }
 
   def convert(

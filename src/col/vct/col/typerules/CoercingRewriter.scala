@@ -1181,8 +1181,6 @@ abstract class CoercingRewriter[Pre <: Generation]()
         CInvocation(applicable, args, givenArgs, yields)(inv.blame)
       case choose @ Choose(xs) => Choose(set(xs)._1)(choose.blame)
       case choose @ ChooseFresh(xs) => ChooseFresh(set(xs)._1)(choose.blame)
-      case p @ ChorPerm(endpoint, loc, perm) =>
-        ChorPerm(endpoint, loc, rat(perm))
       case CLiteralArray(exprs) => CLiteralArray(exprs)
       case CLocal(name) => e
       case c @ Committed(obj) => Committed(cls(obj))(c.blame)
@@ -2150,7 +2148,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case LLVMRawVectorValue(_, _) => e
       case LLVMZeroedAggregateValue(_) => e
       case PVLEndpointExpr(_, _) => e
-      case EndpointExpr(ref, expr) => EndpointExpr(ref, res(expr))
+      case EndpointExpr(ref, expr) => e
       case ChorExpr(expr) => ChorExpr(bool(expr))
     }
   }

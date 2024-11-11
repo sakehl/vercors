@@ -711,6 +711,7 @@ final class Procedure[G](
     val vesuv_entry: Boolean = false,
 )(val blame: Blame[CallableFailure])(implicit val o: Origin)
     extends GlobalDeclaration[G] with AbstractMethod[G] with ProcedureImpl[G]
+@scopes[LabelDecl]
 final class VeSUVMainMethod[G](val body: Option[Statement[G]])(
     val blame: Blame[CallableFailure]
 )(implicit val o: Origin)
@@ -802,6 +803,7 @@ final class InstancePredicate[G](
 final class InstanceField[G](val t: Type[G], val flags: Seq[FieldFlag[G]])(
     implicit val o: Origin
 ) extends ClassDeclaration[G] with Field[G] with InstanceFieldImpl[G]
+@scopes[LabelDecl]
 final class RunMethod[G](
     val body: Option[Statement[G]],
     val contract: ApplicableContract[G],
@@ -3929,12 +3931,6 @@ final case class CommunicateStatement[G](inner: Communicate[G])(
 final case class EndpointName[G](ref: Ref[G, Endpoint[G]])(
     implicit val o: Origin
 ) extends Expr[G] with EndpointNameImpl[G]
-final case class ChorPerm[G](
-    endpoint: Ref[G, Endpoint[G]],
-    loc: Location[G],
-    perm: Expr[G],
-)(implicit val o: Origin)
-    extends Expr[G] with ChorPermImpl[G]
 final case class Sender[G](ref: Ref[G, Communicate[G]])(implicit val o: Origin)
     extends Expr[G] with SenderImpl[G]
 final case class Receiver[G](ref: Ref[G, Communicate[G]])(
