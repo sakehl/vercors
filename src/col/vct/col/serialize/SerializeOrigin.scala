@@ -32,7 +32,12 @@ object SerializeOrigin extends LazyLogging {
         val path = Path.of(context.directory, context.filename)
         val readable = fileMap.getOrElseUpdate(
           path, {
-            if (path.toFile.exists()) {
+            if (context.filename == "<stdin>") {
+              logger.warn(
+                "The file was compiled from standard input, origin information will be missing"
+              )
+              null
+            } else if (path.toFile.exists()) {
               if (
                 context.checksum.isDefined && context.checksumKind.isDefined
               ) {

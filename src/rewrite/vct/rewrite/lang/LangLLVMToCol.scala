@@ -2,7 +2,15 @@ package vct.rewrite.lang
 
 import com.typesafe.scalalogging.LazyLogging
 import vct.col.ast._
-import vct.col.origin.{DiagnosticOrigin, Origin, PanicBlame, TypeName}
+import vct.col.origin.{
+  AssertFailed,
+  Blame,
+  DiagnosticOrigin,
+  Origin,
+  PanicBlame,
+  TypeName,
+  UnreachableReachedError,
+}
 import vct.col.ref.{DirectRef, LazyRef, Ref}
 import vct.col.resolve.ctx.RefLLVMFunctionDefinition
 import vct.col.rewrite.{Generation, Rewritten}
@@ -60,6 +68,13 @@ case object LangLLVMToCol {
       trunc.o.messageInContext(
         s"Unsupported truncation from '${trunc.inputType}' to '${trunc.outputType}'"
       )
+  }
+
+  private final case class UnreachableReached(
+      unreachable: LLVMBranchUnreachable[_]
+  ) extends Blame[AssertFailed] {
+    override def blame(error: AssertFailed): Unit =
+      unreachable.blame.blame(UnreachableReachedError(unreachable))
   }
 }
 
@@ -760,6 +775,13 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   def rewriteFloatExtend(fpext: LLVMFloatExtend[Pre]): Expr[Post] = {
     implicit val o: Origin = fpext.o
     CastFloat(rw.dispatch(fpext.value), rw.dispatch(fpext.t))
+  }
+
+  def rewriteUnreachable(
+      unreachable: LLVMBranchUnreachable[Pre]
+  ): Statement[Post] = {
+    implicit val o: Origin = unreachable.o
+    Assert[Post](ff)(UnreachableReached(unreachable))
   }
 
   private def getInferredType(e: Expr[Pre]): Type[Pre] =
