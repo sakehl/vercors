@@ -132,7 +132,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         (a, b) match {
           case (None, _) | (_, None) => None
           case (Some(a), Some(b))
-              // TODO: This should be removed as soon as we have proper contracts we load from LLVM instead of mixing PVL and LLVM. Coparing in Post is really bad
+              // TODO: This should be removed as soon as we have proper contracts we load from LLVM instead of mixing PVL and LLVM. Comparing in Post is really bad
               if a == b || rw.dispatch(a) == rw.dispatch(b) ||
                 moreSpecific(a, b) =>
             Some(a)

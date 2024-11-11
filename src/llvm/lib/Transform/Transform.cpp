@@ -1,11 +1,10 @@
 #include "Transform/Transform.h"
-
-#include <llvm/IR/Constants.h>
-#include <llvm/IR/DerivedTypes.h>
-
 #include "Origin/OriginProvider.h"
 #include "Passes/Function/FunctionBodyTransformer.h"
 #include "Util/Exceptions.h"
+
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/DerivedTypes.h>
 
 /**
  * Utility function that converts LLVM types to col types

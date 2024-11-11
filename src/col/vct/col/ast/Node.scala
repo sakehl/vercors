@@ -3608,6 +3608,11 @@ final case class LLVMStore[G](
 )(val blame: Blame[VerificationFailure])(implicit val o: Origin)
     extends LLVMStatement[G] with LLVMStoreImpl[G]
 
+final case class LLVMBranchUnreachable[G]()(
+    val blame: Blame[UnreachableReachedError]
+)(implicit val o: Origin)
+    extends LLVMStatement[G] with LLVMBranchUnreachableImpl[G]
+
 final case class LLVMGetElementPointer[G](
     structureType: Type[G],
     resultType: Type[G],

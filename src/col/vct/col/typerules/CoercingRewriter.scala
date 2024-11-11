@@ -2265,6 +2265,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
         LLVMLoad(variable, loadType, p, ordering)(load.blame)
       case store @ LLVMStore(value, p, ordering) =>
         LLVMStore(value, p, ordering)(store.blame)
+      case unreachable: LLVMBranchUnreachable[Pre] => unreachable
       case ModelDo(model, perm, after, action, impl) =>
         ModelDo(model, rat(perm), after, action, impl)
       case n @ Notify(obj) => Notify(cls(obj))(n.blame)
