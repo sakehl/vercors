@@ -84,6 +84,14 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
   )
   private lazy val pointerDeref = find[Function[Post]](pointerFile, "ptr_deref")
   private lazy val pointerAdd = find[Function[Post]](pointerFile, "ptr_add")
+  private lazy val pointerAddress = find[Function[Post]](
+    pointerFile,
+    "ptr_address",
+  )
+  private lazy val pointerFromAddress = find[Function[Post]](
+    pointerFile,
+    "ptr_from_address",
+  )
 
   private val pointerField: mutable.Map[Type[Post], SilverField[Post]] = mutable
     .Map()
@@ -475,13 +483,11 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
           PointerBlockLength(pointer)(pointerLen.blame) -
             PointerBlockOffset(pointer)(pointerLen.blame)
         )
-      case Cast(value, typeValue) if value.t.asPointer.isDefined =>
-        // TODO: Check if types are compatible
+      case Cast(value, typeValue) =>
         val targetType = typeValue.t.asInstanceOf[TType[Pre]].t
-        val innerType = targetType.asPointer.get.element
         val newValue = dispatch(value)
         (targetType, value.t) match {
-          case (TPointer(_), TPointer(_)) =>
+          case (TPointer(innerType), TPointer(_)) =>
             Select[Post](
               OptEmpty(newValue),
               OptNoneTyped(TAxiomatic(pointerAdt.ref, Nil)),
@@ -493,7 +499,7 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
                 )),
               )),
             )
-          case (TNonNullPointer(_), TPointer(_)) =>
+          case (TNonNullPointer(innerType), TPointer(_)) =>
             applyAsTypeFunction(
               innerType,
               value,
@@ -501,10 +507,57 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
                 "Casting a pointer to a non-null pointer implies the pointer must be statically known to be non-null"
               )),
             )
-          case (TPointer(_), TNonNullPointer(_)) =>
+          case (TPointer(innerType), TNonNullPointer(_)) =>
             OptSome(applyAsTypeFunction(innerType, value, newValue))
-          case (TNonNullPointer(_), TNonNullPointer(_)) =>
+          case (TNonNullPointer(innerType), TNonNullPointer(_)) =>
             applyAsTypeFunction(innerType, value, newValue)
+          case (TInt(), TPointer(innerType)) =>
+            Select[Post](
+              OptEmpty(newValue),
+              const(0),
+              FunctionInvocation[Post](
+                ref = pointerAddress.ref,
+                args = Seq(
+                  OptGet(newValue)(PanicBlame(
+                    "Can never be null since this is ensured in the conditional expression"
+                  )),
+                  const(4),
+                ), // TODO: Find size of innerType
+                typeArgs = Nil,
+                Nil,
+                Nil,
+              )(PanicBlame("Stride > 0")),
+            )
+          case (TInt(), TNonNullPointer(innerType)) =>
+            FunctionInvocation[Post](
+              ref = pointerAddress.ref,
+              args = Seq(newValue, const(4)),
+              typeArgs = Nil,
+              Nil,
+              Nil,
+            )(PanicBlame("Stride > 0"))
+          case (TPointer(innerType), TInt()) =>
+            Select[Post](
+              newValue === const(0),
+              OptNoneTyped(TAxiomatic(pointerAdt.ref, Nil)),
+              OptSome(
+                FunctionInvocation[Post](
+                  ref = pointerFromAddress.ref,
+                  args = Seq(newValue, const(4)),
+                  typeArgs = Nil,
+                  Nil,
+                  Nil,
+                )(PanicBlame("Stride > 0"))
+              ),
+            )
+          case (TNonNullPointer(innerType), TInt()) =>
+            FunctionInvocation[Post](
+              ref = pointerFromAddress.ref,
+              args = Seq(newValue, const(4)),
+              typeArgs = Nil,
+              Nil,
+              Nil,
+            )(PanicBlame("Stride > 0")) // TODO: Blame??
         }
       case other => super.postCoerce(other)
     }

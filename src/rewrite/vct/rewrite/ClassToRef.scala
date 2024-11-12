@@ -857,6 +857,8 @@ case class ClassToRef[Pre <: Generation]() extends Rewriter[Pre] {
             const(typeNumber(t.cls.decl))(e.o)
           // Keep pointer casts intact for the adtPointer stage
           case _: TPointer[Pre] | _: TNonNullPointer[Pre] => e.rewriteDefault()
+          // Keep integer casts intact for casting between integers and pointers
+          case _: TInt[Pre] => e.rewriteDefault()
           case other => ???
         }
       case TypeOf(value) =>
@@ -900,7 +902,7 @@ case class ClassToRef[Pre <: Generation]() extends Rewriter[Pre] {
 
         e.rewriteDefault()
       }
-      case Cast(value, typeValue) =>
+      case Cast(value, typeValue) if value.t.asClass.isDefined =>
         dispatch(
           value
         ) // Discard for now, should assert instanceOf(value, typeValue)

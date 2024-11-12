@@ -424,6 +424,13 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           CoercionUtils.firstElementIsType(newTElement, newEElement)
         ) { Cast(newE, TypeValue(newT)(t.o))(c.o) }
         else { throw UnsupportedCast(c) }
+      case CCast(e, t @ TCInt()) if e.t.asPointer.isDefined =>
+        Cast(rw.dispatch(e), TypeValue(TCInt())(t.o))(c.o)
+      case CCast(e, t @ CTPointer(innerType))
+          if getBaseType(e.t) == TCInt[Pre]() =>
+        Cast(rw.dispatch(e), TypeValue(TPointer(rw.dispatch(innerType)))(t.o))(
+          c.o
+        )
       case _ => throw UnsupportedCast(c)
     }
 
