@@ -8,6 +8,7 @@ import hre.util.ScopedStack
 import vct.col.rewrite.error.{ExcludedByPassOrder, ExtraNode}
 import vct.col.ref.Ref
 import vct.col.resolve.ctx.Referrable
+import vct.col.typerules.CoercionUtils
 import vct.col.util.SuccessionMap
 import vct.result.VerificationError.UserError
 
@@ -902,7 +903,9 @@ case class ClassToRef[Pre <: Generation]() extends Rewriter[Pre] {
 
         e.rewriteDefault()
       }
-      case Cast(value, typeValue) if value.t.asClass.isDefined =>
+      case Cast(value, typeValue)
+          if value.t.asClass.isDefined ||
+            CoercionUtils.getAnyCoercion(value.t, TAnyClass[Pre]()).isDefined =>
         dispatch(
           value
         ) // Discard for now, should assert instanceOf(value, typeValue)
