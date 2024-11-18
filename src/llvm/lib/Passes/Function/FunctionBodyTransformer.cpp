@@ -24,12 +24,18 @@ void FunctionCursor::addVariableMapEntry(Value &llvmValue,
                                          col::Variable &colVar) {
     variableMap.insert({&llvmValue, &colVar});
     // add reference to reference lut of function contract
-    col::Tuple2_String_Ref_VctColAstVariable *ref =
+    // (only if the contract is a vcllvm contract)
+    col::LlvmFunctionContract &contract =
         FAM.getResult<FunctionContractDeclarer>(llvmFunction)
-            .getAssociatedColFuncContract()
-            .add_variable_refs();
-    ref->set_v1(llvm2col::getValueName(llvmValue));
-    ref->mutable_v2()->set_id(colVar.id());
+            .getAssociatedColFuncContract();
+    if (contract.has_vcllvm_function_contract()) {
+        col::VcllvmFunctionContract *vcllvmContract = 
+            contract.mutable_vcllvm_function_contract();
+        col::Tuple2_String_Ref_VctColAstVariable *ref = 
+            vcllvmContract->add_variable_refs();
+        ref->set_v1(llvm2col::getValueName(llvmValue));
+        ref->mutable_v2()->set_id(colVar.id());
+    }
 }
 
 col::Variable &FunctionCursor::getVariableMapEntry(Value &llvmValue,

@@ -5,6 +5,14 @@
  * Useful string constants to use for searching out metadata nodes
  */
 namespace pallas::constants {
+
+// Pallas constants
+const std::string PALLAS_FUNC_CONTRACT = "pallas.fcontract";
+const std::string PALLAS_REQUIRES = "pallas.requires";
+const std::string PALLAS_ENSURES = "pallas.ensures";
+const std::string PALLAS_WRAPPER_FUNC = "pallas.exprWrapper";
+
+// Legacy VCLLVM constants
 const std::string VC_PREFIX = "VC.";
 
 const std::string METADATA_PURE_KEYWORD = VC_PREFIX + "pure";
