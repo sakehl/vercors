@@ -1073,10 +1073,14 @@ case class JavaToCol[G](
         }
       case JavaRel(left, comp, right) =>
         comp match {
-          case RelOp0("<=") => AmbiguousLessEq(convert(left), convert(right))
-          case RelOp0(">=") => AmbiguousGreaterEq(convert(left), convert(right))
-          case RelOp0(">") => AmbiguousGreater(convert(left), convert(right))
-          case RelOp0("<") => AmbiguousLess(convert(left), convert(right))
+          case RelOp0("<=") =>
+            AmbiguousLessEq(convert(left), convert(right))(blame(expr))
+          case RelOp0(">=") =>
+            AmbiguousGreaterEq(convert(left), convert(right))(blame(expr))
+          case RelOp0(">") =>
+            AmbiguousGreater(convert(left), convert(right))(blame(expr))
+          case RelOp0("<") =>
+            AmbiguousLess(convert(left), convert(right))(blame(expr))
           case RelOp1(valOp) =>
             convert(expr, valOp, convert(left), convert(right))
         }
@@ -1084,8 +1088,10 @@ case class JavaToCol[G](
         InstanceOf(convert(obj), TypeValue(convert(t)))
       case JavaEquals(left, eq, right) =>
         eq match {
-          case "==" => AmbiguousEq(convert(left), convert(right), TInt())
-          case "!=" => AmbiguousNeq(convert(left), convert(right), TInt())
+          case "==" =>
+            AmbiguousEq(convert(left), convert(right), TInt())(blame(expr))
+          case "!=" =>
+            AmbiguousNeq(convert(left), convert(right), TInt())(blame(expr))
         }
       case JavaBitAnd(left, _, right) =>
         AmbiguousComputationalAnd(convert(left), convert(right))

@@ -2,6 +2,7 @@ adt `block` {
   pure int block_length(`block` b);
   pure ref loc(`block` b, int i);
   pure int block_address(`block` b);
+  pure int block_stride(`block` b);
 
   pure `block` loc_inv_1(ref r);
   pure int loc_inv_2(ref r);
@@ -19,6 +20,8 @@ adt `block` {
 
   // every block is uniquely identified by an address
   axiom (∀ `block` b; addr_inv({:block_address(b):}) == b);
+
+  axiom (∀ `block` p; {:block_stride(p):} > 0);
 }
 
 adt `pointer` {
@@ -67,15 +70,9 @@ ensures (\forall `pointer` p1, int offset, int i;
     {:ptr_add(ptr_add(p1, offset), i):} == ptr_add(p1, offset + i));
 pure boolean ptr_add_axiom() = true;
 
-// TODO: Do we want to support zero-sized types? (i.e. stride == 0)
-decreases assume;
-requires stride > 0;
+decreases;
 ensures \result > 0;
-ensures \polarity_dependent(ptr_from_address(\result, stride) == p, true);
-pure int ptr_address(`pointer` p, int stride) = `block`.block_address(`pointer`.pointer_block(p)) + (`pointer`.pointer_offset(p) * stride);
+pure int ptr_address(`pointer` p) = `block`.block_address(`pointer`.pointer_block(p)) + (`pointer`.pointer_offset(p) * `block`.block_stride(`pointer`.pointer_block(p)));
 
-decreases assume;
-requires address > 0;
-requires stride > 0;
-ensures ptr_address(\result, stride) == address;
-pure `pointer` ptr_from_address(int address, int stride);
+decreases;
+pure `pointer` ptr_from_address(int address);

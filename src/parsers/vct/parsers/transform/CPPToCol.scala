@@ -491,9 +491,9 @@ case class CPPToCol[G](
     expr match {
       case EqualityExpression0(inner) => convert(inner)
       case EqualityExpression1(left, _, right) =>
-        AmbiguousEq(convert(left), convert(right), TCInt())
+        AmbiguousEq(convert(left), convert(right), TCInt())(blame(expr))
       case EqualityExpression2(left, _, right) =>
-        AmbiguousNeq(convert(left), convert(right), TCInt())
+        AmbiguousNeq(convert(left), convert(right), TCInt())(blame(expr))
     }
 
   def convert(implicit expr: RelationalExpressionContext): Expr[G] =
@@ -501,10 +501,14 @@ case class CPPToCol[G](
       case RelationalExpression0(inner) => convert(inner)
       case RelationalExpression1(left, RelationalOp0(op), right) =>
         op match {
-          case "<" => col.AmbiguousLess(convert(left), convert(right))
-          case ">" => col.AmbiguousGreater(convert(left), convert(right))
-          case "<=" => AmbiguousLessEq(convert(left), convert(right))
-          case ">=" => AmbiguousGreaterEq(convert(left), convert(right))
+          case "<" =>
+            col.AmbiguousLess(convert(left), convert(right))(blame(expr))
+          case ">" =>
+            col.AmbiguousGreater(convert(left), convert(right))(blame(expr))
+          case "<=" =>
+            AmbiguousLessEq(convert(left), convert(right))(blame(expr))
+          case ">=" =>
+            AmbiguousGreaterEq(convert(left), convert(right))(blame(expr))
         }
       case RelationalExpression1(left, RelationalOp1(specOp), right) =>
         convert(expr, specOp, convert(left), convert(right))

@@ -136,6 +136,8 @@ final case class TPointer[G](element: Type[G])(
 final case class TNonNullPointer[G](element: Type[G])(
     implicit val o: Origin = DiagnosticOrigin
 ) extends Type[G] with TNonNullPointerImpl[G]
+final case class TPointerBlock[G]()(implicit val o: Origin = DiagnosticOrigin)
+    extends Type[G] with TPointerBlockImpl[G]
 final case class TType[G](t: Type[G])(implicit val o: Origin = DiagnosticOrigin)
     extends Type[G] with TTypeImpl[G]
 final case class TVar[G](ref: Ref[G, Variable[G]])(
@@ -682,6 +684,7 @@ final class ByReferenceClass[G](
 final class ByValueClass[G](
     val typeArgs: Seq[Variable[G]],
     val decls: Seq[ClassDeclaration[G]],
+    val packed: Boolean,
 )(implicit val o: Origin)
     extends Class[G] with ByValueClassImpl[G]
 final class Model[G](val declarations: Seq[ModelDeclaration[G]])(
@@ -1731,6 +1734,11 @@ final case class Unfolding[G](res: FoldTarget[G], body: Expr[G])(
 )(implicit val o: Origin)
     extends Expr[G] with UnfoldingImpl[G]
 
+final case class Asserting[G](condition: Expr[G], body: Expr[G])(
+    val blame: Blame[AssertFailed]
+)(implicit val o: Origin)
+    extends Expr[G] with AssertingImpl[G]
+
 @family
 sealed trait Location[G] extends NodeFamily[G] with LocationImpl[G]
 final case class HeapVariableLocation[G](ref: Ref[G, HeapVariable[G]])(
@@ -1813,13 +1821,13 @@ final case class AmbiguousEq[G](
     left: Expr[G],
     right: Expr[G],
     vectorInnerType: Type[G],
-)(implicit val o: Origin)
+)(val blame: Blame[MismatchedProvenance])(implicit val o: Origin)
     extends AmbiguousComparison[G] with AmbiguousEqImpl[G]
 final case class AmbiguousNeq[G](
     left: Expr[G],
     right: Expr[G],
     vectorInnerType: Type[G],
-)(implicit val o: Origin)
+)(val blame: Blame[MismatchedProvenance])(implicit val o: Origin)
     extends AmbiguousComparison[G] with AmbiguousNeqImpl[G]
 
 final case class Eq[G](left: Expr[G], right: Expr[G])(implicit val o: Origin)
@@ -1830,17 +1838,21 @@ final case class Neq[G](left: Expr[G], right: Expr[G])(implicit val o: Origin)
 sealed trait OrderOp[G] extends Comparison[G] with OrderOpImpl[G]
 sealed trait AmbiguousOrderOp[G] extends OrderOp[G] with AmbiguousOrderOpImpl[G]
 final case class AmbiguousGreater[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends AmbiguousOrderOp[G] with AmbiguousGreaterImpl[G]
+    val blame: Blame[MismatchedProvenance]
+)(implicit val o: Origin)
+    extends AmbiguousOrderOp[G] with AmbiguousGreaterImpl[G]
 final case class AmbiguousLess[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends AmbiguousOrderOp[G] with AmbiguousLessImpl[G]
+    val blame: Blame[MismatchedProvenance]
+)(implicit val o: Origin)
+    extends AmbiguousOrderOp[G] with AmbiguousLessImpl[G]
 final case class AmbiguousGreaterEq[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends AmbiguousOrderOp[G] with AmbiguousGreaterEqImpl[G]
+    val blame: Blame[MismatchedProvenance]
+)(implicit val o: Origin)
+    extends AmbiguousOrderOp[G] with AmbiguousGreaterEqImpl[G]
 final case class AmbiguousLessEq[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends AmbiguousOrderOp[G] with AmbiguousLessEqImpl[G]
+    val blame: Blame[MismatchedProvenance]
+)(implicit val o: Origin)
+    extends AmbiguousOrderOp[G] with AmbiguousLessEqImpl[G]
 
 final case class Greater[G](left: Expr[G], right: Expr[G])(
     implicit val o: Origin
@@ -1867,6 +1879,33 @@ final case class SubBag[G](left: Expr[G], right: Expr[G])(
 final case class SubBagEq[G](left: Expr[G], right: Expr[G])(
     implicit val o: Origin
 ) extends SetComparison[G] with SubBagEqImpl[G]
+
+sealed trait PointerComparison[G]
+    extends OrderOp[G] with PointerComparisonImpl[G]
+final case class PointerEq[G](left: Expr[G], right: Expr[G])(
+    val blame: Blame[MismatchedProvenance]
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerEqImpl[G]
+final case class PointerNeq[G](left: Expr[G], right: Expr[G])(
+    val blame: Blame[MismatchedProvenance]
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerNeqImpl[G]
+final case class PointerGreater[G](left: Expr[G], right: Expr[G])(
+    val blame: Blame[MismatchedProvenance]
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerGreaterImpl[G]
+final case class PointerLess[G](left: Expr[G], right: Expr[G])(
+    val blame: Blame[MismatchedProvenance]
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerLessImpl[G]
+final case class PointerGreaterEq[G](left: Expr[G], right: Expr[G])(
+    val blame: Blame[MismatchedProvenance]
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerGreaterEqImpl[G]
+final case class PointerLessEq[G](left: Expr[G], right: Expr[G])(
+    val blame: Blame[MismatchedProvenance]
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerLessEqImpl[G]
 
 final case class Select[G](
     condition: Expr[G],
@@ -1924,6 +1963,10 @@ final case class Length[G](arr: Expr[G])(val blame: Blame[ArrayNull])(
 ) extends Expr[G] with LengthImpl[G]
 final case class Size[G](obj: Expr[G])(implicit val o: Origin)
     extends Expr[G] with SizeImpl[G]
+final case class PointerBlock[G](pointer: Expr[G])(
+    val blame: Blame[PointerNull]
+)(implicit val o: Origin)
+    extends Expr[G] with PointerBlockImpl[G]
 final case class PointerBlockLength[G](pointer: Expr[G])(
     val blame: Blame[PointerNull]
 )(implicit val o: Origin)

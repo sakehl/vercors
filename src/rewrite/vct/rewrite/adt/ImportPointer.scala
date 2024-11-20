@@ -51,6 +51,14 @@ case object ImportPointer extends ImportADTBuilder("pointer") {
     override def blame(error: InsufficientPermission): Unit =
       inner.blame(PointerInsufficientPermission(expr))
   }
+
+  case class MismatchedProvenanceBlame(
+      inner: Blame[MismatchedProvenance],
+      comparison: PointerComparison[_],
+  ) extends Blame[AssertFailed] {
+    override def blame(error: AssertFailed): Unit =
+      inner.blame(MismatchedProvenance(comparison))
+  }
 }
 
 case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
@@ -108,18 +116,28 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
       typeName: String,
       adt: Ref[Post, AxiomaticDataType[Post]] = pointerAdt.ref,
   ): Function[Post] = {
+    implicit val o: Origin = AsTypeOrigin.where(name = "as_" + typeName)
     val value =
       new Variable[Post](TAxiomatic(adt, Nil))(
         AsTypeOrigin.where(name = "value")
       )
-    globalDeclarations.declare(
+    globalDeclarations.declare(withResult((result: Result[Post]) =>
       function[Post](
         AbstractApplicable,
         TrueSatisfiable,
+        ensures = UnitAccountedPredicate(
+          adtFunctionInvocation[Post](
+            ref = pointerBlock.ref,
+            args = Seq(result),
+          ) === adtFunctionInvocation[Post](
+            ref = pointerBlock.ref,
+            args = Seq(value.get),
+          )
+        ),
         returnType = TAxiomatic(adt, Nil),
         args = Seq(value),
-      )(AsTypeOrigin.where(name = "as_" + typeName))
-    )
+      )
+    ))
   }
 
   private def makePointerCreationMethod(
@@ -559,8 +577,301 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
               Nil,
             )(PanicBlame("Stride > 0")) // TODO: Blame??
         }
+      // TODO: Other comparison ops
+      case e @ PointerEq(l, r)
+          if l.t.asPointer.isDefined && r.t.asPointer.isDefined =>
+        val newL = dispatch(l)
+        val newR = dispatch(r)
+        val blame = MismatchedProvenanceBlame(e.blame, e)
+        (l.t, r.t) match {
+          case (TNonNullPointer(_), TNonNullPointer(_)) =>
+            assertBlocksEqual(newL, newR, blame, Eq(_, _))
+          case (TNonNullPointer(_), TPointer(_)) =>
+            Select(
+              OptEmpty(newR),
+              ff,
+              assertBlocksEqual(newL, OptGet(newR)(NeverNone), blame, Eq(_, _)),
+            )
+          case (TPointer(_), TNonNullPointer(_)) =>
+            Select(
+              OptEmpty(newL),
+              ff,
+              assertBlocksEqual(OptGet(newL)(NeverNone), newR, blame, Eq(_, _)),
+            )
+          case (TPointer(_), TPointer(_)) =>
+            Select(
+              Or(OptEmpty(newL), OptEmpty(newR)),
+              Eq(newL, newR),
+              assertBlocksEqual(
+                OptGet(newL)(NeverNone),
+                OptGet(newR)(NeverNone),
+                blame,
+                Eq(_, _),
+              ),
+            )
+        }
+      case e @ PointerNeq(l, r)
+          if l.t.asPointer.isDefined && r.t.asPointer.isDefined =>
+        val newL = dispatch(l)
+        val newR = dispatch(r)
+        val blame = MismatchedProvenanceBlame(e.blame, e)
+        (l.t, r.t) match {
+          case (TNonNullPointer(_), TNonNullPointer(_)) =>
+            assertBlocksEqual(newL, newR, blame, Neq(_, _))
+          case (TNonNullPointer(_), TPointer(_)) =>
+            Select(
+              OptEmpty(newR),
+              ff,
+              assertBlocksEqual(newL, OptGet(newR)(NeverNone), blame, Neq(_, _)),
+            )
+          case (TPointer(_), TNonNullPointer(_)) =>
+            Select(
+              OptEmpty(newL),
+              ff,
+              assertBlocksEqual(OptGet(newL)(NeverNone), newR, blame, Neq(_, _)),
+            )
+          case (TPointer(_), TPointer(_)) =>
+            Select(
+              Or(OptEmpty(newL), OptEmpty(newR)),
+              Neq(newL, newR),
+              assertBlocksEqual(
+                OptGet(newL)(NeverNone),
+                OptGet(newR)(NeverNone),
+                blame,
+                Neq(_, _),
+              ),
+            )
+        }
+      case e @ PointerGreater(l, r)
+          if l.t.asPointer.isDefined && r.t.asPointer.isDefined =>
+        val newL = dispatch(l)
+        val newR = dispatch(r)
+        val blame = MismatchedProvenanceBlame(e.blame, e)
+        val comp =
+          (l: Expr[Post], r: Expr[Post]) => {
+            Greater(
+              FunctionInvocation[Post](
+                ref = pointerAddress.ref,
+                args = Seq(l),
+                typeArgs = Nil,
+                Nil,
+                Nil,
+              )(TrueSatisfiable),
+              FunctionInvocation[Post](
+                ref = pointerAddress.ref,
+                args = Seq(r),
+                typeArgs = Nil,
+                Nil,
+                Nil,
+              )(TrueSatisfiable),
+            )
+          }
+        (l.t, r.t) match {
+          case (TNonNullPointer(_), TNonNullPointer(_)) =>
+            assertBlocksEqual(newL, newR, blame, comp)
+          // Pointers are unsigned therefore every nonnull-pointer is > NULL
+          case (TNonNullPointer(_), TPointer(_)) =>
+            Select(
+              OptEmpty(newR),
+              tt,
+              assertBlocksEqual(newL, OptGet(newR)(NeverNone), blame, comp),
+            )
+          case (TPointer(_), TNonNullPointer(_)) =>
+            Select(
+              OptEmpty(newL),
+              ff,
+              assertBlocksEqual(OptGet(newL)(NeverNone), newR, blame, comp),
+            )
+          case (TPointer(_), TPointer(_)) =>
+            Select(
+              Or(OptEmpty(newL), OptEmpty(newR)),
+              OptEmpty(newR) && Not(OptEmpty(newL)),
+              assertBlocksEqual(
+                OptGet(newL)(NeverNone),
+                OptGet(newR)(NeverNone),
+                blame,
+                comp,
+              ),
+            )
+        }
+      case e @ PointerLess(l, r)
+          if l.t.asPointer.isDefined && r.t.asPointer.isDefined =>
+        val newL = dispatch(l)
+        val newR = dispatch(r)
+        val blame = MismatchedProvenanceBlame(e.blame, e)
+        val comp =
+          (l: Expr[Post], r: Expr[Post]) => {
+            Less(
+              FunctionInvocation[Post](
+                ref = pointerAddress.ref,
+                args = Seq(l),
+                typeArgs = Nil,
+                Nil,
+                Nil,
+              )(TrueSatisfiable),
+              FunctionInvocation[Post](
+                ref = pointerAddress.ref,
+                args = Seq(r),
+                typeArgs = Nil,
+                Nil,
+                Nil,
+              )(TrueSatisfiable),
+            )
+          }
+        (l.t, r.t) match {
+          case (TNonNullPointer(_), TNonNullPointer(_)) =>
+            assertBlocksEqual(newL, newR, blame, comp)
+          // Pointers are unsigned therefore every nonnull-pointer is > NULL
+          case (TNonNullPointer(_), TPointer(_)) =>
+            Select(
+              OptEmpty(newR),
+              ff,
+              assertBlocksEqual(newL, OptGet(newR)(NeverNone), blame, comp),
+            )
+          case (TPointer(_), TNonNullPointer(_)) =>
+            Select(
+              OptEmpty(newL),
+              tt,
+              assertBlocksEqual(OptGet(newL)(NeverNone), newR, blame, comp),
+            )
+          case (TPointer(_), TPointer(_)) =>
+            Select(
+              Or(OptEmpty(newL), OptEmpty(newR)),
+              OptEmpty(newL) && Not(OptEmpty(newR)),
+              assertBlocksEqual(
+                OptGet(newL)(NeverNone),
+                OptGet(newR)(NeverNone),
+                blame,
+                comp,
+              ),
+            )
+        }
+      case e @ PointerGreaterEq(l, r)
+          if l.t.asPointer.isDefined && r.t.asPointer.isDefined =>
+        val newL = dispatch(l)
+        val newR = dispatch(r)
+        val blame = MismatchedProvenanceBlame(e.blame, e)
+        val comp =
+          (l: Expr[Post], r: Expr[Post]) => {
+            GreaterEq(
+              FunctionInvocation[Post](
+                ref = pointerAddress.ref,
+                args = Seq(l),
+                typeArgs = Nil,
+                Nil,
+                Nil,
+              )(TrueSatisfiable),
+              FunctionInvocation[Post](
+                ref = pointerAddress.ref,
+                args = Seq(r),
+                typeArgs = Nil,
+                Nil,
+                Nil,
+              )(TrueSatisfiable),
+            )
+          }
+        (l.t, r.t) match {
+          case (TNonNullPointer(_), TNonNullPointer(_)) =>
+            assertBlocksEqual(newL, newR, blame, comp)
+          // Pointers are unsigned therefore every nonnull-pointer is > NULL
+          case (TNonNullPointer(_), TPointer(_)) =>
+            Select(
+              OptEmpty(newR),
+              tt,
+              assertBlocksEqual(newL, OptGet(newR)(NeverNone), blame, comp),
+            )
+          case (TPointer(_), TNonNullPointer(_)) =>
+            Select(
+              OptEmpty(newL),
+              ff,
+              assertBlocksEqual(OptGet(newL)(NeverNone), newR, blame, comp),
+            )
+          case (TPointer(_), TPointer(_)) =>
+            Select(
+              Or(OptEmpty(newL), OptEmpty(newR)),
+              OptEmpty(newR),
+              assertBlocksEqual(
+                OptGet(newL)(NeverNone),
+                OptGet(newR)(NeverNone),
+                blame,
+                comp,
+              ),
+            )
+        }
+      case e @ PointerLessEq(l, r)
+          if l.t.asPointer.isDefined && r.t.asPointer.isDefined =>
+        val newL = dispatch(l)
+        val newR = dispatch(r)
+        val blame = MismatchedProvenanceBlame(e.blame, e)
+        val comp =
+          (l: Expr[Post], r: Expr[Post]) => {
+            LessEq(
+              FunctionInvocation[Post](
+                ref = pointerAddress.ref,
+                args = Seq(l),
+                typeArgs = Nil,
+                Nil,
+                Nil,
+              )(TrueSatisfiable),
+              FunctionInvocation[Post](
+                ref = pointerAddress.ref,
+                args = Seq(r),
+                typeArgs = Nil,
+                Nil,
+                Nil,
+              )(TrueSatisfiable),
+            )
+          }
+        (l.t, r.t) match {
+          case (TNonNullPointer(_), TNonNullPointer(_)) =>
+            assertBlocksEqual(newL, newR, blame, comp)
+          // Pointers are unsigned therefore every nonnull-pointer is > NULL
+          case (TNonNullPointer(_), TPointer(_)) =>
+            Select(
+              OptEmpty(newR),
+              ff,
+              assertBlocksEqual(newL, OptGet(newR)(NeverNone), blame, comp),
+            )
+          case (TPointer(_), TNonNullPointer(_)) =>
+            Select(
+              OptEmpty(newL),
+              tt,
+              assertBlocksEqual(OptGet(newL)(NeverNone), newR, blame, comp),
+            )
+          case (TPointer(_), TPointer(_)) =>
+            Select(
+              Or(OptEmpty(newL), OptEmpty(newR)),
+              OptEmpty(newL),
+              assertBlocksEqual(
+                OptGet(newL)(NeverNone),
+                OptGet(newR)(NeverNone),
+                blame,
+                comp,
+              ),
+            )
+        }
       case other => super.postCoerce(other)
     }
+  }
+
+  private def assertBlocksEqual(
+      l: Expr[Post],
+      r: Expr[Post],
+      blame: MismatchedProvenanceBlame,
+      comp: (Expr[Post], Expr[Post]) => Expr[Post],
+  )(implicit o: Origin): Expr[Post] = {
+    Asserting(
+      ADTFunctionInvocation[Post](
+        typeArgs = None,
+        ref = pointerBlock.ref,
+        args = Seq(l),
+      ) === ADTFunctionInvocation[Post](
+        typeArgs = None,
+        ref = pointerBlock.ref,
+        args = Seq(r),
+      ),
+      comp(l, r),
+    )(blame)
   }
 
   private def applyAsTypeFunction(

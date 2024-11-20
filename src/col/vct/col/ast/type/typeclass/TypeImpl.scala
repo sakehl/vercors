@@ -4,13 +4,15 @@ import vct.col.ast._
 import vct.col.check.{CheckContext, CheckError}
 import vct.col.ref.Ref
 import vct.col.rewrite.NonLatchingRewriter
-import vct.col.typerules.CoercionUtils
+import vct.col.typerules.{CoercionUtils, TypeSize}
 import vct.col.print._
 import vct.col.ast.ops.TypeFamilyOps
 import vct.col.util.IdentitySuccessorsProvider
 
 trait TypeImpl[G] extends TypeFamilyOps[G] {
   this: Type[G] =>
+  def byteSize: TypeSize = TypeSize.Unknown()
+
   def superTypeOf(other: Type[G]): Boolean =
     CoercionUtils.getCoercion(other, this).isDefined
 

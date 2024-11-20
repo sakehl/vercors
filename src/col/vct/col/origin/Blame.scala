@@ -183,7 +183,7 @@ case class CopyClassFailedBeforeCall(
     s"Insufficient permission for call `$source`."
 }
 
-case class AssertFailed(failure: ContractFailure, node: Assert[_])
+case class AssertFailed(failure: ContractFailure, node: Node[_])
     extends WithContractFailure {
   override def baseCode: String = "assertFailed"
   override def descInContext: String = "Assertion may not hold, since"
@@ -1068,6 +1068,15 @@ case class PointerInsufficientPermission(node: Expr[_])
     "There may be insufficient permission to dereference the pointer."
   override def inlineDescWithSource(source: String): String =
     s"There may be insufficient permission to dereference `$source`."
+}
+
+case class MismatchedProvenance(node: PointerComparison[_])
+    extends VerificationFailure with NodeVerificationFailure {
+  override def code: String = "ptrProvenance"
+  override def descInContext: String =
+    "The provenance of the two pointers may not match"
+  override def inlineDescWithSource(source: String): String =
+    s"The provenance of the pointers in comparison `$source` may not match"
 }
 
 sealed trait LockRegionFailure extends VerificationFailure

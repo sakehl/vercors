@@ -42,6 +42,7 @@ case class ColToSilver(program: col.Program[_]) {
   val currentInvariant: ScopedStack[col.LoopInvariant[_]] = ScopedStack()
   val currentStarall: ScopedStack[col.Starall[_]] = ScopedStack()
   val currentUnfolding: ScopedStack[col.Unfolding[_]] = ScopedStack()
+  val currentAsserting: ScopedStack[col.Asserting[_]] = ScopedStack()
   val currentMapGet: ScopedStack[col.MapGet[_]] = ScopedStack()
   val currentDividingExpr: ScopedStack[col.DividingExpr[_]] = ScopedStack()
 
@@ -365,6 +366,7 @@ case class ColToSilver(program: col.Program[_]) {
     result.invariant = currentInvariant.topOption
     result.starall = currentStarall.topOption
     result.unfolding = currentUnfolding.topOption
+    result.asserting = currentAsserting.topOption
     result.mapGet = currentMapGet.topOption
     result.dividingExpr = currentDividingExpr.topOption
     result
@@ -589,6 +591,11 @@ case class ColToSilver(program: col.Program[_]) {
         silver.Unfolding(currentUnfolding.having(u) { fold(p) }, exp(body))(
           pos = pos(e),
           info = expInfo(e),
+        )
+      case a @ col.Asserting(cond, body) =>
+        silver.Asserting(currentAsserting.having(a) { exp(cond) }, exp(body))(
+          pos = pos(e),
+          info = NodeInfo(e),
         )
       case col.Select(condition, whenTrue, whenFalse) =>
         silver.CondExp(exp(condition), exp(whenTrue), exp(whenFalse))(

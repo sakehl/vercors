@@ -1021,6 +1021,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               .declare(cStructFieldsSuccessor((decl, fieldDecl)))
           }
         }._1,
+        false,
       )(CStructOrigin(sdecl))
 
     rw.globalDeclarations.declare(newStruct)
