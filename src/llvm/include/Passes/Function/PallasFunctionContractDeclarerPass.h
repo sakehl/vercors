@@ -38,32 +38,43 @@ class PallasFunctionContractDeclarerPass
 
   private:
     /**
-     * Initialized the given ApplicableContract so that it represents a
+     * Initializes the given ApplicableContract so that it represents a
      * trivial contract (i.e. it only contains a requires-true-clause).
      */
-    void initializeTrivialContract(col::ApplicableContract &contract);
+    void initializeTrivialContract(col::ApplicableContract &contract,
+                                   Function &f);
+
+    /**
+     * Adds an empty requires-clause (i.e. requires true;) to the given contract
+     * if it does not already have a requires-clause.
+     */
+    void addEmptyRequires(col::ApplicableContract &contract, Function &f);
+
+    /**
+     * Adds an empty ensures-clause (i.e. ensures true;) to the given contract
+     * if it does not already have a requires-clause.
+     */
+    void addEmptyEnsures(col::ApplicableContract &contract, Function &f);
+
+    /**
+     * Adds an empty context_everywhere (i.e. context_everywhere true;) to the
+     * given contract if it does not already have a context_everywhere-clause.
+     */
+    void addEmptyContextEverywhere(col::ApplicableContract &contract,
+                                   Function &f);
 
     /**
      * Tries to add a clause, that is represented by the given metadata-node, to
      * the given COL-contract.
      * Returns false if an error occurred (e.g. ill-formed metadata-node) and
      * true otherwise. In case of an error, an error is added to the
-     * ErrorReporter. ctxFunc is used to build the error messages.
+     * ErrorReporter.
+     * parentFunc is the function to which the contract is attached.
      */
-    bool addClauseToContract(col::ApplicableContract &contract, MDNode &clause,
-                             FunctionAnalysisManager &fam, Function &ctxFunc);
-
-    /**
-     * Sets the pure-flag of the given function based on the given metadata-node
-     * that encodes a palas contract.
-     * This expects that the second operand of the metadata-node is a boolean
-     * constant.
-     * Returns false if an error occurred (e.g. ill-formed metadata-node) and
-     * true otherwise.
-     * The ctxFunc is used to build error messages.
-     */
-    bool setPurity(col::LlvmFunctionDefinition &colFunc, MDNode &contract,
-                   Function &ctxFunc);
+    bool addClauseToContract(col::ApplicableContract &contract,
+                             Metadata *clauseOperand,
+                             FunctionAnalysisManager &fam, Function &parentFunc,
+                             col::LlvmFunctionDefinition &colParentFunc);
 
     /**
      * Tries to extract the wrapper-function from the given metadata-node that
@@ -74,6 +85,18 @@ class PallasFunctionContractDeclarerPass
      * ctxFunc is used to build error messages.
      */
     Function *getWrapperFuncFromClause(MDNode &clause, Function &ctxFunc);
+
+    /**
+     * Initializes the given predicate 'newPred' such that it represents a split
+     * predicate that contains left and right.
+     * Assumes that 'newPred' is already allocated, but uninitialized.
+     * Assumes that 'left', 'right' and 'newPredOrigin' are owned by the caller.
+     * After the function terminates, the ownership is transferred to 'newPred'.
+     */
+    void extendPredicate(col::AccountedPredicate *newPred,
+                         col::Origin *newPredOrigin,
+                         col::AccountedPredicate *left,
+                         col::UnitAccountedPredicate *right);
 };
 } // namespace pallas
 #endif // PALLAS_PALLASFUNCTIONCONTRACTDECLARERPASS_H

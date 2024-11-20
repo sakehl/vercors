@@ -1142,6 +1142,7 @@ case object ResolveReferences extends LazyLogging {
               func.importedArguments = Some(importedProcedure.args)
               func.importedReturnType = Some(importedProcedure.returnType)
             }
+          case _ =>
         }
       case loop: LLVMLoop[G] =>
         loop.blocks = Some(loop.blockLabels.map { label =>
