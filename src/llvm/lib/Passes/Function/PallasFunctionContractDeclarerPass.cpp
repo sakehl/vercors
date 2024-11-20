@@ -25,25 +25,31 @@ using namespace llvm;
 PreservedAnalyses
 PallasFunctionContractDeclarerPass::run(Function &f,
                                         FunctionAnalysisManager &fam) {
-    // Get empty COL LLVM-contract
+    // Check that f does not have a VCLLVM AND a Pallas contract
+    if (hasConflictingContract(f))
+        return PreservedAnalyses::all();
+    // Skip, if f has a non-empty vcllvm-contract
+    if (hasVcllvmContract(f))
+        return PreservedAnalyses::all();
+
+    // Setup a fresh Pallas-contract
     FDCResult cResult = fam.getResult<FunctionContractDeclarer>(f);
-    auto colLLVMContract = cResult.getAssociatedColFuncContract()
-                               .mutable_pallas_function_contract();
+    auto colPallasContract = cResult.getAssociatedColFuncContract()
+                                 .mutable_pallas_function_contract();
+    colPallasContract->set_allocated_blame(new col::Blame());
 
     // Get COL function
     FDResult fResult = fam.getResult<FunctionDeclarer>(f);
     col::LlvmFunctionDefinition &colFunction =
         fResult.getAssociatedColFuncDef();
-    // Initialize COL LLVM-contract
-    colLLVMContract->set_allocated_blame(new col::Blame());
 
-    col::ApplicableContract *colContract = colLLVMContract->mutable_content();
+    col::ApplicableContract *colContract = colPallasContract->mutable_content();
     colContract->set_allocated_blame(new col::Blame());
 
     // Check if a Pallas-contract is attached to the function:
     if (!f.hasMetadata(pallas::constants::PALLAS_FUNC_CONTRACT)) {
         // No contract is present --> add trivial contract
-        colLLVMContract->set_allocated_origin(
+        colPallasContract->set_allocated_origin(
             llvm2col::generateFunctionContractOrigin(f, "Empty contract"));
         initializeTrivialContract(*colContract, f);
         return PreservedAnalyses::all();
@@ -60,10 +66,11 @@ PallasFunctionContractDeclarerPass::run(Function &f,
     // Get src location:
     // TODO: Implement properly and add location to origin of
     // colLLVMContract and colContract
-    colLLVMContract->set_allocated_origin(
-        llvm2col::generateFunctionContractOrigin(f, "TODO: Add location-info (1)"));
-    colContract->set_allocated_origin(
-        llvm2col::generateFunctionContractOrigin(f, "TODO: Add location-info (2)"));
+    colPallasContract->set_allocated_origin(
+        llvm2col::generateFunctionContractOrigin(
+            f, "TODO: Add location-info (1)"));
+    colContract->set_allocated_origin(llvm2col::generateFunctionContractOrigin(
+        f, "TODO: Add location-info (2)"));
 
     // Handle contract clauses
     unsigned int clauseIdx = 2;
@@ -178,7 +185,7 @@ bool PallasFunctionContractDeclarerPass::addClauseToContract(
             return false;
         }
         // Indexing of getArg starts at 1
-        auto llvmArgIdx = localVar->getArg() -1;
+        auto llvmArgIdx = localVar->getArg() - 1;
         auto colArgVar = colParentFunc.args(llvmArgIdx);
         colArgs.push_back(&colArgVar);
     }
@@ -345,6 +352,24 @@ void PallasFunctionContractDeclarerPass::extendPredicate(
     newSplitPred->set_allocated_left(left);
     newSplitPred->mutable_right()->set_allocated_unit_accounted_predicate(
         right);
+}
+
+bool PallasFunctionContractDeclarerPass::hasConflictingContract(Function &f) {
+    bool conflict = hasPallasContract(f) && hasVcllvmContract(f);
+    if (conflict) {
+        pallas::ErrorReporter::addError(
+            SOURCE_LOC,
+            "The function has both, a vcllvm and a pallas contract.", f);
+    }
+    return conflict;
+}
+
+bool PallasFunctionContractDeclarerPass::hasPallasContract(const Function &f) {
+    return f.hasMetadata(pallas::constants::PALLAS_FUNC_CONTRACT);
+}
+
+bool PallasFunctionContractDeclarerPass::hasVcllvmContract(const Function &f) {
+    return f.hasMetadata(pallas::constants::METADATA_CONTRACT_KEYWORD);
 }
 
 } // namespace pallas

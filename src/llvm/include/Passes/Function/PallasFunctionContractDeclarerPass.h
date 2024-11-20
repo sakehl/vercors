@@ -14,8 +14,9 @@
  * metadata that is attached to an LLVM-function into
  * LlvmfunctionContract objects.
  *
- * It assumes that the FunctionContractDeclarer-pass has already been run to
- * create the contract-objects in the buffer.
+ * This pass expects to be run after the following passes
+ * - FunctionContractDeclarer
+ * - FunctionContractDeclarerPass
  *
  * The results can be accessed through FDCResult-objects using a
  * FunctionAnalysisManager.
@@ -97,6 +98,25 @@ class PallasFunctionContractDeclarerPass
                          col::Origin *newPredOrigin,
                          col::AccountedPredicate *left,
                          col::UnitAccountedPredicate *right);
+
+    /**
+     * Checks if the given llvm function is annotated with both, a VCLLVM and a
+     * Pallas function contract. If so, an error is added to the ErrorReporter
+     * and true is returned. Otherwise, false is returned.
+     */
+    bool hasConflictingContract(Function &f);
+
+    /** 
+     * Checks if the given function has a metadata-node that is labeled as a 
+     * Pallas function contract.
+     */
+    bool hasPallasContract(const Function &f);
+
+    /** 
+     * Checks if the given function has a metadata-node that is labeled as a 
+     * VCLLVM contract.
+     */
+    bool hasVcllvmContract(const Function &f);
 };
 } // namespace pallas
 #endif // PALLAS_PALLASFUNCTIONCONTRACTDECLARERPASS_H
