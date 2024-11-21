@@ -613,6 +613,6 @@ class CSpec extends VercorsSpec {
         bool *pointer_to_boolean = (bool *)&struct_b;
     }
     """
-  vercors should fail withCode "ptrProvenance" using silicon example "concepts/c/mismatched_provenance.c"
+  vercors should verify using silicon example "concepts/c/mismatched_provenance.c"
   vercors should verify using silicon example "concepts/c/ptr_comparisons.c"
 }
