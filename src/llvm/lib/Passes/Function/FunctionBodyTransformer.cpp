@@ -29,9 +29,9 @@ void FunctionCursor::addVariableMapEntry(Value &llvmValue,
         FAM.getResult<FunctionContractDeclarer>(llvmFunction)
             .getAssociatedColFuncContract();
     if (contract.has_vcllvm_function_contract()) {
-        col::VcllvmFunctionContract *vcllvmContract = 
+        col::VcllvmFunctionContract *vcllvmContract =
             contract.mutable_vcllvm_function_contract();
-        col::Tuple2_String_Ref_VctColAstVariable *ref = 
+        col::Tuple2_String_Ref_VctColAstVariable *ref =
             vcllvmContract->add_variable_refs();
         ref->set_v1(llvm2col::getValueName(llvmValue));
         ref->mutable_v2()->set_id(colVar.id());
@@ -216,8 +216,8 @@ col::Assign &FunctionCursor::createPhiAssignment(Instruction &llvmInstruction,
         // tracking assignments in their origin blocks. therefore we need to
         // swap the last two elements of the block (i.e. the goto statement and
         // the newest assignment)
-        int lastIndex = colBlock.statements_size() - 1;
         colBlock.add_statements()->set_allocated_assign(assignment);
+        int lastIndex = colBlock.statements_size() - 1;
         colBlock.mutable_statements()->SwapElements(lastIndex, lastIndex - 1);
     } else {
         // Buffer the phi assignments so they appear at the end
