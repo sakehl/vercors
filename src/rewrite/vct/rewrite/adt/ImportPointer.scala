@@ -598,6 +598,8 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
               Nil,
             )(PanicBlame("Stride > 0")) // TODO: Blame??
         }
+      case PointerEq(Null() | ApplyCoercion(Null(), _), r) => isNull(r)
+      case PointerEq(l, Null() | ApplyCoercion(Null(), _)) => isNull(l)
       case e @ PointerEq(l, r) =>
         val blame = MismatchedProvenanceBlame(e.blame, e)
         dispatchPointerComparison(
@@ -610,6 +612,8 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
           eitherNull = Eq(_, _),
           compareAddress = false,
         )
+      case PointerNeq(Null() | ApplyCoercion(Null(), _), r) => Not(isNull(r))
+      case PointerNeq(l, Null() | ApplyCoercion(Null(), _)) => Not(isNull(l))
       case e @ PointerNeq(l, r) =>
         val blame = MismatchedProvenanceBlame(e.blame, e)
         dispatchPointerComparison(
@@ -622,6 +626,9 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
           eitherNull = Neq(_, _),
           compareAddress = false,
         )
+      case PointerGreater(Null() | ApplyCoercion(Null(), _), _) => ff
+      case PointerGreater(l, Null() | ApplyCoercion(Null(), _)) =>
+        Not(isNull(l))
       case e @ PointerGreater(l, r) =>
         val blame = MismatchedProvenanceBlame(e.blame, e)
         dispatchPointerComparison(
@@ -634,6 +641,8 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
           eitherNull = (l, r) => And(OptEmpty(r), Not(OptEmpty(l))),
           compareAddress = true,
         )
+      case PointerLess(Null() | ApplyCoercion(Null(), _), r) => Not(isNull(r))
+      case PointerLess(_, Null() | ApplyCoercion(Null(), _)) => ff
       case e @ PointerLess(l, r) =>
         val blame = MismatchedProvenanceBlame(e.blame, e)
         dispatchPointerComparison(
@@ -646,6 +655,8 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
           eitherNull = (l, r) => And(OptEmpty(l), Not(OptEmpty(r))),
           compareAddress = true,
         )
+      case PointerGreaterEq(Null() | ApplyCoercion(Null(), _), r) => isNull(r)
+      case PointerGreaterEq(_, Null() | ApplyCoercion(Null(), _)) => tt
       case e @ PointerGreaterEq(l, r) =>
         val blame = MismatchedProvenanceBlame(e.blame, e)
         dispatchPointerComparison(
@@ -658,6 +669,8 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
           eitherNull = (_, r) => OptEmpty(r),
           compareAddress = true,
         )
+      case PointerLessEq(Null() | ApplyCoercion(Null(), _), _) => tt
+      case PointerLessEq(l, Null() | ApplyCoercion(Null(), _)) => isNull(l)
       case e @ PointerLessEq(l, r) =>
         val blame = MismatchedProvenanceBlame(e.blame, e)
         dispatchPointerComparison(
@@ -830,5 +843,14 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
       ).ref,
       Seq(expr),
     )
+  }
+
+  private def isNull(e: Expr[Pre])(implicit o: Origin): Expr[Post] = {
+    if (e == Null[Pre]()) { tt }
+    else
+      e.t match {
+        case TPointer(_) => OptEmpty(dispatch(e))
+        case TNonNullPointer(_) => ff
+      }
   }
 }
