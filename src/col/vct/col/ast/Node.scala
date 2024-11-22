@@ -136,8 +136,6 @@ final case class TPointer[G](element: Type[G])(
 final case class TNonNullPointer[G](element: Type[G])(
     implicit val o: Origin = DiagnosticOrigin
 ) extends Type[G] with TNonNullPointerImpl[G]
-final case class TPointerBlock[G]()(implicit val o: Origin = DiagnosticOrigin)
-    extends Type[G] with TPointerBlockImpl[G]
 final case class TType[G](t: Type[G])(implicit val o: Origin = DiagnosticOrigin)
     extends Type[G] with TTypeImpl[G]
 final case class TVar[G](ref: Ref[G, Variable[G]])(
@@ -1963,10 +1961,6 @@ final case class Length[G](arr: Expr[G])(val blame: Blame[ArrayNull])(
 ) extends Expr[G] with LengthImpl[G]
 final case class Size[G](obj: Expr[G])(implicit val o: Origin)
     extends Expr[G] with SizeImpl[G]
-final case class PointerBlock[G](pointer: Expr[G])(
-    val blame: Blame[PointerNull]
-)(implicit val o: Origin)
-    extends Expr[G] with PointerBlockImpl[G]
 final case class PointerBlockLength[G](pointer: Expr[G])(
     val blame: Blame[PointerNull]
 )(implicit val o: Origin)
