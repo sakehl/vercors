@@ -99,8 +99,6 @@ case class Parsing[G <: Generation](
           .orElse(Language.fromFilename(readable.fileName))
           .getOrElse(throw UnknownFileExtension(readable.fileName))
 
-        val origin = Origin(Seq(ReadableOrigin(readable)))
-
         val parser =
           language match {
             case Language.C =>
@@ -109,7 +107,7 @@ case class Parsing[G <: Generation](
                 blameProvider,
                 cc,
                 cSystemInclude,
-                Option(Paths.get(readable.fileName).getParent).toSeq ++
+                readable.underlyingPath.map(_.getParent).toSeq ++
                   cOtherIncludes,
                 cDefines,
               )
@@ -121,7 +119,7 @@ case class Parsing[G <: Generation](
                 blameProvider,
                 ccpp,
                 cppSystemInclude,
-                Option(Paths.get(readable.fileName).getParent).toSeq ++
+                readable.underlyingPath.map(_.getParent).toSeq ++
                   cppOtherIncludes,
                 cppDefines,
               )
