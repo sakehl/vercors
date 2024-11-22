@@ -1732,6 +1732,9 @@ final case class Unfolding[G](res: FoldTarget[G], body: Expr[G])(
 )(implicit val o: Origin)
     extends Expr[G] with UnfoldingImpl[G]
 
+final case class Assuming[G](assn: Expr[G], inner: Expr[G])(
+  implicit val o: Origin
+) extends Expr[G] with AssumingImpl[G]
 final case class Asserting[G](condition: Expr[G], body: Expr[G])(
     val blame: Blame[AssertFailed]
 )(implicit val o: Origin)

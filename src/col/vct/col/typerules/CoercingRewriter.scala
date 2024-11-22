@@ -1994,6 +1994,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case u @ Unfolding(pred, body) => Unfolding(pred, body)(u.blame)
       case a @ Asserting(condition, body) =>
         Asserting(res(condition), body)(a.blame)
+      case Assuming(assn, inner) => Assuming(bool(assn), inner)
       case UntypedLiteralBag(values) =>
         val sharedType = Types.leastCommonSuperType(values.map(_.t))
         UntypedLiteralBag(values.map(coerce(_, sharedType)))
