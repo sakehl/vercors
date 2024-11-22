@@ -34,7 +34,7 @@ import vct.rewrite.{
   EncodeByValueClassUsage,
   EncodeRange,
   EncodeResourceValues,
-  EncodeAssertingAssuming,
+  EncodeAssuming,
   ExplicitResourceValues,
   GenerateSingleOwnerPermissions,
   HeapVariableToRef,
@@ -414,7 +414,7 @@ case class SilverTransformation(
         RefuteToInvertedAssert,
         ExplicitResourceValues,
         EncodeResourceValues,
-        EncodeAssertingAssuming,
+        EncodeAssuming,
 
         // Encode parallel blocks
         EncodeSendRecv,
