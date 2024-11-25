@@ -7,6 +7,7 @@ import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder}
 import vct.col.ast.RewriteHelpers._
 import vct.col.ref.Ref
 import vct.col.util.AstBuildHelpers._
+import vct.col.util.SuccessionMap
 import vct.result.VerificationError.UserError
 
 case object PureMethodsToFunctions extends RewriterBuilder {
@@ -31,6 +32,9 @@ case class PureMethodsToFunctions[Pre <: Generation]() extends Rewriter[Pre] {
   import PureMethodsToFunctions._
 
   val currentAbstractMethod: ScopedStack[AbstractMethod[Pre]] = ScopedStack()
+
+  private val variableMap: SuccessionMap[Variable[Pre], Variable[Post]] =
+    SuccessionMap()
 
   def countAssignments(v: Variable[Pre], s: Statement[Pre]): Option[Int] =
     s match {
@@ -96,11 +100,11 @@ case class PureMethodsToFunctions[Pre <: Generation]() extends Rewriter[Pre] {
       case Assign(Local(ref), e) =>
         alt match {
           case Some(exprAlt) =>
-            Some(Let[Post](
+            val vDecl = variableMap.getOrElseUpdate(
+              ref.decl,
               variables.collect { dispatch(ref.decl) }._1.head,
-              dispatch(e),
-              exprAlt,
-            ))
+            )
+            Some(Let[Post](vDecl, dispatch(e), exprAlt))
           case None =>
             throw MethodCannotIntoFunction(
               currentAbstractMethod.top,
