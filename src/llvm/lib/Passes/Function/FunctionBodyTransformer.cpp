@@ -108,6 +108,25 @@ FunctionCursor::getOrSetLLVMBlock2LabeledColBlockEntry(BasicBlock &llvmBlock) {
     return llvmBlock2LabeledColBlock.at(&llvmBlock);
 }
 
+LabeledColBlock FunctionCursor::generateIntermediaryLabeledColBlock(
+    llvm::Instruction &originInstruction) {
+    // create basic block
+    col::LlvmBasicBlock *bb =
+        functionBody.add_statements()->mutable_llvm_basic_block();
+    bb->set_allocated_origin(
+        llvm2col::generateSingleStatementOrigin(originInstruction));
+    // create label declaration in buffer
+    col::LabelDecl *labelDecl = bb->mutable_label();
+    labelDecl->set_allocated_origin(
+        llvm2col::generateSingleStatementOrigin(originInstruction));
+    llvm2col::setColNodeId(labelDecl);
+    // create nested block
+    col::Block *block = bb->mutable_body()->mutable_block();
+    block->set_allocated_origin(
+        llvm2col::generateSingleStatementOrigin(originInstruction));
+    return {*bb, *block};
+}
+
 LabeledColBlock &FunctionCursor::visitLLVMBlock(BasicBlock &llvmBlock) {
     LabeledColBlock &labeledBlock =
         this->getOrSetLLVMBlock2LabeledColBlockEntry(llvmBlock);
@@ -224,6 +243,23 @@ col::Assign &FunctionCursor::createPhiAssignment(Instruction &llvmInstruction,
         phiAssignBuffer.insert({&colBlock, assignment});
     }
     return *assignment;
+}
+
+void FunctionCursor::addNewPhiAssignmentTargetBlock(col::Block &from,
+                                                    col::Block &toPhi,
+                                                    col::Block &newBlock) {
+    phiAssignmentTargetMap.insert({{&from, &toPhi}, &newBlock});
+}
+
+col::Block *FunctionCursor::getTargetForPhiAssignment(col::Block &from,
+                                                      col::Block &to) {
+    auto res = phiAssignmentTargetMap.find({&from, &to});
+    if (res == phiAssignmentTargetMap.end()) {
+        // If the map does not contain an entry, no intermediary block has been
+        // added.
+        return &from;
+    }
+    return res->second;
 }
 
 llvm::FunctionAnalysisManager &FunctionCursor::getFunctionAnalysisManager() {
