@@ -75,7 +75,9 @@ class PallasFunctionContractDeclarerPass
     bool addClauseToContract(col::ApplicableContract &contract,
                              Metadata *clauseOperand,
                              FunctionAnalysisManager &fam, Function &parentFunc,
-                             col::LlvmFunctionDefinition &colParentFunc);
+                             col::LlvmFunctionDefinition &colParentFunc,
+                             unsigned int clauseNum,
+                             const MDNode &contractSrcLoc);
 
     /**
      * Tries to extract the wrapper-function from the given metadata-node that
@@ -106,17 +108,28 @@ class PallasFunctionContractDeclarerPass
      */
     bool hasConflictingContract(Function &f);
 
-    /** 
-     * Checks if the given function has a metadata-node that is labeled as a 
+    /**
+     * Checks if the given function has a metadata-node that is labeled as a
      * Pallas function contract.
      */
     bool hasPallasContract(const Function &f);
 
-    /** 
-     * Checks if the given function has a metadata-node that is labeled as a 
+    /**
+     * Checks if the given function has a metadata-node that is labeled as a
      * VCLLVM contract.
      */
     bool hasVcllvmContract(const Function &f);
+
+    /**
+     * Checks if the given metadata-node is a wellformed encoding of a
+     * pallas source-location.
+     */
+    bool isWellformedPallasLocation(const MDNode *mdNode);
+
+    /**
+     * Checks if the given metadata-node refers to a integer-constant.
+     */
+    bool isConstantInt(llvm::Metadata *md);
 };
 } // namespace pallas
 #endif // PALLAS_PALLASFUNCTIONCONTRACTDECLARERPASS_H

@@ -63,21 +63,27 @@ PallasFunctionContractDeclarerPass::run(Function &f,
         return PreservedAnalyses::all();
     }
 
-    // Get src location:
-    // TODO: Implement properly and add location to origin of
-    // colLLVMContract and colContract
+    auto *mdSrcLoc = dyn_cast<MDNode>(contractNode->getOperand(0).get());
+    if (!isWellformedPallasLocation(mdSrcLoc)) {
+        pallas::ErrorReporter::addError(
+            SOURCE_LOC,
+            "Ill-formed contract. First operand should encode source-location.",
+            f);
+        return PreservedAnalyses::all();
+    }
+
+    // Build origin based on the source-location
     colPallasContract->set_allocated_origin(
-        llvm2col::generateFunctionContractOrigin(
-            f, "TODO: Add location-info (1)"));
-    colContract->set_allocated_origin(llvm2col::generateFunctionContractOrigin(
-        f, "TODO: Add location-info (2)"));
+        llvm2col::generatePallasFunctionContractOrigin(f, *mdSrcLoc));
+    colContract->set_allocated_origin(
+        llvm2col::generatePallasFunctionContractOrigin(f, *mdSrcLoc));
 
     // Handle contract clauses
     unsigned int clauseIdx = 2;
     while (clauseIdx < contractNode->getNumOperands()) {
         auto addClauseSuccess = addClauseToContract(
             *colContract, contractNode->getOperand(clauseIdx).get(), fam, f,
-            colFunction);
+            colFunction, clauseIdx - 1, *mdSrcLoc);
         if (!addClauseSuccess)
             return PreservedAnalyses::all();
         ++clauseIdx;
@@ -94,7 +100,8 @@ PallasFunctionContractDeclarerPass::run(Function &f,
 bool PallasFunctionContractDeclarerPass::addClauseToContract(
     col::ApplicableContract &contract, Metadata *clauseOperand,
     FunctionAnalysisManager &fam, Function &parentFunc,
-    col::LlvmFunctionDefinition &colParentFunc) {
+    col::LlvmFunctionDefinition &colParentFunc, unsigned int clauseNum,
+    const MDNode &contractSrcLoc) {
 
     // Try to extract MDNode
     auto *clause = dyn_cast_if_present<MDNode>(clauseOperand);
@@ -127,7 +134,15 @@ bool PallasFunctionContractDeclarerPass::addClauseToContract(
     auto clauseTypeStr = clauseTypeMD->getString().str();
 
     // Check source location
-    // TODO: Add source location to the origin
+    auto *clauseSrcLoc = dyn_cast<MDNode>(clause->getOperand(1).get());
+    if (clauseSrcLoc == nullptr) {
+        pallas::ErrorReporter::addError(
+            SOURCE_LOC,
+            "Ill-formed contract clause. Second operand should contain "
+            "source location.",
+            parentFunc);
+        return false;
+    }
 
     // Get pointer to the LLVM wrapper-function
     auto *wrapperF = getWrapperFuncFromClause(*clause, parentFunc);
@@ -193,8 +208,8 @@ bool PallasFunctionContractDeclarerPass::addClauseToContract(
     // Build a call to the wrapper-function with the gathered arguments
     col::LlvmFunctionInvocation *wrapperCall =
         new col::LlvmFunctionInvocation();
-    wrapperCall->set_allocated_origin(llvm2col::generateFunctionContractOrigin(
-        parentFunc, "TODO: Add location-info (3)"));
+    wrapperCall->set_allocated_origin(
+        llvm2col::generatePallasWrapperCallOrigin(*wrapperF, *clauseSrcLoc));
     wrapperCall->set_allocated_blame(new col::Blame());
 
     // Build ref to parent function
@@ -206,8 +221,10 @@ bool PallasFunctionContractDeclarerPass::addClauseToContract(
         // Construct Local-node that references the variable and add it to the
         // list of arguments
         auto *argExpr = wrapperCall->add_args()->mutable_local();
-        argExpr->set_allocated_origin(llvm2col::generateFunctionContractOrigin(
-            parentFunc, "TODO: Add location-info (4)"));
+        // TODO: Currently this just points to the full clause.
+        //       Could be extended to point to the specific variable instead.
+        argExpr->set_allocated_origin(llvm2col::generatePallasWrapperCallOrigin(
+            *wrapperF, *clauseSrcLoc));
         auto *varRef = argExpr->mutable_ref();
         varRef->set_id(v->id());
     }
@@ -215,8 +232,8 @@ bool PallasFunctionContractDeclarerPass::addClauseToContract(
     // Construct an AccountedPredicate the wraps the call to the
     // wrapper-function
     col::UnitAccountedPredicate *newPred = new col::UnitAccountedPredicate();
-    newPred->set_allocated_origin(llvm2col::generateFunctionContractOrigin(
-        parentFunc, "TODO: Add location-info (5)"));
+    newPred->set_allocated_origin(llvm2col::generatePallasFContractClauseOrigin(
+        parentFunc, *clauseSrcLoc, clauseNum));
     newPred->mutable_pred()->set_allocated_llvm_function_invocation(
         wrapperCall);
 
@@ -229,8 +246,8 @@ bool PallasFunctionContractDeclarerPass::addClauseToContract(
             col::AccountedPredicate *oldPred = contract.release_requires_();
             auto *reqPred = contract.mutable_requires_();
             extendPredicate(reqPred,
-                            llvm2col::generateFunctionContractOrigin(
-                                parentFunc, "TODO: Add location-info (6)"),
+                            llvm2col::generatePallasFunctionContractOrigin(
+                                parentFunc, contractSrcLoc),
                             oldPred, newPred);
         }
     } else if (clauseTypeStr == pallas::constants::PALLAS_ENSURES) {
@@ -242,8 +259,8 @@ bool PallasFunctionContractDeclarerPass::addClauseToContract(
             col::AccountedPredicate *oldPred = contract.release_ensures();
             auto *ensPred = contract.mutable_ensures();
             extendPredicate(ensPred,
-                            llvm2col::generateFunctionContractOrigin(
-                                parentFunc, "TODO: Add location-info (7)"),
+                            llvm2col::generatePallasFunctionContractOrigin(
+                                parentFunc, contractSrcLoc),
                             oldPred, newPred);
         }
     } else {
@@ -370,6 +387,43 @@ bool PallasFunctionContractDeclarerPass::hasPallasContract(const Function &f) {
 
 bool PallasFunctionContractDeclarerPass::hasVcllvmContract(const Function &f) {
     return f.hasMetadata(pallas::constants::METADATA_CONTRACT_KEYWORD);
+}
+
+bool PallasFunctionContractDeclarerPass::isWellformedPallasLocation(
+    const MDNode *mdNode) {
+
+    if (mdNode == nullptr)
+        return false;
+
+    if (mdNode->getNumOperands() != 5)
+        return false;
+
+    // Check that first operand is a string-identifier
+    if (auto *mdStr = dyn_cast<MDString>(mdNode->getOperand(0).get())) {
+        if (mdStr->getString().str() != pallas::constants::PALLAS_SRC_LOC_ID)
+            return false;
+    } else {
+        return false;
+    }
+
+    // Check that the last four operands are integer constants
+    if (!isConstantInt(mdNode->getOperand(1).get()) ||
+        !isConstantInt(mdNode->getOperand(2).get()) ||
+        !isConstantInt(mdNode->getOperand(3).get()) ||
+        !isConstantInt(mdNode->getOperand(4).get())) {
+        return false;
+    }
+
+    return true;
+}
+
+bool PallasFunctionContractDeclarerPass::isConstantInt(llvm::Metadata *md) {
+    if (auto *mdConst = dyn_cast<llvm::ConstantAsMetadata>(md)) {
+        if (isa<llvm::ConstantInt>(mdConst->getValue())) {
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace pallas

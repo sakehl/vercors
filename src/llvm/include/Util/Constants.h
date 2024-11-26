@@ -11,6 +11,7 @@ const std::string PALLAS_FUNC_CONTRACT = "pallas.fcontract";
 const std::string PALLAS_REQUIRES = "pallas.requires";
 const std::string PALLAS_ENSURES = "pallas.ensures";
 const std::string PALLAS_WRAPPER_FUNC = "pallas.exprWrapper";
+const std::string PALLAS_SRC_LOC_ID = "pallas.srcLoc";
 
 // Legacy VCLLVM constants
 const std::string VC_PREFIX = "VC.";
