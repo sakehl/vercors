@@ -28,8 +28,11 @@ PallasFunctionContractDeclarerPass::run(Function &f,
     // Check that f does not have a VCLLVM AND a Pallas contract
     if (hasConflictingContract(f))
         return PreservedAnalyses::all();
-    // Skip, if f has a non-empty vcllvm-contract
-    if (hasVcllvmContract(f))
+    // Skip, if f has a non-empty vcllvm-contract, or no contract at all
+    // If it does not have a contract, we need an empty VCLLVM contract instead
+    // of an empty Pallas contract. Otherwise the mechanism for loading 
+    // contracts from a PVL-file does not get invoked. 
+    if (hasVcllvmContract(f) || !hasPallasContract(f))
         return PreservedAnalyses::all();
 
     // Setup a fresh Pallas-contract
@@ -45,15 +48,6 @@ PallasFunctionContractDeclarerPass::run(Function &f,
 
     col::ApplicableContract *colContract = colPallasContract->mutable_content();
     colContract->set_allocated_blame(new col::Blame());
-
-    // Check if a Pallas-contract is attached to the function:
-    if (!f.hasMetadata(pallas::constants::PALLAS_FUNC_CONTRACT)) {
-        // No contract is present --> add trivial contract
-        colPallasContract->set_allocated_origin(
-            llvm2col::generateFunctionContractOrigin(f, "Empty contract"));
-        initializeTrivialContract(*colContract, f);
-        return PreservedAnalyses::all();
-    }
 
     // Check wellformedness of the contract-metadata
     auto *contractNode = f.getMetadata(pallas::constants::PALLAS_FUNC_CONTRACT);
@@ -299,15 +293,6 @@ Function *PallasFunctionContractDeclarerPass::getWrapperFuncFromClause(
     }
 
     return wrapperF;
-}
-
-void PallasFunctionContractDeclarerPass::initializeTrivialContract(
-    col::ApplicableContract &contract, Function &f) {
-    contract.set_allocated_origin(
-        llvm2col::generateFunctionContractOrigin(f, "Empty contract"));
-    addEmptyRequires(contract, f);
-    addEmptyEnsures(contract, f);
-    addEmptyContextEverywhere(contract, f);
 }
 
 void PallasFunctionContractDeclarerPass::addEmptyRequires(
