@@ -1,7 +1,11 @@
 #include "Origin/OriginProvider.h"
 
 #include <optional>
+#include <utility>
 
+#include <llvm/IR/DebugInfoMetadata.h>
+#include <llvm/IR/Instruction.h>
+#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Module.h>
 
 #include "Origin/ContextDeriver.h"
@@ -32,23 +36,6 @@ col::Origin *llvm2col::generateProgramOrigin(llvm::Module &llvmModule) {
     context->set_context(deriveModuleContext(llvmModule));
     context->set_inline_context(deriveModuleContext(llvmModule));
     context->set_short_position(deriveModuleShortPosition(llvmModule));
-    contextContent->set_allocated_context(context);
-
-    return origin;
-}
-
-col::Origin *llvm2col::generateFuncDefOrigin(llvm::Function &llvmFunction) {
-    col::Origin *origin = new col::Origin();
-    col::OriginContent *preferredNameContent = origin->add_content();
-    col::PreferredName *preferredName = new col::PreferredName();
-    preferredName->add_preferred_name(llvmFunction.getName().str());
-    preferredNameContent->set_allocated_preferred_name(preferredName);
-
-    col::OriginContent *contextContent = origin->add_content();
-    col::Context *context = new col::Context();
-    context->set_context(deriveFunctionContext(llvmFunction));
-    context->set_inline_context(deriveFunctionContext(llvmFunction));
-    context->set_short_position(deriveFunctionShortPosition(llvmFunction));
     contextContent->set_allocated_context(context);
 
     return origin;
@@ -217,7 +204,61 @@ unsigned int getIntValue(llvm::Metadata *md) {
                cast<llvm::ConstantAsMetadata>(md)->getValue())
         ->getSExtValue();
 }
+
+std::pair<unsigned int, unsigned int> getEndPosFromMD(const llvm::Function &f) {
+    unsigned int maxLine = 0;
+    unsigned int maxCol = 0;
+
+    auto sProg = f.getSubprogram();
+    if (sProg != nullptr)
+        maxLine = sProg->getLine();
+
+    for (auto it = llvm::inst_begin(f), end = llvm::inst_end(f); it != end; ++it) {
+        const llvm::Instruction *inst = &*it;
+        auto &loc = inst->getDebugLoc();
+        if (!loc)
+            continue;
+        unsigned int line = loc.getLine();
+        unsigned int col = loc.getCol();
+        if (line > maxLine) {
+            maxLine = line; 
+            maxCol = col;
+        } else if (line == maxLine && col > maxCol) {
+            maxCol = col;
+        }   
+    }
+    return { maxLine, maxCol };
+}
 } // namespace
+
+col::Origin *llvm2col::generateFuncDefOrigin(llvm::Function &llvmFunction) {
+    col::Origin *origin = new col::Origin();
+    col::OriginContent *preferredNameContent = origin->add_content();
+    col::PreferredName *preferredName = new col::PreferredName();
+    preferredName->add_preferred_name(llvmFunction.getName().str());
+    preferredNameContent->set_allocated_preferred_name(preferredName);
+
+    // Try to get the source location of the function
+    auto *sProg = llvmFunction.getSubprogram();
+    if (sProg != nullptr) {
+        auto endPos = getEndPosFromMD(llvmFunction);
+        auto endLine = std::make_optional(endPos.first);
+        auto endCol = std::make_optional(endPos.second);;
+        generateSourceRangeOrigin(origin, *sProg, sProg->getLine(), 0,
+                                  endLine, endCol);
+        return origin;
+    }
+
+    // If the source-lacation is not available, use the IR
+    col::OriginContent *contextContent = origin->add_content();
+    col::Context *context = new col::Context();
+    context->set_context(deriveFunctionContext(llvmFunction));
+    context->set_inline_context(deriveFunctionContext(llvmFunction));
+    context->set_short_position(deriveFunctionShortPosition(llvmFunction));
+    contextContent->set_allocated_context(context);
+
+    return origin;
+}
 
 col::Origin *
 llvm2col::generatePallasFunctionContractOrigin(const llvm::Function &f,
