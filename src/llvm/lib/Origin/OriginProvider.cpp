@@ -128,14 +128,16 @@ void generateSourceRangeOrigin(col::Origin *origin, const llvm::DIScope &scope,
                                std::optional<unsigned int> &endCol) {
     col::OriginContent *positionRangeContent = origin->add_content();
     col::PositionRange *positionRange = new col::PositionRange();
-    positionRange->set_start_line_idx(startLine - 1);
-    positionRange->set_start_col_idx(startCol - 1);
+    auto sLine = startLine - 1;
+    auto sCol = startCol - 1;
+    positionRange->set_start_line_idx(sLine);
+    positionRange->set_start_col_idx(sCol);
     if (endLine.has_value() && endCol.has_value()) {
         positionRange->set_end_line_idx(*endLine - 1);
         // Would it be better without setting the end col?
         positionRange->set_end_col_idx(*endCol - 1);
     } else {
-        positionRange->set_end_line_idx(startLine);
+        positionRange->set_end_line_idx(sLine);
     }
     positionRangeContent->set_allocated_position_range(positionRange);
     auto *file = scope.getFile();
