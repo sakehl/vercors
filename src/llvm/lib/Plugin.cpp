@@ -1,6 +1,3 @@
-#include "llvm/Passes/PassBuilder.h"
-#include "llvm/Passes/PassPlugin.h"
-
 #include "Passes/Function/FunctionBodyTransformer.h"
 #include "Passes/Function/FunctionContractDeclarer.h"
 #include "Passes/Function/FunctionDeclarer.h"
@@ -10,6 +7,9 @@
 #include "Passes/Module/ModuleSpecCollector.h"
 #include "Passes/Module/ProtobufPrinter.h"
 #include "Passes/Module/RootContainer.h"
+
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/PassPlugin.h"
 
 using namespace llvm;
 
