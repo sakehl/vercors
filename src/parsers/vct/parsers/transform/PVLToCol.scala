@@ -344,22 +344,22 @@ case class PVLToCol[G](
   def convert(implicit expr: EqExprContext): Expr[G] =
     expr match {
       case EqExpr0(left, _, right) =>
-        AmbiguousEq(convert(left), convert(right), TInt())(blame(expr))
+        AmbiguousEq(convert(left), convert(right), TInt())
       case EqExpr1(left, _, right) =>
-        AmbiguousNeq(convert(left), convert(right), TInt())(blame(expr))
+        AmbiguousNeq(convert(left), convert(right), TInt())
       case EqExpr2(inner) => convert(inner)
     }
 
   def convert(implicit expr: RelExprContext): Expr[G] =
     expr match {
       case RelExpr0(left, _, right) =>
-        AmbiguousLess(convert(left), convert(right))(blame(expr))
+        AmbiguousLess(convert(left), convert(right))
       case RelExpr1(left, _, right) =>
-        AmbiguousLessEq(convert(left), convert(right))(blame(expr))
+        AmbiguousLessEq(convert(left), convert(right))
       case RelExpr2(left, _, right) =>
-        AmbiguousGreaterEq(convert(left), convert(right))(blame(expr))
+        AmbiguousGreaterEq(convert(left), convert(right))
       case RelExpr3(left, _, right) =>
-        AmbiguousGreater(convert(left), convert(right))(blame(expr))
+        AmbiguousGreater(convert(left), convert(right))
       case RelExpr4(left, specOp, right) =>
         convert(expr, specOp, convert(left), convert(right))
       case RelExpr5(inner) => convert(inner)

@@ -798,21 +798,21 @@ abstract class CoercingRewriter[Pre <: Generation]()
           vectorIntOp2(div, (l, r) => AmbiguousDiv(l, r)(div.blame)),
           vectorFloatOp2(div, (l, r) => AmbiguousDiv(l, r)(div.blame)),
         )
-      case e @ AmbiguousEq(left, right, vectorInnerType) =>
+      case AmbiguousEq(left, right, vectorInnerType) =>
         val sharedType = Types.leastCommonSuperType(left.t, right.t)
         AmbiguousEq(
           coerce(left, sharedType),
           coerce(right, sharedType),
           vectorInnerType,
-        )(e.blame)
+        )
       case g @ AmbiguousGreater(left, right) =>
         firstOk(
           e,
           s"Expected both operands to be numeric, a set, a bag, or a pointer but got ${left
               .t} and ${right.t}.",
-          AmbiguousGreater(int(left), int(right))(g.blame),
-          floatOp2(g, (l, r) => AmbiguousGreater(l, r)(g.blame)),
-          AmbiguousGreater(rat(left), rat(right))(g.blame), {
+          AmbiguousGreater(int(left), int(right)),
+          floatOp2(g, (l, r) => AmbiguousGreater(l, r)),
+          AmbiguousGreater(rat(left), rat(right)), {
             val (coercedLeft, leftSet) = set(left)
             val (coercedRight, rightSet) = set(right)
             val sharedType = Types
@@ -820,7 +820,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousGreater(
               coerce(coercedLeft, TSet(sharedType)),
               coerce(coercedRight, TSet(sharedType)),
-            )(g.blame)
+            )
           }, {
             val (coercedLeft, leftBag) = bag(left)
             val (coercedRight, rightBag) = bag(right)
@@ -829,18 +829,18 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousGreater(
               coerce(coercedLeft, TBag(sharedType)),
               coerce(coercedRight, TBag(sharedType)),
-            )(g.blame)
+            )
           },
-          AmbiguousGreater(pointer(left)._1, pointer(right)._1)(g.blame),
+          AmbiguousGreater(pointer(left)._1, pointer(right)._1),
         )
       case g @ AmbiguousGreaterEq(left, right) =>
         firstOk(
           e,
           s"Expected both operands to be numeric, a set, a bag, or a pointer but got ${left
               .t} and ${right.t}.",
-          AmbiguousGreaterEq(int(left), int(right))(g.blame),
-          floatOp2(g, (l, r) => AmbiguousGreaterEq(l, r)(g.blame)),
-          AmbiguousGreaterEq(rat(left), rat(right))(g.blame), {
+          AmbiguousGreaterEq(int(left), int(right)),
+          floatOp2(g, (l, r) => AmbiguousGreaterEq(l, r)),
+          AmbiguousGreaterEq(rat(left), rat(right)), {
             val (coercedLeft, leftSet) = set(left)
             val (coercedRight, rightSet) = set(right)
             val sharedType = Types
@@ -848,7 +848,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousGreaterEq(
               coerce(coercedLeft, TSet(sharedType)),
               coerce(coercedRight, TSet(sharedType)),
-            )(g.blame)
+            )
           }, {
             val (coercedLeft, leftBag) = bag(left)
             val (coercedRight, rightBag) = bag(right)
@@ -857,18 +857,18 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousGreaterEq(
               coerce(coercedLeft, TBag(sharedType)),
               coerce(coercedRight, TBag(sharedType)),
-            )(g.blame)
+            )
           },
-          AmbiguousGreaterEq(pointer(left)._1, pointer(right)._1)(g.blame),
+          AmbiguousGreaterEq(pointer(left)._1, pointer(right)._1),
         )
       case less @ AmbiguousLess(left, right) =>
         firstOk(
           e,
           s"Expected both operands to be numeric, a set, a bag, or a pointer but got ${left
               .t} and ${right.t}.",
-          AmbiguousLess(int(left), int(right))(less.blame),
-          floatOp2(less, (l, r) => AmbiguousLess(l, r)(less.blame)),
-          AmbiguousLess(rat(left), rat(right))(less.blame), {
+          AmbiguousLess(int(left), int(right)),
+          floatOp2(less, (l, r) => AmbiguousLess(l, r)),
+          AmbiguousLess(rat(left), rat(right)), {
             val (coercedLeft, leftSet) = set(left)
             val (coercedRight, rightSet) = set(right)
             val sharedType = Types
@@ -876,7 +876,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousLess(
               coerce(coercedLeft, TSet(sharedType)),
               coerce(coercedRight, TSet(sharedType)),
-            )(less.blame)
+            )
           }, {
             val (coercedLeft, leftBag) = bag(left)
             val (coercedRight, rightBag) = bag(right)
@@ -885,18 +885,18 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousLess(
               coerce(coercedLeft, TBag(sharedType)),
               coerce(coercedRight, TBag(sharedType)),
-            )(less.blame)
+            )
           },
-          AmbiguousLess(pointer(left)._1, pointer(right)._1)(less.blame),
+          AmbiguousLess(pointer(left)._1, pointer(right)._1),
         )
       case less @ AmbiguousLessEq(left, right) =>
         firstOk(
           e,
           s"Expected both operands to be numeric, a set, a bag, or a pointer but got ${left
               .t} and ${right.t}.",
-          AmbiguousLessEq(int(left), int(right))(less.blame),
-          floatOp2(less, (l, r) => AmbiguousLessEq(l, r)(less.blame)),
-          AmbiguousLessEq(rat(left), rat(right))(less.blame), {
+          AmbiguousLessEq(int(left), int(right)),
+          floatOp2(less, (l, r) => AmbiguousLessEq(l, r)),
+          AmbiguousLessEq(rat(left), rat(right)), {
             val (coercedLeft, leftSet) = set(left)
             val (coercedRight, rightSet) = set(right)
             val sharedType = Types
@@ -904,7 +904,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousLessEq(
               coerce(coercedLeft, TSet(sharedType)),
               coerce(coercedRight, TSet(sharedType)),
-            )(less.blame)
+            )
           }, {
             val (coercedLeft, leftBag) = bag(left)
             val (coercedRight, rightBag) = bag(right)
@@ -913,9 +913,9 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousLessEq(
               coerce(coercedLeft, TBag(sharedType)),
               coerce(coercedRight, TBag(sharedType)),
-            )(less.blame)
+            )
           },
-          AmbiguousLessEq(pointer(left)._1, pointer(right)._1)(less.blame),
+          AmbiguousLessEq(pointer(left)._1, pointer(right)._1),
         )
       case minus @ AmbiguousMinus(left, right) =>
         firstOk(
@@ -1012,13 +1012,13 @@ abstract class CoercingRewriter[Pre <: Generation]()
             )
           },
         )
-      case n @ AmbiguousNeq(left, right, vectorInnerType) =>
+      case AmbiguousNeq(left, right, vectorInnerType) =>
         val sharedType = Types.leastCommonSuperType(left.t, right.t)
         AmbiguousNeq(
           coerce(left, sharedType),
           coerce(right, sharedType),
           vectorInnerType,
-        )(n.blame)
+        )
       case AmbiguousOr(left, right) =>
         firstOk(
           e,
@@ -1615,18 +1615,13 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case len @ PointerLength(p) => PointerLength(pointer(p)._1)(len.blame)
       case get @ PointerSubscript(p, index) =>
         PointerSubscript(pointer(p)._1, int(index))(get.blame)
-      case eq @ PointerEq(l, r) =>
-        PointerEq(pointer(l)._1, pointer(r)._1)(eq.blame)
-      case eq @ PointerNeq(l, r) =>
-        PointerNeq(pointer(l)._1, pointer(r)._1)(eq.blame)
-      case eq @ PointerGreater(l, r) =>
-        PointerGreater(pointer(l)._1, pointer(r)._1)(eq.blame)
-      case eq @ PointerLess(l, r) =>
-        PointerLess(pointer(l)._1, pointer(r)._1)(eq.blame)
-      case eq @ PointerGreaterEq(l, r) =>
-        PointerGreaterEq(pointer(l)._1, pointer(r)._1)(eq.blame)
-      case eq @ PointerLessEq(l, r) =>
-        PointerLessEq(pointer(l)._1, pointer(r)._1)(eq.blame)
+      case PointerEq(l, r) => PointerEq(pointer(l)._1, pointer(r)._1)
+      case PointerNeq(l, r) => PointerNeq(pointer(l)._1, pointer(r)._1)
+      case PointerGreater(l, r) => PointerGreater(pointer(l)._1, pointer(r)._1)
+      case PointerLess(l, r) => PointerLess(pointer(l)._1, pointer(r)._1)
+      case PointerGreaterEq(l, r) =>
+        PointerGreaterEq(pointer(l)._1, pointer(r)._1)
+      case PointerLessEq(l, r) => PointerLessEq(pointer(l)._1, pointer(r)._1)
       case PointsTo(loc, perm, value) =>
         PointsTo(loc, rat(perm), coerce(value, loc.t))
       case PolarityDependent(onInhale, onExhale) =>
