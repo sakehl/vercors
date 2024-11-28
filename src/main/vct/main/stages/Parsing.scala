@@ -107,7 +107,7 @@ case class Parsing[G <: Generation](
                 blameProvider,
                 cc,
                 cSystemInclude,
-                readable.underlyingPath.map(_.getParent).toSeq ++
+                readable.underlyingPath.map(_.toAbsolutePath.getParent).toSeq ++
                   cOtherIncludes,
                 cDefines,
               )

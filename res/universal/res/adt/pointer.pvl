@@ -75,4 +75,5 @@ ensures \result > 0;
 pure int ptr_address(`pointer` p) = `block`.block_address(`pointer`.pointer_block(p)) + (`pointer`.pointer_offset(p) * `block`.block_stride(`pointer`.pointer_block(p)));
 
 decreases;
+ensures ptr_address(\result) == address;
 pure `pointer` ptr_from_address(int address);

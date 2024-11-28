@@ -156,6 +156,7 @@ MATRIX: '\\matrix';
 ARRAY: '\\array';
 POINTER: '\\pointer';
 POINTER_INDEX: '\\pointer_index';
+POINTER_BLOCK: '\\pointer_block';
 POINTER_BLOCK_LENGTH: '\\pointer_block_length';
 POINTER_BLOCK_OFFSET: '\\pointer_block_offset';
 POINTER_LENGTH: '\\pointer_length';
