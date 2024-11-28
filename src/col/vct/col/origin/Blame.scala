@@ -1070,15 +1070,6 @@ case class PointerInsufficientPermission(node: Expr[_])
     s"There may be insufficient permission to dereference `$source`."
 }
 
-case class MismatchedProvenance(node: PointerComparison[_])
-    extends VerificationFailure with NodeVerificationFailure {
-  override def code: String = "ptrProvenance"
-  override def descInContext: String =
-    "The provenance of the two pointers may not match"
-  override def inlineDescWithSource(source: String): String =
-    s"The provenance of the pointers in comparison `$source` may not match"
-}
-
 sealed trait LockRegionFailure extends VerificationFailure
 
 sealed trait LockFailure extends LockRegionFailure

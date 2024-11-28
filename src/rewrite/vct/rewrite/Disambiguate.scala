@@ -234,9 +234,9 @@ case class Disambiguate[Pre <: Generation]() extends Rewriter[Pre] {
         else if (cmp.isPointerOp)
           cmp match {
             case e @ AmbiguousEq(left, right, _) =>
-              PointerEq(dispatch(left), dispatch(right))(e.blame)
+              PointerEq(dispatch(left), dispatch(right))
             case e @ AmbiguousNeq(left, right, _) =>
-              PointerNeq(dispatch(left), dispatch(right))(e.blame)
+              PointerNeq(dispatch(left), dispatch(right))
           }
         else
           cmp match {
@@ -271,13 +271,13 @@ case class Disambiguate[Pre <: Generation]() extends Rewriter[Pre] {
         else if (cmp.isPointerOp)
           cmp match {
             case e @ AmbiguousGreater(left, right) =>
-              PointerGreater(dispatch(left), dispatch(right))(e.blame)
+              PointerGreater(dispatch(left), dispatch(right))
             case e @ AmbiguousLess(left, right) =>
-              PointerLess(dispatch(left), dispatch(right))(e.blame)
+              PointerLess(dispatch(left), dispatch(right))
             case e @ AmbiguousGreaterEq(left, right) =>
-              PointerGreaterEq(dispatch(left), dispatch(right))(e.blame)
+              PointerGreaterEq(dispatch(left), dispatch(right))
             case e @ AmbiguousLessEq(left, right) =>
-              PointerLessEq(dispatch(left), dispatch(right))(e.blame)
+              PointerLessEq(dispatch(left), dispatch(right))
           }
         else
           cmp match {

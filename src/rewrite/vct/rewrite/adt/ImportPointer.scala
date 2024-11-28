@@ -54,18 +54,8 @@ case object ImportPointer extends ImportADTBuilder("pointer") {
       inner.blame(PointerInsufficientPermission(expr))
   }
 
-  private case class MismatchedProvenanceBlame(
-      inner: Blame[MismatchedProvenance],
-      comparison: PointerComparison[_],
-  ) extends Blame[AssertFailed] {
-    override def blame(error: AssertFailed): Unit =
-      inner.blame(MismatchedProvenance(comparison))
-  }
-
   private sealed trait Context
   private final case class InAxiom() extends Context
-  private final case class InPrecondition() extends Context
-  private final case class InPostcondition() extends Context
 }
 
 case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
@@ -598,204 +588,21 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
               Nil,
             )(PanicBlame("Stride > 0")) // TODO: Blame??
         }
-      case PointerEq(Null() | ApplyCoercion(Null(), _), r) => isNull(r)
-      case PointerEq(l, Null() | ApplyCoercion(Null(), _)) => isNull(l)
-      case e @ PointerEq(l, r) =>
-        val blame = MismatchedProvenanceBlame(e.blame, e)
-        dispatchPointerComparison(
-          l,
-          r,
-          blame,
-          Eq(_, _),
-          leftNull = _ => ff,
-          rightNull = _ => ff,
-          eitherNull = Eq(_, _),
-          compareAddress = false,
+      case blck @ PointerBlock(p) =>
+        ADTFunctionInvocation[Post](
+          typeArgs = None,
+          ref = pointerBlock.ref,
+          args = Seq(unwrapOption(p, blck.blame)),
         )
-      case PointerNeq(Null() | ApplyCoercion(Null(), _), r) => Not(isNull(r))
-      case PointerNeq(l, Null() | ApplyCoercion(Null(), _)) => Not(isNull(l))
-      case e @ PointerNeq(l, r) =>
-        val blame = MismatchedProvenanceBlame(e.blame, e)
-        dispatchPointerComparison(
-          l,
-          r,
-          blame,
-          Neq(_, _),
-          leftNull = _ => ff,
-          rightNull = _ => ff,
-          eitherNull = Neq(_, _),
-          compareAddress = false,
-        )
-      case PointerGreater(Null() | ApplyCoercion(Null(), _), _) => ff
-      case PointerGreater(l, Null() | ApplyCoercion(Null(), _)) =>
-        Not(isNull(l))
-      case e @ PointerGreater(l, r) =>
-        val blame = MismatchedProvenanceBlame(e.blame, e)
-        dispatchPointerComparison(
-          l,
-          r,
-          blame,
-          Greater(_, _),
-          leftNull = _ => ff,
-          rightNull = _ => tt,
-          eitherNull = (l, r) => And(OptEmpty(r), Not(OptEmpty(l))),
-          compareAddress = true,
-        )
-      case PointerLess(Null() | ApplyCoercion(Null(), _), r) => Not(isNull(r))
-      case PointerLess(_, Null() | ApplyCoercion(Null(), _)) => ff
-      case e @ PointerLess(l, r) =>
-        val blame = MismatchedProvenanceBlame(e.blame, e)
-        dispatchPointerComparison(
-          l,
-          r,
-          blame,
-          Less(_, _),
-          leftNull = _ => tt,
-          rightNull = _ => ff,
-          eitherNull = (l, r) => And(OptEmpty(l), Not(OptEmpty(r))),
-          compareAddress = true,
-        )
-      case PointerGreaterEq(Null() | ApplyCoercion(Null(), _), r) => isNull(r)
-      case PointerGreaterEq(_, Null() | ApplyCoercion(Null(), _)) => tt
-      case e @ PointerGreaterEq(l, r) =>
-        val blame = MismatchedProvenanceBlame(e.blame, e)
-        dispatchPointerComparison(
-          l,
-          r,
-          blame,
-          GreaterEq(_, _),
-          leftNull = _ => ff,
-          rightNull = _ => tt,
-          eitherNull = (_, r) => OptEmpty(r),
-          compareAddress = true,
-        )
-      case PointerLessEq(Null() | ApplyCoercion(Null(), _), _) => tt
-      case PointerLessEq(l, Null() | ApplyCoercion(Null(), _)) => isNull(l)
-      case e @ PointerLessEq(l, r) =>
-        val blame = MismatchedProvenanceBlame(e.blame, e)
-        dispatchPointerComparison(
-          l,
-          r,
-          blame,
-          LessEq(_, _),
-          leftNull = _ => tt,
-          rightNull = _ => ff,
-          eitherNull = (l, _) => OptEmpty(l),
-          compareAddress = true,
-        )
+      case addr @ PointerAddress(p) =>
+        FunctionInvocation[Post](
+          ref = pointerAddress.ref,
+          args = Seq(unwrapOption(p, addr.blame)),
+          typeArgs = Nil,
+          Nil,
+          Nil,
+        )(TrueSatisfiable)
       case other => super.postCoerce(other)
-    }
-  }
-
-  override def postCoerce(
-      contract: ApplicableContract[Pre]
-  ): ApplicableContract[Post] = {
-    contract.rewrite(
-      requires =
-        context.having(InPrecondition()) { dispatch(contract.requires) },
-      ensures = context.having(InPostcondition()) { dispatch(contract.ensures) },
-    )
-  }
-
-  private def dispatchPointerComparison(
-      l: Expr[Pre],
-      r: Expr[Pre],
-      blame: MismatchedProvenanceBlame,
-      comparison: (Expr[Post], Expr[Post]) => Expr[Post],
-      leftNull: Expr[Post] => Expr[Post],
-      rightNull: Expr[Post] => Expr[Post],
-      eitherNull: (Expr[Post], Expr[Post]) => Expr[Post],
-      compareAddress: Boolean,
-  )(implicit o: Origin): Expr[Post] = {
-    val newL = dispatch(l)
-    val newR = dispatch(r)
-    val comp =
-      if (compareAddress) { (l: Expr[Post], r: Expr[Post]) =>
-        {
-          comparison(
-            FunctionInvocation[Post](
-              ref = pointerAddress.ref,
-              args = Seq(l),
-              typeArgs = Nil,
-              Nil,
-              Nil,
-            )(TrueSatisfiable),
-            FunctionInvocation[Post](
-              ref = pointerAddress.ref,
-              args = Seq(r),
-              typeArgs = Nil,
-              Nil,
-              Nil,
-            )(TrueSatisfiable),
-          )
-        }
-      } else { comparison }
-    (l.t, r.t) match {
-      case (TNonNullPointer(_), TNonNullPointer(_)) =>
-        assertBlocksEqual(newL, newR, blame, comp, checkEq = compareAddress)
-      // Pointers are unsigned therefore every nonnull-pointer is > NULL
-      case (TNonNullPointer(_), TPointer(_)) =>
-        Select(
-          OptEmpty(newR),
-          rightNull(newL),
-          assertBlocksEqual(
-            newL,
-            OptGet(newR)(NeverNone),
-            blame,
-            comp,
-            checkEq = compareAddress,
-          ),
-        )
-      case (TPointer(_), TNonNullPointer(_)) =>
-        Select(
-          OptEmpty(newL),
-          leftNull(newR),
-          assertBlocksEqual(
-            OptGet(newL)(NeverNone),
-            newR,
-            blame,
-            comp,
-            checkEq = compareAddress,
-          ),
-        )
-      case (TPointer(_), TPointer(_)) =>
-        Select(
-          Or(OptEmpty(newL), OptEmpty(newR)),
-          eitherNull(newL, newR),
-          assertBlocksEqual(
-            OptGet(newL)(NeverNone),
-            OptGet(newR)(NeverNone),
-            blame,
-            comp,
-            checkEq = compareAddress,
-          ),
-        )
-    }
-  }
-
-  private def assertBlocksEqual(
-      l: Expr[Post],
-      r: Expr[Post],
-      blame: MismatchedProvenanceBlame,
-      comp: (Expr[Post], Expr[Post]) => Expr[Post],
-      checkEq: Boolean,
-  )(implicit o: Origin): Expr[Post] = {
-    val blockEq =
-      ADTFunctionInvocation[Post](
-        typeArgs = None,
-        ref = pointerBlock.ref,
-        args = Seq(l),
-      ) === ADTFunctionInvocation[Post](
-        typeArgs = None,
-        ref = pointerBlock.ref,
-        args = Seq(r),
-      )
-    // Change based on context
-    context.topOption match {
-      case None => Asserting(blockEq, comp(l, r))(blame)
-      case Some(InAxiom()) | Some(InPrecondition()) | Some(InPostcondition()) =>
-        if (checkEq) { And(blockEq, comp(l, r)) }
-        else { comp(l, r) }
     }
   }
 

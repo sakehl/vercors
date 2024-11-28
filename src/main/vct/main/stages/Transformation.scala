@@ -30,11 +30,12 @@ import vct.result.VerificationError.SystemError
 import vct.rewrite.adt.ImportSetCompat
 import vct.rewrite.{
   DisambiguatePredicateExpression,
+  EncodeAssuming,
   EncodeAutoValue,
   EncodeByValueClassUsage,
+  EncodePointerComparison,
   EncodeRange,
   EncodeResourceValues,
-  EncodeAssuming,
   ExplicitResourceValues,
   GenerateSingleOwnerPermissions,
   HeapVariableToRef,
@@ -415,6 +416,7 @@ case class SilverTransformation(
         ExplicitResourceValues,
         EncodeResourceValues,
         EncodeAssuming,
+        EncodePointerComparison, // Assumes no context_everywhere
 
         // Encode parallel blocks
         EncodeSendRecv,
