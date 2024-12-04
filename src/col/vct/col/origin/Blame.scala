@@ -999,6 +999,16 @@ case class ArrayValuesPerm(node: Values[_]) extends ArrayValuesError {
     "there may be insufficient permission to access the array at the specified range"
 }
 
+// TODO: Signed-ness
+case class IntegerOutOfBounds(node: Node[_], bits: Int)
+    extends NodeVerificationFailure {
+  override def code: String = "intBounds"
+  override def descInContext: String =
+    s"Integer may be out of bounds, expected a `$bits`-bit integer"
+  override def inlineDescWithSource(source: String) =
+    s"Integer `$source` may be out of bounds, expected a `$bits`-bit integer"
+}
+
 sealed trait PointerSubscriptError extends FrontendSubscriptError
 sealed trait PointerDerefError
     extends PointerSubscriptError with FrontendDerefError

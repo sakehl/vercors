@@ -3,11 +3,13 @@ package vct.col.ast.expr.op
 import vct.col.ast.`type`.typeclass.TFloats.getFloatMax
 import vct.col.ast.{
   BinExpr,
+  CPrimitiveType,
+  CSpecificationType,
   Expr,
   IntType,
+  LLVMTInt,
   TBool,
   TCInt,
-  LLVMTInt,
   TInt,
   TProcess,
   TRational,
@@ -16,6 +18,7 @@ import vct.col.ast.{
   Type,
 }
 import vct.col.origin.Origin
+import vct.col.resolve.lang.C
 import vct.col.typerules.{CoercionUtils, Types}
 import vct.result.VerificationError
 
@@ -97,19 +100,38 @@ object BinOperatorTypes {
     override def code: String = "numericBinError"
   }
 
+  private def getBits(t: Type[_]): Int =
+    t match {
+      case cint @ TCInt() => cint.bits
+      case CPrimitiveType(Seq(CSpecificationType(cint @ TCInt()))) => cint.bits
+    }
+
   def getNumericType[G](lt: Type[G], rt: Type[G], o: Origin): Type[G] = {
-    if (isCIntOp(lt, rt))
-      TCInt[G]()
-    else if (isLLVMIntOp(lt, rt))
-      Types.leastCommonSuperType(lt, rt).asInstanceOf[LLVMTInt[G]]
-    else if (isIntOp(lt, rt))
-      TInt[G]()
-    else
-      getFloatMax[G](lt, rt) getOrElse
-        (if (isRationalOp(lt, rt))
-           TRational[G]()
-         else
-           throw NumericBinError(lt, rt, o))
+    (lt, rt) match {
+      case (
+            l @ (TCInt() | CPrimitiveType(Seq(CSpecificationType(TCInt())))),
+            r @ (TCInt() | CPrimitiveType(Seq(CSpecificationType(TCInt())))),
+          ) if getBits(l) != 0 && getBits(l) >= getBits(r) =>
+        l
+      case (
+            l @ (TCInt() | CPrimitiveType(Seq(CSpecificationType(TCInt())))),
+            r @ (TCInt() | CPrimitiveType(Seq(CSpecificationType(TCInt())))),
+          ) if getBits(r) != 0 && getBits(r) >= getBits(l) =>
+        r
+      case _ =>
+        if (isCIntOp(lt, rt))
+          TCInt[G]()
+        else if (isLLVMIntOp(lt, rt))
+          Types.leastCommonSuperType(lt, rt).asInstanceOf[LLVMTInt[G]]
+        else if (isIntOp(lt, rt))
+          TInt[G]()
+        else
+          getFloatMax[G](lt, rt) getOrElse
+            (if (isRationalOp(lt, rt))
+               TRational[G]()
+             else
+               throw NumericBinError(lt, rt, o))
+    }
   }
 }
 

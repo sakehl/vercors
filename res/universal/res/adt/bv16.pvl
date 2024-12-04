@@ -1,0 +1,32 @@
+prover_type bv16 \smtlib `(_ BitVec 16)`;
+
+prover_function bv16 bv16_from_int(int x) \smtlib `(_ int2bv 16)`;
+prover_function int bv16_to_int(bv16 x) \smtlib `(_ bv2int 16)`;
+prover_function bv16 bv16_and(bv16 x, bv16 y) \smtlib `bvand`;
+prover_function bv16 bv16_or(bv16 x, bv16 y) \smtlib `bvor`;
+prover_function bv16 bv16_xor(bv16 x, bv16 y) \smtlib `bvxor`;
+prover_function bv16 bv16_shl(bv16 x, bv16 y) \smtlib `bvshl`;
+prover_function bv16 bv16_shr(bv16 x, bv16 y) \smtlib `bvashr`;
+prover_function bv16 bv16_ushr(bv16 x, bv16 y) \smtlib `bvlshr`;
+prover_function bv16 bv16_not(bv16 x) \smtlib `bvnot`;
+
+ensures \result == (0 <= x && x <= 65535);
+ensures \result == (x == bv16_to_int(bv16_from_int(x)));
+pure boolean u16_is_inbounds(int x);
+
+ensures \polarity_dependent(u16_is_inbounds(x), true);
+pure boolean u16_assume_inbounds(int x) = true;
+
+requires u16_is_inbounds(x);
+pure int u16_require_inbounds(int x) = x;
+
+ensures \result == (-32768 <= x && x <= 32767);
+ensures \result == (x == bv16_to_int(bv16_from_int(x)));
+pure boolean s16_is_inbounds(int x);
+
+ensures \polarity_dependent(s16_is_inbounds(x), true);
+pure boolean s16_assume_inbounds(int x) = true;
+
+requires s16_is_inbounds(x);
+pure int s16_require_inbounds(int x) = x;
+

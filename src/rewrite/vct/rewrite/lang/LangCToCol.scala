@@ -666,7 +666,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           // Since we set the size and blame together, we can assume the blame is not None
           NewNonNullPointerArray[Post](
             getInnerType(cNameSuccessor(d).t),
-            CIntegerValue(size),
+            c_const(size),
           )(blame.get),
         )
         declarations ++= Seq(cNameSuccessor(d))
@@ -720,7 +720,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         val nonZeroThreads: Expr[Post] =
           foldStar(
             (blockDim.indices.values ++ gridDim.indices.values)
-              .map(v => Less(CIntegerValue(0)(o), v.get(o))(o)).toSeq
+              .map(v => Less(c_const(0)(o), v.get(o))(o)).toSeq
           )(o)
         val UnitAccountedPredicate(contractRequires: Expr[Pre]) =
           contract.requires
@@ -906,7 +906,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       sizeBlame: Option[Blame[ArraySizeError]],
   ): Unit =
     arraySize match {
-      case Some(CIntegerValue(size)) =>
+      case Some(CIntegerValue(size, _)) =>
         val v = new Variable[Post](TPointer[Post](rw.dispatch(t)))(o)
         staticSharedMemNames(cRef) = (size, sizeBlame)
         cNameSuccessor(cRef) = v
@@ -1913,7 +1913,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     val arg =
       if (args.size == 1) {
         args.head match {
-          case CIntegerValue(i) if i >= 0 && i < 3 => Some(i.toInt)
+          case CIntegerValue(i, _) if i >= 0 && i < 3 => Some(i.toInt)
           case _ => None
         }
       } else

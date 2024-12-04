@@ -1063,9 +1063,9 @@ public class ExpressionTransformer<T> {
             case "%=" -> new Mod<>(left, right, new GeneratedBlame<>(), OriGen.create());
             case "&=" -> new AmbiguousComputationalAnd<>(left, right, OriGen.create());
             case "|=" -> new AmbiguousComputationalOr<>(left, right, OriGen.create());
-            case "^=" -> new BitXor<>(left, right, OriGen.create());
-            case ">>=" -> new BitShr<>(left, right, OriGen.create());
-            case "<<=" -> new BitShl<>(left, right, OriGen.create());
+            case "^=" -> new BitXor<>(left, right, 0, new GeneratedBlame<>(), OriGen.create());
+            case ">>=" -> new BitShr<>(left, right, 0, new GeneratedBlame<>(), OriGen.create());
+            case "<<=" -> new BitShl<>(left, right, 0, new GeneratedBlame<>(), OriGen.create());
             default -> throw new IllegalOperationException("Trying to transform an expression to a statement!");
         };
 
@@ -1377,9 +1377,9 @@ public class ExpressionTransformer<T> {
             case "||" -> new Or<>(left, right, OriGen.create());
             case "&" -> new AmbiguousComputationalAnd<>(left, right, OriGen.create());
             case "|" -> new AmbiguousComputationalOr<>(left, right, OriGen.create());
-            case "^" -> new BitXor<>(left, right, OriGen.create());
-            case ">>" -> new BitShr<>(left, right, OriGen.create());
-            case "<<" -> new BitShl<>(left, right, OriGen.create());
+            case "^" -> new BitXor<>(left, right, 0, new GeneratedBlame<>(), OriGen.create());
+            case ">>" -> new BitShr<>(left, right, 0, new GeneratedBlame<>(), OriGen.create());
+            case "<<" -> new BitShl<>(left, right, 0, new GeneratedBlame<>(), OriGen.create());
             default -> throw new UnsupportedException("Unsupported binary operator " + expr.getOp());
         };
     }
@@ -1635,7 +1635,7 @@ public class ExpressionTransformer<T> {
         return switch (expr.getOperator()) {
             case "!" -> new Not<>(original, OriGen.create());
             case "-" -> new UMinus<>(original, OriGen.create());
-            case "~" -> new BitNot<>(original, OriGen.create());
+            case "~" -> new BitNot<>(original, 0, new GeneratedBlame<>(), OriGen.create());
             case "+" -> original;
             case "++" -> handle_incr_decr(true, expr.isPrepost(), original);
             case "--" -> handle_incr_decr(false, expr.isPrepost(), original);

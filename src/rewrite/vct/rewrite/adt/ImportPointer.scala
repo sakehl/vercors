@@ -214,7 +214,7 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
       implicit o: Origin
   ): Expr[Post] =
     coercion match {
-      case CoerceNullPointer(_) => OptNone()
+      case CoerceNullPointer(_) => OptNoneTyped(TAxiomatic(pointerAdt.ref, Nil))
       case CoerceNonNullPointer(_) => OptSome(e)
       case other => super.applyCoercion(e, other)
     }
@@ -284,6 +284,23 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
             }),
           )
         }
+      case func: Function[Pre]
+          if func.o.find[SourceName].exists(_.name == "ptr_address") =>
+        globalDeclarations.succeed(
+          func,
+          withResult((result: Result[Post]) =>
+            func.rewrite(contract =
+              func.contract.rewrite(ensures =
+                (dispatch(func.contract.ensures) &* PolarityDependent(
+                  LessEq(result, const(BigInt("18446744073709551615"))(func.o))(
+                    func.o
+                  ),
+                  tt,
+                )(func.o))(func.o)
+              )
+            )
+          )(func.o),
+        )
       case _ => super.postCoerce(decl)
     }
   }
@@ -650,14 +667,5 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
       ).ref,
       Seq(expr),
     )
-  }
-
-  private def isNull(e: Expr[Pre])(implicit o: Origin): Expr[Post] = {
-    if (e == Null[Pre]()) { tt }
-    else
-      e.t match {
-        case TPointer(_) => OptEmpty(dispatch(e))
-        case TNonNullPointer(_) => ff
-      }
   }
 }

@@ -1183,8 +1183,9 @@ sealed trait Expr[G] extends NodeFamily[G] with ExprImpl[G]
 
 sealed trait Constant[G] extends Expr[G] with ConstantImpl[G]
 sealed trait ConstantInt[G] extends Constant[G] with ConstantIntImpl[G]
-final case class CIntegerValue[G](value: BigInt)(implicit val o: Origin)
-    extends ConstantInt[G] with Expr[G] with CIntegerValueImpl[G]
+final case class CIntegerValue[G](value: BigInt, t: Type[G])(
+    implicit val o: Origin
+) extends ConstantInt[G] with Expr[G] with CIntegerValueImpl[G]
 final case class IntegerValue[G](value: BigInt)(implicit val o: Origin)
     extends ConstantInt[G] with Expr[G] with IntegerValueImpl[G]
 final case class BooleanValue[G](value: Boolean)(implicit val o: Origin)
@@ -1542,7 +1543,9 @@ sealed trait UnExpr[G] extends Expr[G] with UnExprImpl[G]
 
 final case class UMinus[G](arg: Expr[G])(implicit val o: Origin)
     extends UnExpr[G] with UMinusImpl[G]
-final case class BitNot[G](arg: Expr[G])(implicit val o: Origin)
+final case class BitNot[G](arg: Expr[G], bits: Int)(
+    val blame: Blame[IntegerOutOfBounds]
+)(implicit val o: Origin)
     extends UnExpr[G] with BitNotImpl[G]
 final case class Not[G](arg: Expr[G])(implicit val o: Origin)
     extends UnExpr[G] with NotImpl[G]
@@ -1688,23 +1691,30 @@ final case class StringConcat[G](left: Expr[G], right: Expr[G])(
     implicit val o: Origin
 ) extends BinExpr[G] with StringConcatImpl[G]
 
-final case class BitAnd[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends BinExpr[G] with BitAndImpl[G]
-final case class BitOr[G](left: Expr[G], right: Expr[G])(implicit val o: Origin)
+final case class BitAnd[G](left: Expr[G], right: Expr[G], bits: Int)(
+    val blame: Blame[IntegerOutOfBounds]
+)(implicit val o: Origin)
+    extends BinExpr[G] with BitAndImpl[G]
+final case class BitOr[G](left: Expr[G], right: Expr[G], bits: Int)(
+    val blame: Blame[IntegerOutOfBounds]
+)(implicit val o: Origin)
     extends BinExpr[G] with BitOrImpl[G]
-final case class BitXor[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends BinExpr[G] with BitXorImpl[G]
-final case class BitShl[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends BinExpr[G] with BitShlImpl[G]
-final case class BitShr[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends BinExpr[G] with BitShrImpl[G]
-final case class BitUShr[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends BinExpr[G] with BitUShrImpl[G]
+final case class BitXor[G](left: Expr[G], right: Expr[G], bits: Int)(
+    val blame: Blame[IntegerOutOfBounds]
+)(implicit val o: Origin)
+    extends BinExpr[G] with BitXorImpl[G]
+final case class BitShl[G](left: Expr[G], right: Expr[G], bits: Int)(
+    val blame: Blame[IntegerOutOfBounds]
+)(implicit val o: Origin)
+    extends BinExpr[G] with BitShlImpl[G]
+final case class BitShr[G](left: Expr[G], right: Expr[G], bits: Int)(
+    val blame: Blame[IntegerOutOfBounds]
+)(implicit val o: Origin)
+    extends BinExpr[G] with BitShrImpl[G]
+final case class BitUShr[G](left: Expr[G], right: Expr[G], bits: Int)(
+    val blame: Blame[IntegerOutOfBounds]
+)(implicit val o: Origin)
+    extends BinExpr[G] with BitUShrImpl[G]
 
 final case class And[G](left: Expr[G], right: Expr[G])(implicit val o: Origin)
     extends BinExpr[G] with AndImpl[G]
@@ -2872,7 +2882,9 @@ final case class CLiteralArray[G](exprs: Seq[Expr[G]])(implicit val o: Origin)
 
 sealed trait CType[G] extends Type[G] with CTypeImpl[G]
 final case class TCInt[G]()(implicit val o: Origin = DiagnosticOrigin)
-    extends IntType[G] with CType[G] with TCIntImpl[G]
+    extends IntType[G] with CType[G] with TCIntImpl[G] {
+  var bits: Int = 0
+}
 final case class TCFloat[G](exponent: Int, mantissa: Int)(
     implicit val o: Origin = DiagnosticOrigin
 ) extends FloatType[G] with CType[G] with TCFloatImpl[G]

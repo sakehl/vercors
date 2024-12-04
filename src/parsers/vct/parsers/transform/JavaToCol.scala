@@ -1042,7 +1042,7 @@ case class JavaToCol[G](
         }
       case JavaPrefixOp2(preOp, inner) =>
         preOp match {
-          case "~" => BitNot(convert(inner))
+          case "~" => BitNot(convert(inner), 0)(blame(expr))
           case "!" => Not(convert(inner))
         }
       case JavaValPrefix(PrefixOp0(op), inner) =>
@@ -1067,9 +1067,12 @@ case class JavaToCol[G](
         }
       case JavaShift(left, shift, right) =>
         shift match {
-          case ShiftOp0(_, _) => BitShl(convert(left), convert(right))
-          case ShiftOp1(_, _, _) => BitUShr(convert(left), convert(right))
-          case ShiftOp2(_, _) => BitShr(convert(left), convert(right))
+          case ShiftOp0(_, _) =>
+            BitShl(convert(left), convert(right), 0)(blame(expr))
+          case ShiftOp1(_, _, _) =>
+            BitUShr(convert(left), convert(right), 0)(blame(expr))
+          case ShiftOp2(_, _) =>
+            BitShr(convert(left), convert(right), 0)(blame(expr))
         }
       case JavaRel(left, comp, right) =>
         comp match {
@@ -1119,11 +1122,11 @@ case class JavaToCol[G](
             case "*=" => AmbiguousMult(target, value)
             case "/=" => AmbiguousTruncDiv(target, value)(blame(expr))
             case "&=" => AmbiguousComputationalAnd(target, value)
-            case "|=" => BitOr(target, value)
-            case "^=" => BitXor(target, value)
-            case ">>=" => BitShr(target, value)
-            case ">>>=" => BitUShr(target, value)
-            case "<<=" => BitShl(target, value)
+            case "|=" => BitOr(target, value, 0)(blame(expr))
+            case "^=" => BitXor(target, value, 0)(blame(expr))
+            case ">>=" => BitShr(target, value, 0)(blame(expr))
+            case ">>>=" => BitUShr(target, value, 0)(blame(expr))
+            case "<<=" => BitShl(target, value, 0)(blame(expr))
             case "%=" => AmbiguousTruncMod(target, value)(blame(expr))
           },
         )(blame(expr))

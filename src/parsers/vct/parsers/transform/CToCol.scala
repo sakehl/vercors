@@ -13,6 +13,7 @@ import vct.col.ref.{Ref, UnresolvedRef}
 import vct.col.resolve.lang.C
 import vct.col.util.AstBuildHelpers
 
+import java.util.Locale
 import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.util.Try
@@ -683,11 +684,11 @@ case class CToCol[G](
               case "%=" => AmbiguousTruncMod(target, value)(blame(expr))
               case "+=" => col.AmbiguousPlus(target, value)(blame(valueNode))
               case "-=" => col.AmbiguousMinus(target, value)((blame(valueNode)))
-              case "<<=" => BitShl(target, value)
-              case ">>=" => BitShr(target, value)
-              case "&=" => BitAnd(target, value)
-              case "^=" => BitXor(target, value)
-              case "|=" => BitOr(target, value)
+              case "<<=" => BitShl(target, value, 0)(blame(expr))
+              case ">>=" => BitShr(target, value, 0)(blame(expr))
+              case "&=" => BitAnd(target, value, 0)(blame(expr))
+              case "^=" => BitXor(target, value, 0)(blame(expr))
+              case "|=" => BitOr(target, value, 0)(blame(expr))
             },
           )(blame(expr))
 
@@ -730,21 +731,21 @@ case class CToCol[G](
     expr match {
       case InclusiveOrExpression0(inner) => convert(inner)
       case InclusiveOrExpression1(left, _, right) =>
-        BitOr(convert(left), convert(right))
+        BitOr(convert(left), convert(right), 0)(blame(expr))
     }
 
   def convert(implicit expr: ExclusiveOrExpressionContext): Expr[G] =
     expr match {
       case ExclusiveOrExpression0(inner) => convert(inner)
       case ExclusiveOrExpression1(left, _, right) =>
-        BitXor(convert(left), convert(right))
+        BitXor(convert(left), convert(right), 0)(blame(expr))
     }
 
   def convert(implicit expr: AndExpressionContext): Expr[G] =
     expr match {
       case AndExpression0(inner) => convert(inner)
       case AndExpression1(left, _, right) =>
-        BitAnd(convert(left), convert(right))
+        BitAnd(convert(left), convert(right), 0)(blame(expr))
     }
 
   def convert(implicit expr: EqualityExpressionContext): Expr[G] =
@@ -774,9 +775,9 @@ case class CToCol[G](
     expr match {
       case ShiftExpression0(inner) => convert(inner)
       case ShiftExpression1(left, _, right) =>
-        BitShl(convert(left), convert(right))
+        BitShl(convert(left), convert(right), 0)(blame(expr))
       case ShiftExpression2(left, _, right) =>
-        BitShr(convert(left), convert(right))
+        BitShr(convert(left), convert(right), 0)(blame(expr))
     }
 
   def convert(implicit expr: AdditiveExpressionContext): Expr[G] =
@@ -870,7 +871,7 @@ case class CToCol[G](
           case "*" => DerefPointer(convert(arg))(blame(expr))
           case "+" => convert(arg)
           case "-" => UMinus(convert(arg))
-          case "~" => BitNot(convert(arg))
+          case "~" => BitNot(convert(arg), 0)(blame(expr))
           case "!" => col.Not(convert(arg))
         }
       case UnaryExpression3(_, _) => ??(expr)
@@ -959,9 +960,29 @@ case class CToCol[G](
     } catch { case _: NumberFormatException => None }
   }
 
-  def parseInt(i: String)(implicit o: Origin): Option[Expr[G]] =
-    try { Some(CIntegerValue(BigInt(i))) }
+  def parseInt(i: String)(implicit o: Origin): Option[Expr[G]] = {
+    val lower = i.toLowerCase(Locale.ROOT)
+    // TODO: Check if value in range
+    val (s, t: Seq[CDeclarationSpecifier[G]]) =
+      if (
+        lower.endsWith("uwb") || lower.endsWith("wbu") || lower.endsWith("wb")
+      ) {
+        // Bit-precise integers from C23 unimplemented
+        return None
+      } else if (lower.endsWith("ull") || lower.endsWith("llu")) {
+        (i.substring(0, i.length - 3), Seq(CUnsigned(), CLong(), CLong()))
+      } else if (lower.endsWith("lu") || lower.endsWith("ul")) {
+        (i.substring(0, i.length - 2), Seq(CUnsigned(), CLong()))
+      } else if (lower.endsWith("ll")) {
+        (i.substring(0, i.length - 2), Seq(CLong(), CLong()))
+      } else if (lower.endsWith("u")) {
+        (i.substring(0, i.length - 1), Seq(CUnsigned()))
+      } else if (lower.endsWith("l")) {
+        (i.substring(0, i.length - 1), Seq(CLong()))
+      } else { (i, Seq(CInt())) }
+    try { Some(CIntegerValue(BigInt(s), CPrimitiveType(t))) }
     catch { case e: NumberFormatException => None }
+  }
 
   def convert(implicit expr: PrimaryExpressionContext): Expr[G] =
     expr match {

@@ -177,9 +177,11 @@ case class LLVMContractToCol[G](
             }
           case TInt() =>
             bitOp match {
-              case LLVMSpecParserPatterns.And(_) => BitAnd(left, right)
-              case LLVMSpecParserPatterns.Or(_) => BitOr(left, right)
-              case Xor(_) => BitXor(left, right)
+              case LLVMSpecParserPatterns.And(_) =>
+                BitAnd(left, right, 0)(blame(bitOp))
+              case LLVMSpecParserPatterns.Or(_) =>
+                BitOr(left, right, 0)(blame(bitOp))
+              case Xor(_) => BitXor(left, right, 0)(blame(bitOp))
             }
           case other =>
             throw ParseError(

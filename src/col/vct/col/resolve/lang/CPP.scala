@@ -116,7 +116,7 @@ case object CPP {
       case Seq(
             SYCLClassDefName(
               name,
-              Seq(CPPExprOrTypeSpecifier(Some(CIntegerValue(dim)), None)),
+              Seq(CPPExprOrTypeSpecifier(Some(CIntegerValue(dim, _)), None)),
             )
           ) =>
         name match {
@@ -131,7 +131,7 @@ case object CPP {
               name,
               Seq(
                 CPPExprOrTypeSpecifier(None, Some(typ)),
-                CPPExprOrTypeSpecifier(Some(CIntegerValue(dim)), None),
+                CPPExprOrTypeSpecifier(Some(CIntegerValue(dim, _)), None),
               ),
             )
           ) =>
@@ -147,7 +147,7 @@ case object CPP {
               "accessor",
               Seq(
                 CPPExprOrTypeSpecifier(None, Some(typ)),
-                CPPExprOrTypeSpecifier(Some(CIntegerValue(dim)), None),
+                CPPExprOrTypeSpecifier(Some(CIntegerValue(dim, _)), None),
                 CPPExprOrTypeSpecifier(
                   None,
                   Some(SYCLClassDefName(accessMode, Nil)),

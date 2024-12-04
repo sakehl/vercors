@@ -27,7 +27,7 @@ import vct.options.types.{Backend, PathOrStd}
 import vct.parsers.debug.DebugOptions
 import vct.resources.Resources
 import vct.result.VerificationError.SystemError
-import vct.rewrite.adt.ImportSetCompat
+import vct.rewrite.adt.{ImportBitVector, ImportSetCompat}
 import vct.rewrite.{
   DisambiguatePredicateExpression,
   EncodeAssuming,
@@ -461,6 +461,7 @@ case class SilverTransformation(
         EncodeNdIndex,
         ExtractInlineQuantifierPatterns,
         // Translate internal types to domains
+        ImportBitVector.withArg(adtImporter),
         FloatToRat,
         SmtlibToProverTypes,
         EnumToDomain,

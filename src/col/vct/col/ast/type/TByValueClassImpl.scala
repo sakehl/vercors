@@ -7,7 +7,7 @@ import vct.col.typerules.TypeSize
 trait TByValueClassImpl[G] extends TByValueClassOps[G] {
   this: TByValueClass[G] =>
 
-  override def byteSize(): TypeSize = {
+  override def byteSize: TypeSize = {
     val sizes = cls.decl.decls.collect { case field: InstanceField[G] =>
       field.t.byteSize
     }

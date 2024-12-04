@@ -2,7 +2,6 @@ package vct.rewrite.lang
 
 import com.typesafe.scalalogging.LazyLogging
 import hre.util.ScopedStack
-import vct.col.ast.RewriteHelpers._
 import vct.col.ast._
 import vct.col.origin._
 import vct.col.ref.Ref
@@ -14,8 +13,8 @@ import vct.col.rewrite.{
   RewriterBuilderArg,
   RewriterBuilderArg2,
 }
+import vct.col.typerules.TypeSize
 import vct.result.VerificationError.UserError
-import vct.rewrite.lang.LangSpecificToCol.NotAValue
 
 case object LangSpecificToCol extends RewriterBuilderArg[Boolean] {
   override def key: String = "langSpecific"
@@ -30,11 +29,34 @@ case object LangSpecificToCol extends RewriterBuilderArg[Boolean] {
     override def text: String =
       value.o.messageInContext("Could not resolve this expression to a value.")
   }
+
+  private case class IndeterminableBitVectorSize(op: Expr[_])
+      extends UserError {
+    override def code: String = "unknownBVSize"
+    override def text: String =
+      op.o.messageInContext(
+        "Could not determine the size of the bit vector for this bitwise operation"
+      )
+  }
+
+  private case class IncompatibleBitVectorSize(
+      op: Expr[_],
+      l: BigInt,
+      r: BigInt,
+  ) extends UserError {
+    override def code: String = "incompatibleBVSize"
+    override def text: String =
+      op.o.messageInContext(
+        s"The sizes of the operands for this bitwise operation are `$l` and `$r` respectively. Only operations on equal sizes are supported"
+      )
+  }
 }
 
 case class LangSpecificToCol[Pre <: Generation](
     generatePermissions: Boolean = false
 ) extends Rewriter[Pre] with LazyLogging {
+  import LangSpecificToCol._
+
   val java: LangJavaToCol[Pre] = LangJavaToCol(this)
   val bip: LangBipToCol[Pre] = LangBipToCol(this)
   val c: LangCToCol[Pre] = LangCToCol(this)
@@ -395,6 +417,45 @@ case class LangSpecificToCol[Pre <: Generation](
       case trunc: LLVMTruncate[Pre] => llvm.rewriteTruncate(trunc)
       case fpext: LLVMFloatExtend[Pre] => llvm.rewriteFloatExtend(fpext)
 
+      case b @ BitAnd(left, right, 0) =>
+        BitAnd(
+          dispatch(left),
+          dispatch(right),
+          determineBitVectorSize(e, left, right),
+        )(b.blame)(e.o)
+      case b @ BitOr(left, right, 0) =>
+        BitOr(
+          dispatch(left),
+          dispatch(right),
+          determineBitVectorSize(e, left, right),
+        )(b.blame)(e.o)
+      case b @ BitXor(left, right, 0) =>
+        BitXor(
+          dispatch(left),
+          dispatch(right),
+          determineBitVectorSize(e, left, right),
+        )(b.blame)(e.o)
+      case b @ BitShl(left, right, 0) =>
+        BitShl(
+          dispatch(left),
+          dispatch(right),
+          determineBitVectorSize(e, left, right),
+        )(b.blame)(e.o)
+      case b @ BitShr(left, right, 0) =>
+        BitShr(
+          dispatch(left),
+          dispatch(right),
+          determineBitVectorSize(e, left, right),
+        )(b.blame)(e.o)
+      case b @ BitUShr(left, right, 0) =>
+        BitUShr(
+          dispatch(left),
+          dispatch(right),
+          determineBitVectorSize(e, left, right),
+        )(b.blame)(e.o)
+      case b @ BitNot(arg, 0) =>
+        BitNot(dispatch(arg), determineBitVectorSize(e, arg, arg))(b.blame)(e.o)
+
       case other => rewriteDefault(other)
     }
 
@@ -419,4 +480,20 @@ case class LangSpecificToCol[Pre <: Generation](
       case t: CPPTArray[Pre] => cpp.arrayType(t)
       case other => rewriteDefault(other)
     }
+
+  private def determineBitVectorSize(
+      op: Expr[Pre],
+      left: Expr[Pre],
+      right: Expr[Pre],
+  ): Int = {
+    (left.t.byteSize, right.t.byteSize) match {
+      case (TypeSize.Unknown() | TypeSize.Minimally(_), _) =>
+        throw IndeterminableBitVectorSize(op)
+      case (_, TypeSize.Unknown() | TypeSize.Minimally(_)) =>
+        throw IndeterminableBitVectorSize(op)
+      case (TypeSize.Exact(l), TypeSize.Exact(r)) if l == r => l.intValue * 8
+      case (TypeSize.Exact(l), TypeSize.Exact(r)) =>
+        throw IncompatibleBitVectorSize(op, l, r)
+    }
+  }
 }

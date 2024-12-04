@@ -28,8 +28,8 @@
 #define uint_fast32_t int
 #define uint_fast64_t int
 
-#define intptr_t int
-#define uintptr_t int
+#define intptr_t signed long long
+#define uintptr_t unsigned long long
 
 #endif
 

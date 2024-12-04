@@ -119,14 +119,17 @@ abstract class ImportADT[Pre <: Generation](importer: ImportADTImporter)
       .map(succProvider.globalDeclarationsSuccProvider.computeSucc).map(_.get)
   }
 
-  protected def find[T](decls: Seq[Declaration[Post]], name: String)(
-      implicit tag: ClassTag[T]
-  ): T =
+  protected def find[T <: Declaration[Post]](
+      decls: Seq[Declaration[Post]],
+      name: String,
+  )(implicit tag: ClassTag[T]): T = {
     decls.collectFirst {
       case decl: T if decl.o.find[SourceName].contains(SourceName(name)) => decl
     }.get
+  }
 
-  protected def find[T](decls: Declarator[Post], name: String)(
-      implicit tag: ClassTag[T]
-  ): T = find(decls.declarations, name)(tag)
+  protected def find[T <: Declaration[Post]](
+      decls: Declarator[Post],
+      name: String,
+  )(implicit tag: ClassTag[T]): T = find(decls.declarations, name)(tag)
 }

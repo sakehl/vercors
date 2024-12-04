@@ -8,6 +8,6 @@ import vct.col.typerules.TypeSize
 trait TCharImpl[G] extends TCharOps[G] {
   this: TChar[G] =>
   // TODO: Parameterize on target
-  override def byteSize(): TypeSize = TypeSize.Exact(BigInt.int2bigInt(1))
+  override def byteSize: TypeSize = TypeSize.Exact(BigInt.int2bigInt(1))
   override def layout(implicit ctx: Ctx): Doc = Text("char")
 }

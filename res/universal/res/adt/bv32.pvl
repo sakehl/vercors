@@ -1,0 +1,32 @@
+prover_type bv32 \smtlib `(_ BitVec 32)`;
+
+prover_function bv32 bv32_from_int(int x) \smtlib `(_ int2bv 32)`;
+prover_function int bv32_to_int(bv32 x) \smtlib `(_ bv2int 32)`;
+prover_function bv32 bv32_and(bv32 x, bv32 y) \smtlib `bvand`;
+prover_function bv32 bv32_or(bv32 x, bv32 y) \smtlib `bvor`;
+prover_function bv32 bv32_xor(bv32 x, bv32 y) \smtlib `bvxor`;
+prover_function bv32 bv32_shl(bv32 x, bv32 y) \smtlib `bvshl`;
+prover_function bv32 bv32_shr(bv32 x, bv32 y) \smtlib `bvashr`;
+prover_function bv32 bv32_ushr(bv32 x, bv32 y) \smtlib `bvlshr`;
+prover_function bv32 bv32_not(bv32 x) \smtlib `bvnot`;
+
+ensures \result == (0 <= x && x <= 4294967295);
+ensures \result == (x == bv32_to_int(bv32_from_int(x)));
+pure boolean u32_is_inbounds(int x);
+
+ensures \polarity_dependent(u32_is_inbounds(x), true);
+pure boolean u32_assume_inbounds(int x) = true;
+
+requires u32_is_inbounds(x);
+pure int u32_require_inbounds(int x) = x;
+
+ensures \result == (-2147483648 <= x && x <= 2147483647);
+ensures \result == (x == bv32_to_int(bv32_from_int(x)));
+pure boolean s32_is_inbounds(int x);
+
+ensures \polarity_dependent(s32_is_inbounds(x), true);
+pure boolean s32_assume_inbounds(int x) = true;
+
+requires s32_is_inbounds(x);
+pure int s32_require_inbounds(int x) = x;
+

@@ -52,7 +52,7 @@ case class CFloatIntCoercion[Pre <: Generation]()
 
   override def postCoerce(e: Expr[Pre]): Expr[Post] =
     e match {
-      case CIntegerValue(v) => IntegerValue(v)(e.o)
+      case CIntegerValue(v, _) => IntegerValue(v)(e.o)
       case other => rewriteDefault(other)
     }
 }

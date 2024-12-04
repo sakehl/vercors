@@ -1,0 +1,32 @@
+prover_type bv64 \smtlib `(_ BitVec 64)`;
+
+prover_function bv64 bv64_from_int(int x) \smtlib `(_ int2bv 64)`;
+prover_function int bv64_to_int(bv64 x) \smtlib `(_ bv2int 64)`;
+prover_function bv64 bv64_and(bv64 x, bv64 y) \smtlib `bvand`;
+prover_function bv64 bv64_or(bv64 x, bv64 y) \smtlib `bvor`;
+prover_function bv64 bv64_xor(bv64 x, bv64 y) \smtlib `bvxor`;
+prover_function bv64 bv64_shl(bv64 x, bv64 y) \smtlib `bvshl`;
+prover_function bv64 bv64_shr(bv64 x, bv64 y) \smtlib `bvashr`;
+prover_function bv64 bv64_ushr(bv64 x, bv64 y) \smtlib `bvlshr`;
+prover_function bv64 bv64_not(bv64 x) \smtlib `bvnot`;
+
+ensures \result == (0 <= x && x <= 18446744073709551615);
+ensures \result == (x == bv64_to_int(bv64_from_int(x)));
+pure boolean u64_is_inbounds(int x);
+
+ensures \polarity_dependent(u64_is_inbounds(x), true);
+pure boolean u64_assume_inbounds(int x) = true;
+
+requires u64_is_inbounds(x);
+pure int u64_require_inbounds(int x) = x;
+
+ensures \result == (-9223372036854775808 <= x && x <= 9223372036854775807);
+ensures \result == (x == bv64_to_int(bv64_from_int(x)));
+pure boolean s64_is_inbounds(int x);
+
+ensures \polarity_dependent(s64_is_inbounds(x), true);
+pure boolean s64_assume_inbounds(int x) = true;
+
+requires s64_is_inbounds(x);
+pure int s64_require_inbounds(int x) = x;
+

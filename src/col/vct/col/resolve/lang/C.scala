@@ -7,7 +7,7 @@ import vct.col.ast.util.ExpressionEqualityCheck.isConstantInt
 import vct.col.origin._
 import vct.col.resolve._
 import vct.col.resolve.ctx._
-import vct.col.typerules.Types
+import vct.col.typerules.{TypeSize, Types}
 import vct.result.VerificationError.UserError
 
 case object C {
@@ -31,12 +31,28 @@ case object C {
 
   val INTEGER_LIKE_TYPES: Seq[Seq[CDeclarationSpecifier[_]]] = Seq(
     Seq(CShort()),
+    Seq(CSigned(), CShort()),
+    Seq(CUnsigned(), CShort()),
     Seq(CShort(), CInt()),
+    Seq(CSigned(), CShort(), CInt()),
+    Seq(CUnsigned(), CShort(), CInt()),
     Seq(CInt()),
+    Seq(CSigned()),
+    Seq(CUnsigned()),
+    Seq(CSigned(), CInt()),
+    Seq(CUnsigned(), CInt()),
     Seq(CLong()),
+    Seq(CSigned(), CLong()),
+    Seq(CUnsigned(), CLong()),
     Seq(CLong(), CInt()),
+    Seq(CSigned(), CLong(), CInt()),
+    Seq(CUnsigned(), CLong(), CInt()),
     Seq(CLong(), CLong()),
+    Seq(CSigned(), CLong(), CLong()),
+    Seq(CUnsigned(), CLong(), CLong()),
     Seq(CLong(), CLong(), CInt()),
+    Seq(CSigned(), CLong(), CLong(), CInt()),
+    Seq(CUnsigned(), CLong(), CLong(), CInt()),
   )
 
   // See here for more discussion https://github.com/utwente-fmt/vercors/discussions/1018#discussioncomment-5966388
@@ -45,20 +61,68 @@ case object C {
   case object LP64 extends DataModel
   case object LLP64 extends DataModel
 
-  def INT_TYPE_TO_SIZE(dm: DataModel): Map[Seq[CDeclarationSpecifier[_]], Int] =
+  def INT_TYPE_TO_SIZE(
+      dm: DataModel
+  ): Map[Seq[CDeclarationSpecifier[_]], Int] = {
+    val longSize =
+      (if (dm == LP64)
+         64
+       else
+         32)
     Map(
       (Seq(CShort()) -> 16),
+      (Seq(CSigned(), CShort()) -> 16),
+      (Seq(CUnsigned(), CShort()) -> 16),
       (Seq(CShort(), CInt()) -> 16),
+      (Seq(CSigned(), CShort(), CInt()) -> 16),
+      (Seq(CUnsigned(), CShort(), CInt()) -> 16),
       (Seq(CInt()) -> 32),
-      (Seq(CLong()) -> 64),
-      (Seq(CLong(), CInt()) ->
-        (if (dm == LP64)
-           64
-         else
-           32)),
+      (Seq(CSigned()) -> 32),
+      (Seq(CUnsigned()) -> 32),
+      (Seq(CSigned(), CInt()) -> 32),
+      (Seq(CUnsigned(), CInt()) -> 32),
+      (Seq(CLong()) -> longSize),
+      (Seq(CSigned(), CLong()) -> longSize),
+      (Seq(CUnsigned(), CLong()) -> longSize),
+      (Seq(CLong(), CInt()) -> longSize),
+      (Seq(CSigned(), CLong(), CInt()) -> longSize),
+      (Seq(CUnsigned(), CLong(), CInt()) -> longSize),
       (Seq(CLong(), CLong()) -> 64),
+      (Seq(CSigned(), CLong(), CLong()) -> 64),
+      (Seq(CUnsigned(), CLong(), CLong()) -> 64),
       (Seq(CLong(), CLong(), CInt()) -> 64),
+      (Seq(CSigned(), CLong(), CLong(), CInt()) -> 64),
+      (Seq(CUnsigned(), CLong(), CLong(), CInt()) -> 64),
     )
+  }
+
+  def getIntSize(
+      dm: DataModel,
+      specs: Seq[CDeclarationSpecifier[_]],
+  ): Option[Int] = {
+    specs.collectFirst { case CSpecificationType(t) => t.byteSize }.collect {
+      case TypeSize.Exact(size) => size.intValue * 8
+    }.orElse(INT_TYPE_TO_SIZE(dm).get(specs.flatMap(_ match {
+      // Inline/Pure
+      case _: CSpecificationModifier[_] => Nil
+      // Extern/static/typedef/...
+      case _: CStorageClassSpecifier[_] => Nil
+      // Actual types
+      case specifier: CTypeSpecifier[_] =>
+        specifier match {
+          case CVoid() | CChar() | CShort() | CInt() | CLong() | CFloat() |
+              CDouble() | CSigned() | CUnsigned() | CBool() |
+              CTypedefName(_) | CFunctionTypeExtensionModifier(_) |
+              CStructDeclaration(_, _) | CStructSpecifier(_) =>
+            Seq(specifier)
+        }
+      // Const/restrict/volatile/...
+      case CTypeQualifierDeclarationSpecifier(_) => Nil
+      case _: CFunctionSpecifier[_] => Nil
+      case _: CAlignmentSpecifier[_] => Nil
+      case _: CGpgpuKernelSpecifier[_] => Nil
+    })))
+  }
 
   case class DeclaratorInfo[G](
       params: Option[Seq[CParam[G]]],
@@ -172,9 +236,11 @@ case object C {
       filteredSpecs match {
         case Seq(CVoid()) => TVoid()
         case Seq(CChar()) => TChar()
-        case CUnsigned() +: t if INTEGER_LIKE_TYPES.contains(t) => TCInt()
-        case CSigned() +: t if INTEGER_LIKE_TYPES.contains(t) => TCInt()
-        case t if C.INTEGER_LIKE_TYPES.contains(t) => TCInt()
+        case Seq(CUnsigned(), CChar()) => TChar()
+        case t if C.INTEGER_LIKE_TYPES.contains(t) =>
+          val cint = TCInt[G]()
+          cint.bits = getIntSize(LP64, specs).getOrElse(0)
+          cint
         case Seq(CFloat()) => C_ieee754_32bit()
         case Seq(CDouble()) => C_ieee754_64bit()
         case Seq(CLong(), CDouble()) => C_ieee754_64bit()

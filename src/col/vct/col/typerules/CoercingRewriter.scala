@@ -1164,13 +1164,19 @@ abstract class CoercingRewriter[Pre <: Generation]()
         )
       case bgi @ BipGuardInvocation(obj, ref) =>
         BipGuardInvocation(cls(obj), ref)
-      case BitAnd(left, right) => BitAnd(int(left), int(right))
-      case BitNot(arg) => BitNot(int(arg))
-      case BitOr(left, right) => BitOr(int(left), int(right))
-      case BitShl(left, right) => BitShl(int(left), int(right))
-      case BitShr(left, right) => BitShr(int(left), int(right))
-      case BitUShr(left, right) => BitUShr(int(left), int(right))
-      case BitXor(left, right) => BitXor(int(left), int(right))
+      case op @ BitAnd(left, right, bits) =>
+        BitAnd(int(left), int(right), bits)(op.blame)
+      case op @ BitNot(arg, bits) => BitNot(int(arg), bits)(op.blame)
+      case op @ BitOr(left, right, bits) =>
+        BitOr(int(left), int(right), bits)(op.blame)
+      case op @ BitShl(left, right, bits) =>
+        BitShl(int(left), int(right), bits)(op.blame)
+      case op @ BitShr(left, right, bits) =>
+        BitShr(int(left), int(right), bits)(op.blame)
+      case op @ BitUShr(left, right, bits) =>
+        BitUShr(int(left), int(right), bits)(op.blame)
+      case op @ BitXor(left, right, bits) =>
+        BitXor(int(left), int(right), bits)(op.blame)
       case Cast(value, typeValue) => Cast(value, typeValue)
       case CastFloat(e, t) =>
         firstOk(

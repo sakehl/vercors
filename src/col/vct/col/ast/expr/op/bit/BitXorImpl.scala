@@ -6,7 +6,7 @@ import vct.col.ast.ops.BitXorOps
 
 trait BitXorImpl[G] extends BitXorOps[G] {
   this: BitXor[G] =>
-  override def t: Type[G] = getIntType
+  override def t: Type[G] = getNumericType
 
   override def precedence: Int = Precedence.BIT_XOR
   override def layout(implicit ctx: Ctx): Doc = lassoc(left, "^", right)

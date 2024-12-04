@@ -9,7 +9,7 @@ trait TPointerImpl[G] extends TPointerOps[G] {
   this: TPointer[G] =>
 
   // TODO: Parameterize on target
-  override def byteSize(): TypeSize = TypeSize.Exact(BigInt.int2bigInt(8))
+  override def byteSize: TypeSize = TypeSize.Exact(BigInt.int2bigInt(8))
 
   override def layoutSplitDeclarator(implicit ctx: Ctx): (Doc, Doc) = {
     val (spec, decl) = element.layoutSplitDeclarator

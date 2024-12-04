@@ -2109,7 +2109,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   )(implicit o: Origin): IterVariable[Post] = {
     val variable =
       new Variable[Post](TCInt())(o.where(name = s"${scope.idName}_$dimension"))
-    new IterVariable[Post](variable, CIntegerValue(0), maxRange)
+    new IterVariable[Post](variable, c_const(0), maxRange)
   }
 
   // Used for generation the contract for the method wrapping the parblocks

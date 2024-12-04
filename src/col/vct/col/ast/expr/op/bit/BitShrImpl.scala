@@ -6,7 +6,7 @@ import vct.col.ast.ops.BitShrOps
 
 trait BitShrImpl[G] extends BitShrOps[G] {
   this: BitShr[G] =>
-  override def t: Type[G] = getIntType
+  override def t: Type[G] = getNumericType
 
   override def precedence: Int = Precedence.SHIFT
   override def layout(implicit ctx: Ctx): Doc = lassoc(left, ">>", right)

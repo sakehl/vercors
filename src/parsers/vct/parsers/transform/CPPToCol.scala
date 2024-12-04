@@ -470,21 +470,21 @@ case class CPPToCol[G](
     expr match {
       case InclusiveOrExpression0(inner) => convert(inner)
       case InclusiveOrExpression1(left, _, right) =>
-        BitOr(convert(left), convert(right))
+        BitOr(convert(left), convert(right), 0)(blame(expr))
     }
 
   def convert(implicit expr: ExclusiveOrExpressionContext): Expr[G] =
     expr match {
       case ExclusiveOrExpression0(inner) => convert(inner)
       case ExclusiveOrExpression1(left, _, right) =>
-        BitXor(convert(left), convert(right))
+        BitXor(convert(left), convert(right), 0)(blame(expr))
     }
 
   def convert(implicit expr: AndExpressionContext): Expr[G] =
     expr match {
       case AndExpression0(inner) => convert(inner)
       case AndExpression1(left, _, right) =>
-        BitAnd(convert(left), convert(right))
+        BitAnd(convert(left), convert(right), 0)(blame(expr))
     }
 
   def convert(implicit expr: EqualityExpressionContext): Expr[G] =
@@ -514,9 +514,9 @@ case class CPPToCol[G](
     expr match {
       case ShiftExpression0(inner) => convert(inner)
       case ShiftExpression1(left, _, _, right) =>
-        BitShl(convert(left), convert(right))
+        BitShl(convert(left), convert(right), 0)(blame(expr))
       case ShiftExpression2(left, _, _, right) =>
-        BitShr(convert(left), convert(right))
+        BitShr(convert(left), convert(right), 0)(blame(expr))
     }
 
   def convert(implicit expr: AdditiveExpressionContext): Expr[G] =
@@ -759,9 +759,11 @@ case class CPPToCol[G](
     } catch { case _: NumberFormatException => None }
   }
 
-  def parseInt(i: String)(implicit o: Origin): Option[Expr[G]] =
-    try { Some(CIntegerValue(BigInt(i))) }
+  def parseInt(i: String)(implicit o: Origin): Option[Expr[G]] = {
+    // TODO: Proper integer parsing and typing
+    try { Some(CIntegerValue(BigInt(i), CPrimitiveType(Seq(CInt())))) }
     catch { case _: NumberFormatException => None }
+  }
 
   private def parseChar(value: String)(implicit o: Origin): Option[Expr[G]] = {
     val fixedValue = fixEscapeAndUnicodeChars(value)
