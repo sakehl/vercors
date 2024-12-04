@@ -8,6 +8,12 @@ import vct.col.ref.{DirectRef, Ref}
 import vct.col.rewrite.Rewritten
 import vct.result.VerificationError.{Unreachable, UserError}
 
+import scala.language.implicitConversions
+
+object Conversions {
+
+}
+
 /** Collection of general AST building utilities. This is meant to organically
   * grow, so add helpers as you see fit.
   */
@@ -49,6 +55,8 @@ object AstBuildHelpers {
     def +(right: Expr[G])(implicit origin: Origin): Plus[G] = Plus(left, right)
     def -(right: Expr[G])(implicit origin: Origin): Minus[G] =
       Minus(left, right)
+    def unary_-(implicit origin: Origin): UMinus[G] =
+      UMinus(left)
     def *(right: Expr[G])(implicit origin: Origin): Mult[G] = Mult(left, right)
     def /(
         right: Expr[G]
