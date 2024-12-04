@@ -418,7 +418,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   private def getPallasSpecRetArg(
       wFunc: LLVMFunctionDefinition[Pre]
   ): Option[Variable[Post]] = {
-    if (!wFunc.needsWrapperResultArg) { None }
+    if (!wFunc.needsWrapperResultArg) { return None }
     wFunc.pallasExprWrapperFor match {
       case Some(pFunc) =>
         Some(
