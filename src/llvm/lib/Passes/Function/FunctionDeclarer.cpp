@@ -1,9 +1,11 @@
 #include "Passes/Function/FunctionDeclarer.h"
+#include "Passes/Function/ExprWrapperMapper.h"
 
 #include "Origin/OriginProvider.h"
 #include "Passes/Module/RootContainer.h"
 #include "Transform/Transform.h"
 #include "Util/Exceptions.h"
+#include "Util/PallasMD.h"
 
 namespace pallas {
 const std::string SOURCE_LOC = "Passes::Function::FunctionDeclarer";
@@ -110,6 +112,20 @@ FDResult FunctionDeclarer::run(Function &F, FunctionAnalysisManager &FAM) {
         pallas::ErrorReporter::addError(SOURCE_LOC, errorStream.str(), F);
     }
 
+    llvmFuncDef->set_needs_wrapper_result_arg(false);
+    if (utils::isPallasExprWrapper(F)) {
+        auto mapperResult = FAM.getResult<pallas::ExprWrapperMapper>(F);
+        auto *wrapperParent =
+            mapperResult.getParentFunc();
+
+        auto colParent = FAM.getResult<FunctionDeclarer>(*wrapperParent);
+        llvmFuncDef->mutable_pallas_expr_wrapper_for()->set_id(
+            colParent.getFunctionId());
+        if (mapperResult.getContext() == PallasWrapperContext::FuncContractPost) {
+            llvmFuncDef->set_needs_wrapper_result_arg(true);
+        }
+    }
+
     if (F.isDeclaration()) {
         // Defined outside of this module so we don't know if it's pure or what
         // its contract is
@@ -130,6 +146,10 @@ FDResult FunctionDeclarer::run(Function &F, FunctionAnalysisManager &FAM) {
  */
 PreservedAnalyses FunctionDeclarerPass::run(Function &F,
                                             FunctionAnalysisManager &FAM) {
+
+    // TODO: Check if the function is part of the spec-lib library.
+    // If so, skip it.
+
     FDResult result = FAM.getResult<FunctionDeclarer>(F);
     // Just makes sure we analyse every function
     return PreservedAnalyses::all();

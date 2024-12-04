@@ -1,3 +1,5 @@
+
+#include "Passes/Function/ExprWrapperMapper.h"
 #include "Passes/Function/FunctionBodyTransformer.h"
 #include "Passes/Function/FunctionContractDeclarer.h"
 #include "Passes/Function/FunctionDeclarer.h"
@@ -27,6 +29,8 @@ llvm::PassPluginLibraryInfo getPallasPluginInfo() {
                             [&] { return pallas::FunctionDeclarer(); });
                         FAM.registerPass(
                             [&] { return pallas::FunctionContractDeclarer(); });
+                        FAM.registerPass(
+                            [&] { return pallas::ExprWrapperMapper(); });
                     });
                 PB.registerPipelineParsingCallback(
                     [](StringRef Name, llvm::ModulePassManager &MPM,

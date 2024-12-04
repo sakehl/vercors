@@ -1,13 +1,16 @@
 package vct.rewrite.lang
 
 import com.typesafe.scalalogging.LazyLogging
-import vct.col.ast._
+import hre.util.ScopedStack
+import vct.col.ast.{Expr, _}
 import vct.col.origin.{
   AssertFailed,
   Blame,
   DiagnosticOrigin,
+  LabelContext,
   Origin,
   PanicBlame,
+  PreferredName,
   TypeName,
   UnreachableReachedError,
 }
@@ -76,6 +79,10 @@ case object LangLLVMToCol {
     override def blame(error: AssertFailed): Unit =
       unreachable.blame.blame(UnreachableReachedError(unreachable))
   }
+
+  val pallasResArgOrigin: Origin = Origin(
+    Seq(PreferredName(Seq("resArg")), LabelContext("result arg"))
+  )
 }
 
 case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
@@ -107,6 +114,10 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   private val loopBlocks: mutable.ArrayBuffer[LLVMBasicBlock[Pre]] = mutable
     .ArrayBuffer()
   private val elidedBackEdges: mutable.Set[LabelDecl[Pre]] = mutable.Set()
+
+  // If the LLVM-function that is currently being transformed,
+  // this contains the argument that is used to pass the value of \result
+  private val wrapperRetArg: ScopedStack[Option[Variable[Post]]] = ScopedStack()
 
   def gatherBackEdges(program: Program[Pre]): Unit = {
     program.collect { case loop: LLVMLoop[Pre] =>
@@ -362,6 +373,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       val newArgs = func.importedArguments.getOrElse(func.args).map { it =>
         it.rewriteDefault()
       }
+      val retArg = getPallasSpecRetArg(func)
       rw.globalDeclarations.declare(
         new Procedure[Post](
           returnType = rw
@@ -371,20 +383,22 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               func.args.zip(newArgs).foreach { case (a, b) =>
                 rw.variables.succeed(a, b)
               }
-            }._1,
+            }._1 ++ retArg,
           outArgs = Nil,
           typeArgs = Nil,
           body =
-            func.functionBody match {
-              case None => None
-              case Some(functionBody) =>
-                if (func.pure)
-                  Some(GotoEliminator(functionBody match {
-                    case scope: Scope[Pre] => scope;
-                    case other => throw UnexpectedLLVMNode(other)
-                  }).eliminate())
-                else
-                  Some(rw.dispatch(functionBody))
+            wrapperRetArg.having(retArg) {
+              func.functionBody match {
+                case None => None
+                case Some(functionBody) =>
+                  if (func.pure)
+                    Some(GotoEliminator(functionBody match {
+                      case scope: Scope[Pre] => scope;
+                      case other => throw UnexpectedLLVMNode(other)
+                    }).eliminate())
+                  else
+                    Some(rw.dispatch(functionBody))
+              }
             },
           contract =
             func.contract match {
@@ -396,8 +410,23 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           pure = func.pure,
         )(func.blame)
       )
+
     }
     llvmFunctionMap.update(func, procedure)
+  }
+
+  private def getPallasSpecRetArg(
+      wFunc: LLVMFunctionDefinition[Pre]
+  ): Option[Variable[Post]] = {
+    if (!wFunc.needsWrapperResultArg) { None }
+    wFunc.pallasExprWrapperFor match {
+      case Some(pFunc) =>
+        Some(
+          new Variable(pFunc.decl.returnType)(pallasResArgOrigin)
+            .rewriteDefault()
+        )
+      case None => None
+    }
   }
 
   def rewriteAmbiguousFunctionInvocation(
@@ -438,19 +467,23 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       inv: LLVMFunctionInvocation[Pre]
   ): ProcedureInvocation[Post] = {
     implicit val o: Origin = inv.o
+
     new ProcedureInvocation[Post](
       ref = new LazyRef[Post, Procedure[Post]](llvmFunctionMap(inv.ref.decl)),
-      args = inv.args.zipWithIndex.map {
-        // TODO: This is really ugly, can we do the type inference in the resolve step and then do coercions to do this?
-        case (a, i) =>
-          val requiredType = localVariableInferredType
-            .getOrElse(inv.ref.decl.args(i), inv.ref.decl.args(i).t)
-          if (
-            a.t != requiredType && a.t.asPointer.isDefined &&
-            requiredType.asPointer.isDefined
-          ) { Cast(a, TypeValue(requiredType)) }
-          else { a }
-      }.map(rw.dispatch),
+      args = extendWithPallasSpecArgs(
+        inv,
+        inv.args.zipWithIndex.map {
+          // TODO: This is really ugly, can we do the type inference in the resolve step and then do coercions to do this?
+          case (a, i) =>
+            val requiredType = localVariableInferredType
+              .getOrElse(inv.ref.decl.args(i), inv.ref.decl.args(i).t)
+            if (
+              a.t != requiredType && a.t.asPointer.isDefined &&
+              requiredType.asPointer.isDefined
+            ) { Cast(a, TypeValue(requiredType)) }
+            else { a }
+        }.map(rw.dispatch),
+      ),
       givenMap = inv.givenMap.map { case (Ref(v), e) =>
         (rw.succ(v), rw.dispatch(e))
       },
@@ -460,6 +493,29 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       outArgs = Seq.empty,
       typeArgs = Seq.empty,
     )(inv.blame)
+  }
+
+  /** If the given invocation invokes a wrapper-function for a Pallas
+    * specification, the list of passed arguments is extended to pass the value
+    * of \result into the wrapper-function.
+    */
+  private def extendWithPallasSpecArgs(
+      inv: LLVMFunctionInvocation[Pre],
+      args: Seq[Expr[Post]],
+  ): Seq[Expr[Post]] = {
+    val wFunc = inv.ref.decl
+    wFunc.pallasExprWrapperFor match {
+      case Some(pFunc) =>
+        var newArgs = args
+        if (wFunc.needsWrapperResultArg) {
+          newArgs =
+            newArgs :+ new Result[Post](llvmFunctionMap.ref(pFunc.decl))(
+              pallasResArgOrigin
+            )
+        }
+        newArgs
+      case None => args
+    }
   }
 
   def rewriteGlobal(decl: LLVMGlobalSpecification[Pre]): Unit = {
@@ -903,6 +959,15 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         pointer.value.decl.asInstanceOf[LLVMGlobalVariable[Pre]]
       ))(pointer.o)
     )
+  }
+
+  def rewriteResult(res: LLVMResult[Pre]): Local[Post] = {
+    implicit val o: Origin = res.o
+    if (wrapperRetArg.isEmpty || wrapperRetArg.top.isEmpty) {
+      throw UnexpectedLLVMNode(res)
+    }
+    new Local[Post](ref = wrapperRetArg.top.get.ref)
+    // new Result[Post](applicable = llvmFunctionMap.ref(res.func.decl))
   }
 
   def result(ref: RefLLVMFunctionDefinition[Pre])(

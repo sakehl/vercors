@@ -38,6 +38,25 @@ void transformFCmp(llvm::FCmpInst &fcmpInstruction, col::Block &colBlock,
                    pallas::FunctionCursor &funcCursor);
 
 bool checkCallSupport(llvm::CallInst &callInstruction);
+
+/**
+ * Transforms a call to a function form the Pallas specification library to the
+ * appropriate specification construct.
+ */
+void transformPallasSpecLibCall(llvm::CallInst &callInstruction,
+                                col::Block &colBlock,
+                                pallas::FunctionCursor &funcCursor);
+
+/**
+ * Transform the given call-instruction to the result-function of the pallas
+ * specification library.
+ * Assumes that the provided function-call is indeed a call to a result-function
+ * of the pallas specification library.
+ */
+void transformPallasSpecResult(llvm::CallInst &callInstruction,
+                               col::Block &colBlock,
+                               pallas::FunctionCursor &funcCursor);
+
 } // namespace llvm2col
 
 #endif // PALLAS_OTHEROPTRANSFORM_H

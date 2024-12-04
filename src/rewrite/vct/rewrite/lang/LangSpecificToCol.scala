@@ -394,7 +394,7 @@ case class LangSpecificToCol[Pre <: Generation](
       case zext: LLVMZeroExtend[Pre] => llvm.rewriteZeroExtend(zext)
       case trunc: LLVMTruncate[Pre] => llvm.rewriteTruncate(trunc)
       case fpext: LLVMFloatExtend[Pre] => llvm.rewriteFloatExtend(fpext)
-
+      case result: LLVMResult[Pre] => llvm.rewriteResult(result)
       case other => rewriteDefault(other)
     }
 

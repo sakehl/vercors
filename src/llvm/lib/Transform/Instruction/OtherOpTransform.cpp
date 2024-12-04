@@ -1,9 +1,16 @@
 #include "Transform/Instruction/OtherOpTransform.h"
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/FMF.h>
+#include <llvm/IR/Instruction.h>
+#include <llvm/IR/Metadata.h>
+#include <llvm/IR/Module.h>
 
+#include "Passes/Function/ExprWrapperMapper.h"
 #include "Transform/BlockTransform.h"
 #include "Transform/Transform.h"
+#include "Util/Constants.h"
 #include "Util/Exceptions.h"
+#include "Util/PallasMD.h"
 
 const std::string SOURCE_LOC = "Transform::Instruction::OtherOp";
 
@@ -250,6 +257,14 @@ void llvm2col::transformCallExpr(llvm::CallInst &callInstruction,
         // TODO: Deal with intrinsic functions
         return;
     }
+
+    // If it is a call to a function from the pallas specification library,
+    // we transform it into the appropriate col-node.
+    if (pallas::utils::isPallasSpecLib(*callInstruction.getCalledFunction())) {
+        transformPallasSpecLibCall(callInstruction, colBlock, funcCursor);
+        return;
+    }
+
     // allocate expression to host the function call in advance
     col::Expr *functionCallExpr;
     // if void function add an eval expression
@@ -279,4 +294,72 @@ void llvm2col::transformCallExpr(llvm::CallInst &callInstruction,
         llvm2col::transformAndSetExpr(funcCursor, callInstruction, *A,
                                       *invocation->add_args());
     }
+}
+
+void llvm2col::transformPallasSpecLibCall(llvm::CallInst &callInstruction,
+                                          col::Block &colBlock,
+                                          pallas::FunctionCursor &funcCursor) {
+    auto specLibType =
+        pallas::utils::isPallasSpecLib(*callInstruction.getCalledFunction())
+            .value();
+
+    if (specLibType == pallas::constants::PALLAS_SPEC_RESULT) {
+        transformPallasSpecResult(callInstruction, colBlock, funcCursor);
+    } else {
+        pallas::ErrorReporter::addError(
+            SOURCE_LOC, "Unsupported Pallas specification function",
+            callInstruction);
+    }
+}
+
+void llvm2col::transformPallasSpecResult(llvm::CallInst &callInstruction,
+                                         col::Block &colBlock,
+                                         pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    bool isRegularReturn = !llvmSpecFunc->getReturnType()->isVoidTy();
+
+    // Get the function to whose contract this call instuction belongs to.
+    auto *wrapperFunc = callInstruction.getFunction();
+    auto *llvmParentFunc = funcCursor.getFunctionAnalysisManager()
+                              .getResult<pallas::ExprWrapperMapper>(*wrapperFunc)
+                              .getParentFunc();
+    if (llvmParentFunc == nullptr) {
+        pallas::ErrorReporter::addError(
+            SOURCE_LOC,
+            "Encountered call to spec-lib that cannot be associated "
+            "with a function",
+            callInstruction);
+        return;
+    }
+    auto &colParentFunc = funcCursor.getFDResult(*llvmParentFunc);
+
+    if (isRegularReturn) {
+        // Case 1: Result is returned as regular return-value
+        // %2 = call i32 @pallas.result.0()
+
+        // Check that the function signature is wellformed
+        if (!llvmSpecFunc->arg_empty()) {
+            pallas::ErrorReporter::addError(
+                SOURCE_LOC, "Malformed pallas spec-lib result-function",
+                callInstruction);
+        }
+
+        // Build the assignment-expression
+        col::Assign &assignment = funcCursor.createAssignmentAndDeclaration(
+            callInstruction, colBlock);
+        auto *assignExpr = assignment.mutable_value();
+        auto *resultNode = assignExpr->mutable_llvm_result();
+        resultNode->set_allocated_origin(
+            llvm2col::generateFunctionCallOrigin(callInstruction));
+        // Set ref to the function to which this contract is attached to
+        resultNode->mutable_func()->set_id(colParentFunc.getFunctionId());
+
+    } else {
+        // Case 2: Result is returned as a sret parameter
+        // Implement & and add example!
+        pallas::ErrorReporter::addError(SOURCE_LOC, "Unsupported",
+                                        callInstruction);
+    }
+
+    // TODO: Handle cases, where the result is returned in other ways
 }

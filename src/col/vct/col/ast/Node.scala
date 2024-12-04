@@ -3524,6 +3524,12 @@ final class LLVMFunctionDefinition[G](
     val functionBody: Option[Statement[G]],
     val contract: LLVMFunctionContract[G],
     val pure: Boolean = false,
+    // If this function is a wrapper function for an expression of a
+    // pallas specification of a function F, then this field references F.
+    val pallasExprWrapperFor: Option[Ref[G, LLVMFunctionDefinition[G]]],
+    // Indicates that a new argument has to be added to pass the value for \result
+    // to the expression-wrapper.
+    val needsWrapperResultArg: Boolean = false,
 )(val blame: Blame[CallableFailure])(implicit val o: Origin)
     extends LLVMCallable[G]
     with Applicable[G]
@@ -3663,6 +3669,11 @@ final class LLVMGlobalSpecification[G](val value: String)(
 ) extends GlobalDeclaration[G] with LLVMGlobalSpecificationImpl[G] {
   var data: Option[Seq[GlobalDeclaration[G]]] = None
 }
+
+// Node that represents the \result-construct in a Pallas contract.
+final case class LLVMResult[G](func: Ref[G, LLVMFunctionDefinition[G]])(
+    implicit val o: Origin
+) extends LLVMExpr[G] with LLVMResultImpl[G]
 
 @family
 sealed trait LLVMMemoryOrdering[G]

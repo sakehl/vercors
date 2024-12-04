@@ -5,6 +5,7 @@
 #include "Passes/Function/FunctionDeclarer.h"
 #include "Util/Constants.h"
 #include "Util/Exceptions.h"
+#include "Util/PallasMD.h"
 
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/Argument.h>
@@ -30,9 +31,10 @@ PallasFunctionContractDeclarerPass::run(Function &f,
         return PreservedAnalyses::all();
     // Skip, if f has a non-empty vcllvm-contract, or no contract at all
     // If it does not have a contract, we need an empty VCLLVM contract instead
-    // of an empty Pallas contract. Otherwise the mechanism for loading 
-    // contracts from a PVL-file does not get invoked. 
-    if (hasVcllvmContract(f) || !hasPallasContract(f))
+    // of an empty Pallas contract. Otherwise the mechanism for loading
+    // contracts from a PVL-file does not get invoked.
+    if (pallas::utils::hasVcllvmContract(f) ||
+        !pallas::utils::hasPallasContract(f))
         return PreservedAnalyses::all();
 
     // Setup a fresh Pallas-contract
@@ -357,21 +359,14 @@ void PallasFunctionContractDeclarerPass::extendPredicate(
 }
 
 bool PallasFunctionContractDeclarerPass::hasConflictingContract(Function &f) {
-    bool conflict = hasPallasContract(f) && hasVcllvmContract(f);
+    bool conflict = pallas::utils::hasPallasContract(f) &&
+                    pallas::utils::hasVcllvmContract(f);
     if (conflict) {
         pallas::ErrorReporter::addError(
             SOURCE_LOC,
             "The function has both, a vcllvm and a pallas contract.", f);
     }
     return conflict;
-}
-
-bool PallasFunctionContractDeclarerPass::hasPallasContract(const Function &f) {
-    return f.hasMetadata(pallas::constants::PALLAS_FUNC_CONTRACT);
-}
-
-bool PallasFunctionContractDeclarerPass::hasVcllvmContract(const Function &f) {
-    return f.hasMetadata(pallas::constants::METADATA_CONTRACT_KEYWORD);
 }
 
 bool PallasFunctionContractDeclarerPass::isWellformedPallasLocation(

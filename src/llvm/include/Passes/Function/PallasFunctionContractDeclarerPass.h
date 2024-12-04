@@ -109,18 +109,6 @@ class PallasFunctionContractDeclarerPass
     bool hasConflictingContract(Function &f);
 
     /**
-     * Checks if the given function has a metadata-node that is labeled as a
-     * Pallas function contract.
-     */
-    bool hasPallasContract(const Function &f);
-
-    /**
-     * Checks if the given function has a metadata-node that is labeled as a
-     * VCLLVM contract.
-     */
-    bool hasVcllvmContract(const Function &f);
-
-    /**
      * Checks if the given metadata-node is a wellformed encoding of a
      * pallas source-location.
      */

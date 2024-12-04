@@ -2147,6 +2147,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case LLVMVectorValue(_, _) => e
       case LLVMRawVectorValue(_, _) => e
       case LLVMZeroedAggregateValue(_) => e
+      case LLVMResult(_) => e
       case PVLEndpointExpr(_, _) => e
       case EndpointExpr(ref, expr) => e
       case ChorExpr(expr) => ChorExpr(bool(expr))
