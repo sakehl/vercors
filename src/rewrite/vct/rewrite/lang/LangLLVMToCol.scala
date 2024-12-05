@@ -115,9 +115,14 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     .ArrayBuffer()
   private val elidedBackEdges: mutable.Set[LabelDecl[Pre]] = mutable.Set()
 
-  // If the LLVM-function that is currently being transformed,
+  // If the LLVM-function that is currently being transformed is a wrapper-function,
   // this contains the argument that is used to pass the value of \result
   private val wrapperRetArg: ScopedStack[Option[Variable[Post]]] = ScopedStack()
+
+  // If the LLVM-function that is currently being transformed returns its result in
+  // an argument, this contains the variable that contains the result.
+  private val contractRetArg: ScopedStack[Option[Ref[Post, Variable[Post]]]] =
+    ScopedStack()
 
   def gatherBackEdges(program: Program[Pre]): Unit = {
     program.collect { case loop: LLVMLoop[Pre] =>
@@ -373,21 +378,29 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       val newArgs = func.importedArguments.getOrElse(func.args).map { it =>
         it.rewriteDefault()
       }
-      val retArg = getPallasSpecRetArg(func)
+      // if func is a pallas wrapper, this is the additional arg used to pass the value of \result
+      val wRetArg = getPallasSpecRetArg(func)
+      val argList =
+        rw.variables.collect {
+          func.args.zip(newArgs).foreach { case (a, b) =>
+            rw.variables.succeed(a, b)
+          }
+        }._1 ++ wRetArg
+      // If func returns its result in an argument, this is a reference to that argument
+      val cRetArg =
+        func.returnInParam match {
+          case Some(idx) => Some(argList(idx).ref)
+          case None => None
+        }
       rw.globalDeclarations.declare(
         new Procedure[Post](
           returnType = rw
             .dispatch(func.importedReturnType.getOrElse(func.returnType)),
-          args =
-            rw.variables.collect {
-              func.args.zip(newArgs).foreach { case (a, b) =>
-                rw.variables.succeed(a, b)
-              }
-            }._1 ++ retArg,
+          args = argList,
           outArgs = Nil,
           typeArgs = Nil,
           body =
-            wrapperRetArg.having(retArg) {
+            wrapperRetArg.having(wRetArg) {
               func.functionBody match {
                 case None => None
                 case Some(functionBody) =>
@@ -405,7 +418,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               case contract: VCLLVMFunctionContract[Pre] =>
                 rw.dispatch(contract.data.get)
               case contract: PallasFunctionContract[Pre] =>
-                rw.dispatch(contract.content)
+                contractRetArg.having(cRetArg) { rw.dispatch(contract.content) }
             },
           pure = func.pure,
         )(func.blame)
@@ -422,8 +435,10 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     wFunc.pallasExprWrapperFor match {
       case Some(pFunc) =>
         val retT =
-          if (pFunc.decl.returnInParam) { pFunc.decl.args.head.t }
-          else { pFunc.decl.returnType }
+          pFunc.decl.returnInParam match {
+            case Some(idx) => pFunc.decl.args(idx).t
+            case None => pFunc.decl.returnType
+          }
         Some(new Variable(retT)(pallasResArgOrigin).rewriteDefault())
       case None => None
     }
@@ -497,7 +512,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
   /** If the given invocation invokes a wrapper-function for a Pallas
     * specification, the list of passed arguments is extended to pass the value
-    * of \result into the wrapper-function.
+    * of \result of the parent function into the wrapper-function.
     */
   private def extendWithPallasSpecArgs(
       inv: LLVMFunctionInvocation[Pre],
@@ -508,9 +523,13 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
     var newArgs = args
     wFunc.pallasExprWrapperFor match {
-      case Some(pFunc) if pFunc.decl.returnInParam =>
-        newArgs = newArgs :+ args.head
-      case Some(pFunc) if !pFunc.decl.returnInParam =>
+      case Some(pFunc) if pFunc.decl.returnInParam.isDefined =>
+        if (contractRetArg.isEmpty || contractRetArg.top.isEmpty) {
+          throw UnexpectedLLVMNode(inv)
+        }
+        newArgs =
+          newArgs :+ new Local[Post](contractRetArg.top.get)(pallasResArgOrigin)
+      case Some(pFunc) if pFunc.decl.returnInParam.isEmpty =>
         newArgs =
           newArgs :+ new Result[Post](llvmFunctionMap.ref(pFunc.decl))(
             pallasResArgOrigin

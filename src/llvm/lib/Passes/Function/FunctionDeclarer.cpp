@@ -126,7 +126,11 @@ FDResult FunctionDeclarer::run(Function &F, FunctionAnalysisManager &FAM) {
         }
     }
 
-    llvmFuncDef->set_return_in_param(F.getParamStructRetType(0));
+    if (F.getParamStructRetType(0) != nullptr) {
+        llvmFuncDef->set_return_in_param(0);
+    } else if (F.getParamStructRetType(1) != nullptr) {
+        llvmFuncDef->set_return_in_param(1);
+    } 
 
     if (F.isDeclaration()) {
         // Defined outside of this module so we don't know if it's pure or what

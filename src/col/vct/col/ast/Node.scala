@@ -3524,8 +3524,8 @@ final class LLVMFunctionDefinition[G](
     val functionBody: Option[Statement[G]],
     val contract: LLVMFunctionContract[G],
     val pure: Boolean = false,
-    // Indicates if the result is returned in an sret-argument.
-    val returnInParam: Boolean = false,
+    // If the result is returned in an sret-argument, this contains the index
+    val returnInParam: Option[Int] = None,
     // If this function is a wrapper function for an expression of a
     // pallas specification of a function F, then this field references F.
     val pallasExprWrapperFor: Option[Ref[G, LLVMFunctionDefinition[G]]],
