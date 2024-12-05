@@ -320,9 +320,10 @@ void llvm2col::transformPallasSpecResult(llvm::CallInst &callInstruction,
 
     // Get the function to whose contract this call instuction belongs to.
     auto *wrapperFunc = callInstruction.getFunction();
-    auto *llvmParentFunc = funcCursor.getFunctionAnalysisManager()
-                              .getResult<pallas::ExprWrapperMapper>(*wrapperFunc)
-                              .getParentFunc();
+    auto *llvmParentFunc =
+        funcCursor.getFunctionAnalysisManager()
+            .getResult<pallas::ExprWrapperMapper>(*wrapperFunc)
+            .getParentFunc();
     if (llvmParentFunc == nullptr) {
         pallas::ErrorReporter::addError(
             SOURCE_LOC,
@@ -340,8 +341,11 @@ void llvm2col::transformPallasSpecResult(llvm::CallInst &callInstruction,
         // Check that the function signature is wellformed
         if (!llvmSpecFunc->arg_empty()) {
             pallas::ErrorReporter::addError(
-                SOURCE_LOC, "Malformed pallas spec-lib result-function",
+                SOURCE_LOC,
+                "Malformed pallas spec-lib result-function. Expected no "
+                "arguments.",
                 callInstruction);
+            return;
         }
 
         // Build the assignment-expression
@@ -357,8 +361,37 @@ void llvm2col::transformPallasSpecResult(llvm::CallInst &callInstruction,
     } else {
         // Case 2: Result is returned as a sret parameter
         // Implement & and add example!
-        pallas::ErrorReporter::addError(SOURCE_LOC, "Unsupported",
-                                        callInstruction);
+        if (llvmSpecFunc->arg_size() != 1 ||
+            !llvmSpecFunc->getArg(0)->hasStructRetAttr()) {
+            pallas::ErrorReporter::addError(
+                SOURCE_LOC,
+                "Malformed pallas spec-lib result-function. Expected one "
+                "sret-argument.",
+                callInstruction);
+            return;
+        }
+
+        // Replace the call to the result-function with a store-instruction that
+        // stores the value of \result.
+        col::LlvmStore *store = colBlock.add_statements()->mutable_llvm_store();
+        store->set_allocated_origin(
+            llvm2col::generateFunctionCallOrigin(callInstruction));
+        store->set_allocated_blame(new col::Blame());
+        // Value
+        col::LlvmResult *value = store->mutable_value()->mutable_llvm_result();
+        value->set_allocated_origin(
+            llvm2col::generateFunctionCallOrigin(callInstruction));
+        value->mutable_func()->set_id(colParentFunc.getFunctionId());
+        // Pointer
+        llvm2col::transformAndSetExpr(funcCursor, callInstruction,
+                                      *callInstruction.getArgOperand(0),
+                                      *store->mutable_pointer());
+        // Memory ordering (Set to sequentially consistent)
+        col::LlvmMemorySequentiallyConsistent *memOrder =
+            store->mutable_ordering()
+                ->mutable_llvm_memory_sequentially_consistent();
+        memOrder->set_allocated_origin(
+            llvm2col::generateFunctionCallOrigin(callInstruction));
     }
 
     // TODO: Handle cases, where the result is returned in other ways

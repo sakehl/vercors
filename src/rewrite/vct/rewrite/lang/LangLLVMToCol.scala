@@ -421,10 +421,10 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     if (!wFunc.needsWrapperResultArg) { return None }
     wFunc.pallasExprWrapperFor match {
       case Some(pFunc) =>
-        Some(
-          new Variable(pFunc.decl.returnType)(pallasResArgOrigin)
-            .rewriteDefault()
-        )
+        val retT =
+          if (pFunc.decl.returnInParam) { pFunc.decl.args.head.t }
+          else { pFunc.decl.returnType }
+        Some(new Variable(retT)(pallasResArgOrigin).rewriteDefault())
       case None => None
     }
   }
@@ -504,18 +504,21 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       args: Seq[Expr[Post]],
   ): Seq[Expr[Post]] = {
     val wFunc = inv.ref.decl
+    if (!wFunc.needsWrapperResultArg) { return args }
+
+    var newArgs = args
     wFunc.pallasExprWrapperFor match {
-      case Some(pFunc) =>
-        var newArgs = args
-        if (wFunc.needsWrapperResultArg) {
-          newArgs =
-            newArgs :+ new Result[Post](llvmFunctionMap.ref(pFunc.decl))(
-              pallasResArgOrigin
-            )
-        }
-        newArgs
-      case None => args
+      case Some(pFunc) if pFunc.decl.returnInParam =>
+        newArgs = newArgs :+ args.head
+      case Some(pFunc) if !pFunc.decl.returnInParam =>
+        newArgs =
+          newArgs :+ new Result[Post](llvmFunctionMap.ref(pFunc.decl))(
+            pallasResArgOrigin
+          )
+      case None =>
     }
+
+    return newArgs
   }
 
   def rewriteGlobal(decl: LLVMGlobalSpecification[Pre]): Unit = {
@@ -967,7 +970,6 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       throw UnexpectedLLVMNode(res)
     }
     new Local[Post](ref = wrapperRetArg.top.get.ref)
-    // new Result[Post](applicable = llvmFunctionMap.ref(res.func.decl))
   }
 
   def result(ref: RefLLVMFunctionDefinition[Pre])(
