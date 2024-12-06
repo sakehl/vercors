@@ -293,6 +293,11 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             _ => func.importedArguments.map(_(i).t).getOrElse(a.t),
           )
         }
+        // If the function has an sret-argument, infer type from that.
+        func.returnInParam match {
+          case Some((idx, t)) => addTypeGuess(func.args(idx), Set.empty, _ => t)
+          case None =>
+        }
       case alloc: LLVMAllocA[Pre] =>
         addTypeGuess(
           alloc.variable.decl,
@@ -376,7 +381,10 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     implicit val o: Origin = func.o
     val procedure = rw.labelDecls.scope {
       val newArgs = func.importedArguments.getOrElse(func.args).map { it =>
-        it.rewriteDefault()
+        // Apply type-inference to function-arguments
+        new Variable(
+          rw.dispatch(localVariableInferredType.getOrElse(it, it.t))
+        )(it.o)
       }
       // if func is a pallas wrapper, this is the additional arg used to pass the value of \result
       val wRetArg = getPallasSpecRetArg(func)
@@ -389,7 +397,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       // If func returns its result in an argument, this is a reference to that argument
       val cRetArg =
         func.returnInParam match {
-          case Some(idx) => Some(argList(idx).ref)
+          case Some((idx, _)) => Some(argList(idx).ref)
           case None => None
         }
       rw.globalDeclarations.declare(
@@ -436,7 +444,9 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       case Some(pFunc) =>
         val retT =
           pFunc.decl.returnInParam match {
-            case Some(idx) => pFunc.decl.args(idx).t
+            case Some((idx, _)) =>
+              val preArg = pFunc.decl.args(idx)
+              localVariableInferredType.getOrElse(preArg, preArg.t)
             case None => pFunc.decl.returnType
           }
         Some(new Variable(retT)(pallasResArgOrigin).rewriteDefault())
