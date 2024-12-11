@@ -1,19 +1,16 @@
 package vct.parsers.transform
 
-import hre.data.BitString
 import org.antlr.v4.runtime.{ParserRuleContext, Token}
 import vct.antlr4.generated.LLVMSpecParser._
 import vct.antlr4.generated.LLVMSpecParserPatterns
 import vct.antlr4.generated.LLVMSpecParserPatterns._
 import vct.col.ast._
 import vct.col.origin.{ExpectedError, Origin}
-import vct.col.ref.{Ref, UnresolvedRef}
+import vct.col.ref.UnresolvedRef
 import vct.col.util.AstBuildHelpers.{ff, foldAnd, implies, tt}
 import vct.parsers.err.ParseError
 
 import scala.annotation.nowarn
-import scala.collection.immutable.{AbstractSeq, LinearSeq}
-import scala.collection.mutable
 
 @nowarn("msg=match may not be exhaustive&msg=Some\\(")
 case class LLVMContractToCol[G](
@@ -178,10 +175,10 @@ case class LLVMContractToCol[G](
           case TInt() =>
             bitOp match {
               case LLVMSpecParserPatterns.And(_) =>
-                BitAnd(left, right, 0)(blame(bitOp))
+                BitAnd(left, right, 0, signed = true)(blame(bitOp))
               case LLVMSpecParserPatterns.Or(_) =>
-                BitOr(left, right, 0)(blame(bitOp))
-              case Xor(_) => BitXor(left, right, 0)(blame(bitOp))
+                BitOr(left, right, 0, signed = true)(blame(bitOp))
+              case Xor(_) => BitXor(left, right, 0, signed = true)(blame(bitOp))
             }
           case other =>
             throw ParseError(

@@ -3,6 +3,7 @@ package vct.col.ast.expr.op
 import vct.col.ast.`type`.typeclass.TFloats.getFloatMax
 import vct.col.ast.{
   BinExpr,
+  BitwiseType,
   CPrimitiveType,
   CSpecificationType,
   Expr,
@@ -24,8 +25,10 @@ import vct.result.VerificationError
 
 object BinOperatorTypes {
   def isCIntOp[G](lt: Type[G], rt: Type[G]): Boolean =
-    CoercionUtils.getCoercion(lt, TCInt()).isDefined &&
-      CoercionUtils.getCoercion(rt, TCInt()).isDefined
+    (CoercionUtils.getCoercion(lt, TCInt(signed = true)).isDefined ||
+      CoercionUtils.getCoercion(lt, TCInt(signed = false)).isDefined) &&
+      (CoercionUtils.getCoercion(rt, TCInt(signed = true)).isDefined ||
+        CoercionUtils.getCoercion(rt, TCInt(signed = false)).isDefined)
 
   def isIntOp[G](lt: Type[G], rt: Type[G]): Boolean =
     CoercionUtils.getCoercion(lt, TInt()).isDefined &&
@@ -85,14 +88,6 @@ object BinOperatorTypes {
         TVector[G](sizeL, getNumericType(eL, eR, o))).get
   }
 
-  def getIntType[G](lt: Type[G], rt: Type[G]): IntType[G] =
-    if (isCIntOp(lt, rt))
-      TCInt()
-    else if (isLLVMIntOp(lt, rt))
-      Types.leastCommonSuperType(lt, rt).asInstanceOf[LLVMTInt[G]]
-    else
-      TInt()
-
   case class NumericBinError(lt: Type[_], rt: Type[_], o: Origin)
       extends VerificationError.UserError {
     override def text: String =
@@ -100,38 +95,29 @@ object BinOperatorTypes {
     override def code: String = "numericBinError"
   }
 
-  private def getBits(t: Type[_]): Int =
-    t match {
-      case cint @ TCInt() => cint.bits
-      case CPrimitiveType(Seq(CSpecificationType(cint @ TCInt()))) => cint.bits
-    }
-
   def getNumericType[G](lt: Type[G], rt: Type[G], o: Origin): Type[G] = {
-    (lt, rt) match {
-      case (
-            l @ (TCInt() | CPrimitiveType(Seq(CSpecificationType(TCInt())))),
-            r @ (TCInt() | CPrimitiveType(Seq(CSpecificationType(TCInt())))),
-          ) if getBits(l) != 0 && getBits(l) >= getBits(r) =>
-        l
-      case (
-            l @ (TCInt() | CPrimitiveType(Seq(CSpecificationType(TCInt())))),
-            r @ (TCInt() | CPrimitiveType(Seq(CSpecificationType(TCInt())))),
-          ) if getBits(r) != 0 && getBits(r) >= getBits(l) =>
-        r
-      case _ =>
-        if (isCIntOp(lt, rt))
-          TCInt[G]()
-        else if (isLLVMIntOp(lt, rt))
-          Types.leastCommonSuperType(lt, rt).asInstanceOf[LLVMTInt[G]]
-        else if (isIntOp(lt, rt))
-          TInt[G]()
-        else
-          getFloatMax[G](lt, rt) getOrElse
-            (if (isRationalOp(lt, rt))
-               TRational[G]()
-             else
-               throw NumericBinError(lt, rt, o))
-    }
+    if (isCIntOp(lt, rt))
+      (lt, rt) match {
+        case (l: BitwiseType[G], r: BitwiseType[G])
+            if l.signed == r.signed && l.bits.isDefined &&
+              l.bits.get >= r.bits.getOrElse(0) =>
+          l
+        case (l: BitwiseType[G], r: BitwiseType[G])
+            if l.signed == r.signed && r.bits.isDefined &&
+              r.bits.get >= l.bits.getOrElse(0) =>
+          r
+        case _ => TCInt[G](signed = true)
+      }
+    else if (isLLVMIntOp(lt, rt))
+      Types.leastCommonSuperType(lt, rt).asInstanceOf[LLVMTInt[G]]
+    else if (isIntOp(lt, rt))
+      TInt[G]()
+    else
+      getFloatMax[G](lt, rt) getOrElse
+        (if (isRationalOp(lt, rt))
+           TRational[G]()
+         else
+           throw NumericBinError(lt, rt, o))
   }
 }
 
@@ -160,8 +146,6 @@ trait BinExprImpl[G] {
   def isSetOp: Boolean = BinOperatorTypes.isSetOp(left.t, right.t)
   def isVectorOp: Boolean = BinOperatorTypes.isVectorOp(left.t, right.t)
   def isVectorIntOp: Boolean = BinOperatorTypes.isVectorIntOp(left.t, right.t)
-
-  lazy val getIntType: IntType[G] = BinOperatorTypes.getIntType(left.t, right.t)
 
   lazy val getNumericType: Type[G] = BinOperatorTypes
     .getNumericType(left.t, right.t, o)

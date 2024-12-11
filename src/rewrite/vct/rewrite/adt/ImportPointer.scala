@@ -123,10 +123,7 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
       function[Post](
         AbstractApplicable,
         TrueSatisfiable,
-        ensures = UnitAccountedPredicate(
-          adtFunctionInvocation[Post](ref = block, args = Seq(result)) ===
-            adtFunctionInvocation[Post](ref = block, args = Seq(value.get))
-        ),
+        ensures = UnitAccountedPredicate(result === value.get),
         returnType = TAxiomatic(adt, Nil),
         args = Seq(value),
       )

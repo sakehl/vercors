@@ -470,30 +470,30 @@ case class CPPToCol[G](
     expr match {
       case InclusiveOrExpression0(inner) => convert(inner)
       case InclusiveOrExpression1(left, _, right) =>
-        BitOr(convert(left), convert(right), 0)(blame(expr))
+        BitOr(convert(left), convert(right), 0, signed = true)(blame(expr))
     }
 
   def convert(implicit expr: ExclusiveOrExpressionContext): Expr[G] =
     expr match {
       case ExclusiveOrExpression0(inner) => convert(inner)
       case ExclusiveOrExpression1(left, _, right) =>
-        BitXor(convert(left), convert(right), 0)(blame(expr))
+        BitXor(convert(left), convert(right), 0, signed = true)(blame(expr))
     }
 
   def convert(implicit expr: AndExpressionContext): Expr[G] =
     expr match {
       case AndExpression0(inner) => convert(inner)
       case AndExpression1(left, _, right) =>
-        BitAnd(convert(left), convert(right), 0)(blame(expr))
+        BitAnd(convert(left), convert(right), 0, signed = true)(blame(expr))
     }
 
   def convert(implicit expr: EqualityExpressionContext): Expr[G] =
     expr match {
       case EqualityExpression0(inner) => convert(inner)
       case EqualityExpression1(left, _, right) =>
-        AmbiguousEq(convert(left), convert(right), TCInt())
+        AmbiguousEq(convert(left), convert(right), TCInt(signed = true))
       case EqualityExpression2(left, _, right) =>
-        AmbiguousNeq(convert(left), convert(right), TCInt())
+        AmbiguousNeq(convert(left), convert(right), TCInt(signed = true))
     }
 
   def convert(implicit expr: RelationalExpressionContext): Expr[G] =
@@ -514,9 +514,15 @@ case class CPPToCol[G](
     expr match {
       case ShiftExpression0(inner) => convert(inner)
       case ShiftExpression1(left, _, _, right) =>
-        BitShl(convert(left), convert(right), 0)(blame(expr))
+        BitShl(convert(left), convert(right), 0, signed = true)(blame(expr))
       case ShiftExpression2(left, _, _, right) =>
-        BitShr(convert(left), convert(right), 0)(blame(expr))
+        val l = convert(left)
+        val r = convert(right)
+        // The true in BitUShr will be replaced in LangSpecificToCol
+        if (isSigned(l.t) || isSigned(r.t))
+          BitShr(l, r, 0)(blame(expr))
+        else
+          BitUShr(l, r, 0, signed = true)(blame(expr))
     }
 
   def convert(implicit expr: AdditiveExpressionContext): Expr[G] =
@@ -2345,4 +2351,9 @@ case class CPPToCol[G](
         Block(Nil)(DiagnosticOrigin)
     }
 
+  def isSigned(t: Type[G]): Boolean =
+    t match {
+      case t: BitwiseType[G] => t.signed
+      case _ => true
+    }
 }

@@ -18,6 +18,7 @@ class ExampleCoverage extends AnyFlatSpec {
       new ArrayExamplesSpec(),
       new AssertingAssumingSpec(),
       new BasicExamplesSpec(),
+      new BitVectorSpec(),
       new CIncludeSpec(),
       new ClassesSpec(),
       new CounterSpec(),

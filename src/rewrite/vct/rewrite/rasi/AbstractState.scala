@@ -382,19 +382,19 @@ case class AbstractState[G](
         resolve_integer_expression(left, is_old, is_contract) %
           resolve_integer_expression(right, is_old, is_contract)
       // Bit operations destroy any knowledge of integer state       TODO: Support bit operations?
-      case BitNot(_, _) => UncertainIntegerValue.uncertain()
+      case BitNot(_, _, _) => UncertainIntegerValue.uncertain()
       case AmbiguousComputationalOr(_, _) => UncertainIntegerValue.uncertain()
       case AmbiguousComputationalXor(_, _) => UncertainIntegerValue.uncertain()
       case AmbiguousComputationalAnd(_, _) => UncertainIntegerValue.uncertain()
       case ComputationalOr(_, _) => UncertainIntegerValue.uncertain()
       case ComputationalXor(_, _) => UncertainIntegerValue.uncertain()
       case ComputationalAnd(_, _) => UncertainIntegerValue.uncertain()
-      case BitAnd(_, _, _) => UncertainIntegerValue.uncertain()
-      case BitOr(_, _, _) => UncertainIntegerValue.uncertain()
-      case BitXor(_, _, _) => UncertainIntegerValue.uncertain()
-      case BitShl(_, _, _) => UncertainIntegerValue.uncertain()
+      case BitAnd(_, _, _, _) => UncertainIntegerValue.uncertain()
+      case BitOr(_, _, _, _) => UncertainIntegerValue.uncertain()
+      case BitXor(_, _, _, _) => UncertainIntegerValue.uncertain()
+      case BitShl(_, _, _, _) => UncertainIntegerValue.uncertain()
       case BitShr(_, _, _) => UncertainIntegerValue.uncertain()
-      case BitUShr(_, _, _) => UncertainIntegerValue.uncertain()
+      case BitUShr(_, _, _, _) => UncertainIntegerValue.uncertain()
       case Select(cond, ift, iff) =>
         var value: UncertainIntegerValue = UncertainIntegerValue.empty()
         if (resolve_boolean_expression(cond, is_old, is_contract).can_be_true) {

@@ -352,9 +352,9 @@ case class SilverTransformation(
 ) extends Transformation(
       onPassEvent,
       Seq(
+        CFloatIntCoercion,
         // Replace leftover SYCL types
         ReplaceSYCLTypes,
-        CFloatIntCoercion,
 
         // BIP transformations
         ComputeBipGlue,

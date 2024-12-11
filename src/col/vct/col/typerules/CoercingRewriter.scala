@@ -302,7 +302,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case CoerceDecreasePrecision(_, _) => e
       case CoerceCFloatCInt(_) => e
       case CoerceCIntCFloat(_) => e
-      case CoerceCIntInt() => e
+      case CoerceCIntInt(_) => e
       case CoerceCFloatFloat(_, _) => e
 
       case CoerceLLVMIntInt() => e
@@ -1164,19 +1164,20 @@ abstract class CoercingRewriter[Pre <: Generation]()
         )
       case bgi @ BipGuardInvocation(obj, ref) =>
         BipGuardInvocation(cls(obj), ref)
-      case op @ BitAnd(left, right, bits) =>
-        BitAnd(int(left), int(right), bits)(op.blame)
-      case op @ BitNot(arg, bits) => BitNot(int(arg), bits)(op.blame)
-      case op @ BitOr(left, right, bits) =>
-        BitOr(int(left), int(right), bits)(op.blame)
-      case op @ BitShl(left, right, bits) =>
-        BitShl(int(left), int(right), bits)(op.blame)
+      case op @ BitAnd(left, right, bits, signed) =>
+        BitAnd(int(left), int(right), bits, signed)(op.blame)
+      case op @ BitNot(arg, bits, signed) =>
+        BitNot(int(arg), bits, signed)(op.blame)
+      case op @ BitOr(left, right, bits, signed) =>
+        BitOr(int(left), int(right), bits, signed)(op.blame)
+      case op @ BitShl(left, right, bits, signed) =>
+        BitShl(int(left), int(right), bits, signed)(op.blame)
       case op @ BitShr(left, right, bits) =>
         BitShr(int(left), int(right), bits)(op.blame)
-      case op @ BitUShr(left, right, bits) =>
-        BitUShr(int(left), int(right), bits)(op.blame)
-      case op @ BitXor(left, right, bits) =>
-        BitXor(int(left), int(right), bits)(op.blame)
+      case op @ BitUShr(left, right, bits, signed) =>
+        BitUShr(int(left), int(right), bits, signed)(op.blame)
+      case op @ BitXor(left, right, bits, signed) =>
+        BitXor(int(left), int(right), bits, signed)(op.blame)
       case Cast(value, typeValue) => Cast(value, typeValue)
       case CastFloat(e, t) =>
         firstOk(

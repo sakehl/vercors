@@ -4,6 +4,7 @@ import vct.col.ast.`type`.typeclass.TFloats
 import vct.col.ast.{
   BinExpr,
   CIntegerValue,
+  Cast,
   CastFloat,
   CoerceCFloatCInt,
   CoerceCIntCFloat,
@@ -16,6 +17,7 @@ import vct.col.ast.{
   TFloat,
   TInt,
   Type,
+  TypeValue,
 }
 import vct.col.origin.Origin
 import vct.col.rewrite.{Generation, RewriterBuilder}
@@ -41,18 +43,21 @@ case class CFloatIntCoercion[Pre <: Generation]()
 
   override def postCoerce(t: Type[Pre]): Type[Post] =
     t match {
-      case TCInt() => TInt()
+      case TCInt(_) => TInt()
       // This is wrong, but since we translate to rationals anyways, this does not matter.
       // Getting everything to type check otherwise is a pain, since in "coerce" we always coerce
       // to an arbitrary big float.
       case TCFloat(e, m) => TFloats.ieee754_32bit
       case TFloat(e, m) => TFloats.ieee754_32bit
-      case other => rewriteDefault(other)
+      case other => super.postCoerce(other)
     }
 
   override def postCoerce(e: Expr[Pre]): Expr[Post] =
     e match {
+      // TODO: Do truncation/sign extension
+      case Cast(e, TypeValue(TCInt(_))) if e.t.isInstanceOf[TCInt[Pre]] =>
+        dispatch(e)
       case CIntegerValue(v, _) => IntegerValue(v)(e.o)
-      case other => rewriteDefault(other)
+      case other => super.postCoerce(other)
     }
 }

@@ -6,7 +6,7 @@ import vct.col.ast.ops.SharedMemSizeOps
 
 trait SharedMemSizeImpl[G] extends SharedMemSizeOps[G] {
   this: SharedMemSize[G] =>
-  override def t: Type[G] = TCInt()
+  override def t: Type[G] = TCInt(signed = false)
 
   override def precedence: Int = Precedence.POSTFIX
   override def layout(implicit ctx: Ctx): Doc =

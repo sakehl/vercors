@@ -30,6 +30,9 @@ case object C {
   )
 
   val INTEGER_LIKE_TYPES: Seq[Seq[CDeclarationSpecifier[_]]] = Seq(
+    Seq(CChar()),
+    Seq(CSigned(), CChar()),
+    Seq(CUnsigned(), CChar()),
     Seq(CShort()),
     Seq(CSigned(), CShort()),
     Seq(CUnsigned(), CShort()),
@@ -70,6 +73,9 @@ case object C {
        else
          32)
     Map(
+      (Seq(CChar()) -> 8),
+      (Seq(CSigned(), CChar()) -> 8),
+      (Seq(CUnsigned(), CChar()) -> 8),
       (Seq(CShort()) -> 16),
       (Seq(CSigned(), CShort()) -> 16),
       (Seq(CUnsigned(), CShort()) -> 16),
@@ -122,6 +128,31 @@ case object C {
       case _: CAlignmentSpecifier[_] => Nil
       case _: CGpgpuKernelSpecifier[_] => Nil
     })))
+  }
+
+  // XXX: We assume that everything's signed unless specified otherwise, this is not actually defined in the spec though
+  def isSigned(specs: Seq[CDeclarationSpecifier[_]]): Boolean = {
+    specs.collectFirst { case CSpecificationType(t: BitwiseType[_]) =>
+      t.signed
+    }.getOrElse(
+      specs.map {
+        case _: CSpecificationModifier[_] => true
+        case _: CStorageClassSpecifier[_] => true
+        case specifier: CTypeSpecifier[_] =>
+          specifier match {
+            case CUnsigned() => false
+            case CSpecificationType(_) | CVoid() | CChar() |
+                CShort() | CInt() | CLong() | CFloat() | CDouble() | CSigned() |
+                CBool() | CTypedefName(_) | CFunctionTypeExtensionModifier(_) |
+                CStructDeclaration(_, _) | CStructSpecifier(_) =>
+              true
+          }
+        case CTypeQualifierDeclarationSpecifier(_) => true
+        case _: CFunctionSpecifier[_] => true
+        case _: CAlignmentSpecifier[_] => true
+        case _: CGpgpuKernelSpecifier[_] => true
+      }.reduce(_ && _)
+    )
   }
 
   case class DeclaratorInfo[G](
@@ -235,11 +266,9 @@ case object C {
     val t: Type[G] =
       filteredSpecs match {
         case Seq(CVoid()) => TVoid()
-        case Seq(CChar()) => TChar()
-        case Seq(CUnsigned(), CChar()) => TChar()
         case t if C.INTEGER_LIKE_TYPES.contains(t) =>
-          val cint = TCInt[G]()
-          cint.bits = getIntSize(LP64, specs).getOrElse(0)
+          val cint = TCInt[G](isSigned(specs))
+          cint.bits = getIntSize(LP64, specs)
           cint
         case Seq(CFloat()) => C_ieee754_32bit()
         case Seq(CDouble()) => C_ieee754_64bit()

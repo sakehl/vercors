@@ -21,15 +21,26 @@ trait SYCLTRangeImpl[G] extends SYCLTRangeOps[G] {
       case Seq(CPPExprOrTypeSpecifier(Some(CIntegerValue(dim, _)), None))
           if dim > 0 && dim <= 3 && Util.compatTypes(
             args,
-            Seq.range(0, dim.toInt).map(_ => TCInt[G]()),
+            Seq.range(0, dim.toInt).map(_ => TCInt[G](signed = false)),
           ) =>
         Some(RefSYCLConstructorDefinition(SYCLTRange(dim.toInt)))
-      case Nil if Util.compatTypes(args, Seq(TCInt[G]())) =>
+      case Nil if Util.compatTypes(args, Seq(TCInt[G](signed = false))) =>
         Some(RefSYCLConstructorDefinition(SYCLTRange(1)))
-      case Nil if Util.compatTypes(args, Seq(TCInt[G](), TCInt[G]())) =>
+      case Nil
+          if Util.compatTypes(
+            args,
+            Seq(TCInt[G](signed = false), TCInt[G](signed = false)),
+          ) =>
         Some(RefSYCLConstructorDefinition(SYCLTRange(2)))
       case Nil
-          if Util.compatTypes(args, Seq(TCInt[G](), TCInt[G](), TCInt[G]())) =>
+          if Util.compatTypes(
+            args,
+            Seq(
+              TCInt[G](signed = false),
+              TCInt[G](signed = false),
+              TCInt[G](signed = false),
+            ),
+          ) =>
         Some(RefSYCLConstructorDefinition(SYCLTRange(3)))
       case _ => None
     }

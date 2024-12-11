@@ -29,7 +29,7 @@ trait CStructDerefImpl[G] extends CStructDerefOps[G] {
       case ref: RefModelAction[G] => Types.notAValue(ref)
       case ref: BuiltinField[G] => ref.f(struct).t
       case ref: BuiltinInstanceMethod[G] => Types.notAValue(ref)
-      case ref: RefCudaVecDim[G] => TCInt()
+      case ref: RefCudaVecDim[G] => TCInt(signed = false)
     }
 
   override def precedence: Int = Precedence.POSTFIX

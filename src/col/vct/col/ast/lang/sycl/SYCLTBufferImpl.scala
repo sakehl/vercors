@@ -115,8 +115,8 @@ trait SYCLTBufferImpl[G] extends SYCLTBufferOps[G] {
   def generateCopyHostDataToBufferProcedure(): Procedure[G] = {
     val hostDataVar =
       new Variable[G](TPointer(this.typ))(o.where(name = "hostData"))
-    val sizeVar = new Variable[G](TCInt())(o.where(name = "size"))
-    val indexVar = new Variable[G](TCInt())(o.where(name = "i"))
+    val sizeVar = new Variable[G](TCInt(signed = false))(o.where(name = "size"))
+    val indexVar = new Variable[G](TCInt(signed = false))(o.where(name = "i"))
     val copyHostdataToBufferBlame = PanicBlame(
       "The generated method 'copy_hostData_to_buffer' should not throw any errors."
     )
@@ -190,7 +190,7 @@ trait SYCLTBufferImpl[G] extends SYCLTBufferOps[G] {
     val bufferVar = new Variable[G](TArray(this.typ))(o.where(name = "buffer"))
     val hostDataVar =
       new Variable[G](TPointer(this.typ))(o.where(name = "hostData"))
-    val indexVar = new Variable[G](TCInt())(o.where(name = "i"))
+    val indexVar = new Variable[G](TCInt(signed = false))(o.where(name = "i"))
     val copyBufferToHostdataBlame = PanicBlame(
       "The generated method 'copy_buffer_to_hostData' should not throw any errors."
     )

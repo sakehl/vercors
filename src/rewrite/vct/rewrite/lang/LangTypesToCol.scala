@@ -103,8 +103,8 @@ case class LangTypesToCol[Pre <: Generation]() extends Rewriter[Pre] {
             dispatch(t.partialTypeArgs.find(_._1.decl == arg).get._2)
           ),
         )
-      case t @ TCInt() =>
-        val cint = TCInt[Post]()
+      case t @ TCInt(signed) =>
+        val cint = TCInt[Post](signed)
         cint.bits = t.bits
         cint
       case other => rewriteDefault(other)

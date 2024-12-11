@@ -2,6 +2,7 @@ package vct.rewrite.adt
 
 import hre.util.ScopedStack
 import vct.col.ast.{
+  Applicable,
   Asserting,
   BitAnd,
   BitNot,
@@ -36,6 +37,7 @@ import vct.col.util.AstBuildHelpers.functionInvocation
 import vct.result.VerificationError.UserError
 
 import scala.collection.mutable
+import scala.reflect.ClassTag
 
 case object ImportBitVector extends ImportADTBuilder("bitvec") {
   private case class UnsupportedBitVectorSize(origin: Origin, bits: Int)
@@ -63,8 +65,8 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
     extends ImportADT[Pre](importer) {
   import ImportBitVector._
 
-  private val functionMap: mutable.HashMap[String, ProverFunction[Post]] =
-    mutable.HashMap()
+  private val functionMap: mutable.HashMap[String, Applicable[Post]] = mutable
+    .HashMap()
 
   // TODO: These could easily be programmatically generated instead of fixing the sizes
   private lazy val bv8 = parse("bv8")
@@ -120,39 +122,89 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
     "u64_assume_inbounds",
   )
 
-  private def function(
+  private lazy val s8_is_inbounds = find[Function[Post]](bv8, "s8_is_inbounds")
+  private lazy val s16_is_inbounds = find[Function[Post]](
+    bv16,
+    "s16_is_inbounds",
+  )
+  private lazy val s32_is_inbounds = find[Function[Post]](
+    bv32,
+    "s32_is_inbounds",
+  )
+  private lazy val s64_is_inbounds = find[Function[Post]](
+    bv64,
+    "s64_is_inbounds",
+  )
+
+  private lazy val s8_assume_inbounds = find[Function[Post]](
+    bv8,
+    "s8_assume_inbounds",
+  )
+  private lazy val s16_assume_inbounds = find[Function[Post]](
+    bv16,
+    "s16_assume_inbounds",
+  )
+  private lazy val s32_assume_inbounds = find[Function[Post]](
+    bv32,
+    "s32_assume_inbounds",
+  )
+  private lazy val s64_assume_inbounds = find[Function[Post]](
+    bv64,
+    "s64_assume_inbounds",
+  )
+
+  private def function[T <: Applicable[Post]](
       name: String
-  )(implicit o: Origin, bits: Int): ProverFunction[Post] = {
+  )(implicit o: Origin, bits: Int, tag: ClassTag[T]): Ref[Post, T] = {
     val func = s"bv${bits}_$name"
     bits match {
       case 8 =>
-        functionMap.getOrElseUpdate(func, find[ProverFunction[Post]](bv8, func))
+        functionMap.getOrElseUpdate(func, find[T](bv8, func)).asInstanceOf[T]
+          .ref
       case 16 =>
-        functionMap
-          .getOrElseUpdate(func, find[ProverFunction[Post]](bv16, func))
+        functionMap.getOrElseUpdate(func, find[T](bv16, func)).asInstanceOf[T]
+          .ref
       case 32 =>
-        functionMap
-          .getOrElseUpdate(func, find[ProverFunction[Post]](bv32, func))
+        functionMap.getOrElseUpdate(func, find[T](bv32, func)).asInstanceOf[T]
+          .ref
       case 64 =>
-        functionMap
-          .getOrElseUpdate(func, find[ProverFunction[Post]](bv64, func))
+        functionMap.getOrElseUpdate(func, find[T](bv64, func)).asInstanceOf[T]
+          .ref
       case _ => throw UnsupportedBitVectorSize(o, bits)
     }
   }
 
-  private def to(e: Expr[Post], blame: Blame[IntegerOutOfBounds])(
-      implicit bits: Int
-  ): Expr[Post] = {
+  private def to(
+      e: Expr[Post],
+      blame: Blame[IntegerOutOfBounds],
+  )(implicit bits: Int, signed: Boolean): Expr[Post] = {
     implicit val o: Origin = e.o
     ProverFunctionInvocation(
-      function("from_int").ref,
+      function(
+        if (signed)
+          "from_sint"
+        else
+          "from_uint"
+      ),
       Seq(ensureInRange(e, blame)),
     )
   }
 
-  private def from(e: Expr[Post])(implicit bits: Int): Expr[Post] = {
+  private def from(
+      e: Expr[Post]
+  )(implicit bits: Int, signed: Boolean): Expr[Post] = {
     implicit val o: Origin = e.o
-    assumeInRange(ProverFunctionInvocation(function("to_int").ref, Seq(e)))
+    if (signed) {
+      FunctionInvocation(
+        function[Function[Post]]("to_sint"),
+        Seq(assumeInRange(e)),
+        Nil,
+        Nil,
+        Nil,
+      )(TrueSatisfiable)
+    } else {
+      ProverFunctionInvocation(function("to_uint"), Seq(assumeInRange(e)))
+    }
   }
 
   private case class StripAsserting[G]() extends NonLatchingRewriter[G, G]() {
@@ -172,28 +224,34 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
       }
   }
 
-  private def simplifyBV(e: Expr[Post]) =
+  private def simplifyBV(e: Expr[Post])(implicit signed: Boolean) =
     e match {
       case ProverFunctionInvocation(
             Ref(r1),
             Seq(
               Asserting(
                 _,
-                Asserting(_, ProverFunctionInvocation(Ref(r2), Seq(inner))),
+                ProverFunctionInvocation(Ref(r2), Seq(Asserting(_, inner))),
               )
             ),
           )
-          if r1.o.find[SourceName].map(_.name)
-            .exists(n => functionMap.contains(n) && n.endsWith("_from_int")) &&
-            r2.o.find[SourceName].map(_.name)
-              .exists(n => functionMap.contains(n) && n.endsWith("_to_int")) =>
+          if r1.o.find[SourceName].map(_.name).exists(n =>
+            functionMap.contains(n) &&
+              ((signed && n.endsWith("_from_sint")) ||
+                (!signed && n.endsWith("_from_uint")))
+          ) && r2.o.find[SourceName].map(_.name).exists(n =>
+            functionMap.contains(n) &&
+              ((signed && n.endsWith("_to_sint")) ||
+                (!signed && n.endsWith("_to_uint")))
+          ) =>
         inner
       case _ => e
     }
 
-  private def ensureInRange(e: Expr[Post], blame: Blame[IntegerOutOfBounds])(
-      implicit bits: Int
-  ): Expr[Post] = {
+  private def ensureInRange(
+      e: Expr[Post],
+      blame: Blame[IntegerOutOfBounds],
+  )(implicit bits: Int, signed: Boolean): Expr[Post] = {
     implicit val o: Origin = e.o
     val stripped = StripAsserting().dispatch(e)
     bits match {
@@ -201,7 +259,10 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
         Asserting(
           functionInvocation[Post](
             TrueSatisfiable,
-            u8_is_inbounds.ref,
+            if (signed)
+              s8_is_inbounds.ref
+            else
+              u8_is_inbounds.ref,
             args = Seq(stripped),
           ),
           e,
@@ -210,7 +271,10 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
         Asserting(
           functionInvocation[Post](
             TrueSatisfiable,
-            u16_is_inbounds.ref,
+            if (signed)
+              s16_is_inbounds.ref
+            else
+              u16_is_inbounds.ref,
             args = Seq(stripped),
           ),
           e,
@@ -219,7 +283,10 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
         Asserting(
           functionInvocation[Post](
             TrueSatisfiable,
-            u32_is_inbounds.ref,
+            if (signed)
+              s32_is_inbounds.ref
+            else
+              u32_is_inbounds.ref,
             args = Seq(stripped),
           ),
           e,
@@ -228,7 +295,10 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
         Asserting(
           functionInvocation[Post](
             TrueSatisfiable,
-            u64_is_inbounds.ref,
+            if (signed)
+              s64_is_inbounds.ref
+            else
+              u64_is_inbounds.ref,
             args = Seq(stripped),
           ),
           e,
@@ -237,7 +307,9 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
     }
   }
 
-  private def assumeInRange(e: Expr[Post])(implicit bits: Int): Expr[Post] = {
+  private def assumeInRange(
+      e: Expr[Post]
+  )(implicit bits: Int, signed: Boolean): Expr[Post] = {
     implicit val o: Origin = e.o
     val stripped = StripAsserting().dispatch(e)
     bits match {
@@ -245,7 +317,10 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
         Asserting(
           functionInvocation[Post](
             TrueSatisfiable,
-            u8_assume_inbounds.ref,
+            if (signed)
+              s8_assume_inbounds.ref
+            else
+              u8_assume_inbounds.ref,
             args = Seq(stripped),
           ),
           e,
@@ -254,7 +329,10 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
         Asserting(
           functionInvocation[Post](
             TrueSatisfiable,
-            u16_assume_inbounds.ref,
+            if (signed)
+              s16_assume_inbounds.ref
+            else
+              u16_assume_inbounds.ref,
             args = Seq(stripped),
           ),
           e,
@@ -263,7 +341,10 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
         Asserting(
           functionInvocation[Post](
             TrueSatisfiable,
-            u32_assume_inbounds.ref,
+            if (signed)
+              s32_assume_inbounds.ref
+            else
+              u32_assume_inbounds.ref,
             args = Seq(stripped),
           ),
           e,
@@ -272,7 +353,10 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
         Asserting(
           functionInvocation[Post](
             TrueSatisfiable,
-            u64_assume_inbounds.ref,
+            if (signed)
+              s64_assume_inbounds.ref
+            else
+              u64_assume_inbounds.ref,
             args = Seq(stripped),
           ),
           e,
@@ -286,11 +370,13 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
       l: Expr[Pre],
       r: Expr[Pre],
       b: Int,
+      s: Boolean,
       blame: Blame[IntegerOutOfBounds],
   )(implicit o: Origin): Expr[Post] = {
     implicit val bits: Int = b
+    implicit val signed: Boolean = s
     from(ProverFunctionInvocation(
-      function(name).ref,
+      function(name),
       Seq(
         simplifyBV(to(dispatch(l), blame)),
         simplifyBV(to(dispatch(r), blame)),
@@ -301,16 +387,17 @@ case class ImportBitVector[Pre <: Generation](importer: ImportADTImporter)
   override def postCoerce(e: Expr[Pre]): Expr[Post] = {
     implicit val o: Origin = e.o
     e match {
-      case op @ BitAnd(l, r, b) => binOp("and", l, r, b, op.blame)
-      case op @ BitOr(l, r, b) => binOp("or", l, r, b, op.blame)
-      case op @ BitXor(l, r, b) => binOp("xor", l, r, b, op.blame)
-      case op @ BitShl(l, r, b) => binOp("shl", l, r, b, op.blame)
-      case op @ BitShr(l, r, b) => binOp("shr", l, r, b, op.blame)
-      case op @ BitUShr(l, r, b) => binOp("ushr", l, r, b, op.blame)
-      case op @ BitNot(arg, b) =>
+      case op @ BitAnd(l, r, b, s) => binOp("and", l, r, b, s, op.blame)
+      case op @ BitOr(l, r, b, s) => binOp("or", l, r, b, s, op.blame)
+      case op @ BitXor(l, r, b, s) => binOp("xor", l, r, b, s, op.blame)
+      case op @ BitShl(l, r, b, s) => binOp("shl", l, r, b, s, op.blame)
+      case op @ BitShr(l, r, b) => binOp("shr", l, r, b, s = true, op.blame)
+      case op @ BitUShr(l, r, b, s) => binOp("ushr", l, r, b, s, op.blame)
+      case op @ BitNot(arg, b, s) =>
         implicit val bits: Int = b
+        implicit val signed: Boolean = s
         from(ProverFunctionInvocation(
-          function("not").ref,
+          function("not"),
           Seq(simplifyBV(to(dispatch(arg), op.blame))),
         ))
       case _ => super.postCoerce(e)

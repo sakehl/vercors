@@ -107,7 +107,7 @@ case object CPP {
     specs.collect { case spec: CPPTypeSpecifier[G] => spec } match {
       case Seq(CPPVoid()) => TVoid()
       case Seq(CPPChar()) => TChar()
-      case t if CPP.NUMBER_LIKE_SPECIFIERS.contains(t) => TCInt()
+      case t if CPP.NUMBER_LIKE_SPECIFIERS.contains(t) => TCInt(isSigned(specs))
       case Seq(CPPSpecificationType(t @ TCFloat(_, _))) => t
       case Seq(CPPBool()) => TBool()
       case Seq(SYCLClassDefName("event", Seq())) => SYCLTEvent()
@@ -169,6 +169,10 @@ case object CPP {
       case spec +: _ => throw CPPTypeNotSupported(context.orElse(Some(spec)))
       case _ => throw CPPTypeNotSupported(context)
     }
+
+  // XXX: We assume that everything's signed unless specified otherwise, this is not actually defined in the spec though
+  def isSigned(specs: Seq[CPPDeclarationSpecifier[_]]): Boolean =
+    specs.collect { case t: CPPTypeSpecifier[_] => t }.contains(CPPUnsigned())
 
   def unwrappedType[G](t: Type[G]): Type[G] =
     t match {

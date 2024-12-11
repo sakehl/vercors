@@ -198,7 +198,11 @@ case object CoercionUtils {
           CoerceDecreasePrecision(source, coercedCFloat),
           CoerceCFloatFloat(coercedCFloat, target),
         ))
-      case (TCInt(), TInt()) => CoerceCIntInt()
+      case (l @ TCInt(s1), r @ TCInt(s2))
+          if s1 == s2 && l.bits.isEmpty ||
+            (r.bits.isEmpty || l.bits.get <= r.bits.get) =>
+        CoerceIdentity(target)
+      case (TCInt(_), TInt()) => CoerceCIntInt(source)
       case (LLVMTInt(_), TInt()) => CoerceLLVMIntInt()
       case (TInt(), LLVMTInt(_)) => CoerceIdentity(target)
       case (l @ LLVMTFloat(_), TFloat(mantissa, exponent))
@@ -260,12 +264,14 @@ case object CoercionUtils {
           .collectFirst { case (Some(coercion), index) =>
             CoerceSelectUnion(coercion, source, target.types, index)
           }
-      case (source @ TCFloat(_, _), TCInt()) => CoerceCFloatCInt(source)
-      case (TCInt(), target @ TCFloat(_, _)) => CoerceCIntCFloat(target)
+      case (source @ TCFloat(_, _), TCInt(_)) => CoerceCFloatCInt(source)
+      case (TCInt(_), target @ TCFloat(_, _)) => CoerceCIntCFloat(target)
 
       case (source @ TCFloat(_, _), TInt()) =>
-        CoercionSequence(Seq(CoerceCFloatCInt(source), CoerceCIntInt()))
-      case (TCInt(), target @ TFloat(exponent, mantissa)) =>
+        CoercionSequence(
+          Seq(CoerceCFloatCInt(source), CoerceCIntInt(TCInt(signed = true)))
+        )
+      case (TCInt(_), target @ TFloat(exponent, mantissa)) =>
         val coercedCFloat = TCFloat[G](exponent, mantissa)
         CoercionSequence(Seq(
           CoerceCIntCFloat(coercedCFloat),
