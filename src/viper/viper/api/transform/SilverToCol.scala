@@ -539,6 +539,7 @@ case class SilverToCol[G](
       case silver.TrueLit() => col.BooleanValue(true)
       case silver.Unfolding(acc, body) =>
         col.Unfolding(col.AmbiguousFoldTarget(f(acc)), f(body))(blame(e))
+      case silver.Asserting(a, body) => col.Asserting(f(a), f(body))(blame(e))
       case silver.WildcardPerm() => col.ReadPerm()
 
       case silver.ForPerm(variables, resource, body) => ??(e)
