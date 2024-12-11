@@ -885,8 +885,19 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       case LLVMPointerValue(Ref(v)) =>
         globalVariableInferredType
           .getOrElse(v.asInstanceOf[LLVMGlobalVariable[Pre]], e.t)
+      case LLVMResult(Ref(f)) => getResultType(f)
       case _ => e.t
     }
+
+  /** Determines the type of the functions result, taking into account whether
+    * the function returns its result in a parameter.
+    */
+  private def getResultType(func: LLVMFunctionDefinition[Pre]): Type[Pre] = {
+    func.returnInParam match {
+      case Some((_, t)) => t
+      case None => func.returnType
+    }
+  }
 
   def rewriteStore(store: LLVMStore[Pre]): Statement[Post] = {
     implicit val o: Origin = store.o
