@@ -1241,7 +1241,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               syclAccessorSuccessor.values
                 .find(acc => ref.decl.equals(acc.instanceField)).get
             LiteralSeq[Post](
-              TCInt(signed = false),
+              TCInt(),
               accessor.rangeIndexFields.map(f =>
                 Deref[Post](currentThis.get, f.ref)(
                   SYCLAccessorRangeIndexFieldInsufficientReferencePermissionBlame(
@@ -1256,7 +1256,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         classInstance match {
           case Some(Local(ref)) =>
             val dimensions = syclLocalAccessorVarToDimensions(ref.decl)
-            LiteralSeq[Post](TCInt(signed = false), dimensions)
+            LiteralSeq[Post](TCInt(), dimensions)
           case _ => throw NotApplicable(inv)
         }
       case "sycl::range::get" =>
@@ -1569,7 +1569,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     val rangeFields: mutable.Buffer[InstanceField[Post]] = mutable.Buffer.empty
     range.indices.foreach(index => {
       implicit val o: Origin = range(index).o.where(name = s"range$index")
-      val instanceField = new InstanceField[Post](TCInt(signed = false), Nil)
+      val instanceField = new InstanceField[Post](TCInt(), Nil)
       rangeFields.append(instanceField)
       val iterVar = createRangeIterVar(
         GlobalScope(),
@@ -1645,8 +1645,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       {
         implicit val o: Origin = kernelDimensions.o
           .where(name = s"group_range$index")
-        val groupInstanceField =
-          new InstanceField[Post](TCInt(signed = false), Nil)
+        val groupInstanceField = new InstanceField[Post](TCInt(), Nil)
         rangeFields.append(groupInstanceField)
         val groupIterVar = createRangeIterVar(
           GroupScope(),
@@ -1660,8 +1659,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       {
         implicit val o: Origin = localRange(index).o
           .where(name = s"local_range$index")
-        val localInstanceField =
-          new InstanceField[Post](TCInt(signed = false), Nil)
+        val localInstanceField = new InstanceField[Post](TCInt(), Nil)
         rangeFields.append(localInstanceField)
         val localIterVar = createRangeIterVar(
           LocalScope(),
@@ -1863,7 +1861,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                       new InstanceField[Post](buffer.generatedVar.t, Nil)(accO)
                     val rangeIndexFields = Seq
                       .range(0, buffer.range.dimensions.size).map(i =>
-                        new InstanceField[Post](TCInt(signed = false), Nil)(
+                        new InstanceField[Post](TCInt(), Nil)(
                           dimO.where(name = s"${accName}_r$i")
                         )
                       )
@@ -1991,7 +1989,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
         // Generate expressions that check the bounds of the given range
         constructorArgs.appendAll(currentKernelType.get.getRangeFields.map(f =>
-          new Variable[Post](TCInt(signed = false))(f.o)
+          new Variable[Post](TCInt())(f.o)
         ))
         constructorPostConditions.appendAll(
           currentKernelType.get
@@ -2007,7 +2005,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           val newConstructorAccessorArg =
             new Variable[Post](acc.buffer.generatedVar.t)(acc.instanceField.o)
           val newConstructorAccessorDimensionArgs = acc.rangeIndexFields
-            .map(f => new Variable[Post](TCInt(signed = false))(f.o))
+            .map(f => new Variable[Post](TCInt())(f.o))
 
           val (basicPermissions, fieldArrayElementsPermission) =
             getBasicAccessorPermissions(acc, result)
@@ -2110,9 +2108,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       maxRange: Expr[Post],
   )(implicit o: Origin): IterVariable[Post] = {
     val variable =
-      new Variable[Post](TCInt(signed = false))(
-        o.where(name = s"${scope.idName}_$dimension")
-      )
+      new Variable[Post](TCInt())(o.where(name = s"${scope.idName}_$dimension"))
     new IterVariable[Post](variable, c_const(0), maxRange)
   }
 
@@ -2180,7 +2176,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   )(implicit o: Origin): Expr[Post] = {
     SeqSubscript[Post](
       LiteralSeq(
-        TCInt(signed = false),
+        TCInt(),
         currentDimensionIterVars(level).map(iterVar => iterVar.variable.get)
           .toSeq,
       ),
@@ -2194,7 +2190,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   )(implicit o: Origin): Expr[Post] = {
     SeqSubscript[Post](
       LiteralSeq(
-        TCInt(signed = false),
+        TCInt(),
         currentDimensionIterVars(level).map(iterVar => iterVar.to).toSeq,
       ),
       rw.dispatch(inv.args.head),
@@ -2226,7 +2222,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     val args: Seq[Expr[Post]] = Seq(
       SeqSubscript[Post](
         LiteralSeq(
-          TCInt(signed = false),
+          TCInt(),
           currentDimensionIterVars(LocalScope())
             .map(iterVar => iterVar.variable.get).toSeq,
         ),
@@ -2234,7 +2230,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       )(SYCLItemMethodSeqBoundFailureBlame(inv)),
       SeqSubscript[Post](
         LiteralSeq(
-          TCInt(signed = false),
+          TCInt(),
           currentDimensionIterVars(GroupScope())
             .map(iterVar => iterVar.variable.get).toSeq,
         ),
@@ -2242,7 +2238,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       )(SYCLItemMethodSeqBoundFailureBlame(inv)),
       SeqSubscript[Post](
         LiteralSeq(
-          TCInt(signed = false),
+          TCInt(),
           currentDimensionIterVars(LocalScope()).map(iterVar => iterVar.to)
             .toSeq,
         ),
@@ -2250,7 +2246,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       )(SYCLItemMethodSeqBoundFailureBlame(inv)),
       SeqSubscript[Post](
         LiteralSeq(
-          TCInt(signed = false),
+          TCInt(),
           currentDimensionIterVars(GroupScope()).map(iterVar => iterVar.to)
             .toSeq,
         ),
@@ -2271,7 +2267,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     val args: Seq[Expr[Post]] = Seq(
       SeqSubscript[Post](
         LiteralSeq(
-          TCInt(signed = false),
+          TCInt(),
           currentDimensionIterVars(LocalScope()).map(iterVar => iterVar.to)
             .toSeq,
         ),
@@ -2279,7 +2275,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       )(SYCLItemMethodSeqBoundFailureBlame(inv)),
       SeqSubscript[Post](
         LiteralSeq(
-          TCInt(signed = false),
+          TCInt(),
           currentDimensionIterVars(GroupScope()).map(iterVar => iterVar.to)
             .toSeq,
         ),

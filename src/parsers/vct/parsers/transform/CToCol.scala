@@ -756,9 +756,9 @@ case class CToCol[G](
     expr match {
       case EqualityExpression0(inner) => convert(inner)
       case EqualityExpression1(left, _, right) =>
-        AmbiguousEq(convert(left), convert(right), TCInt(signed = true))
+        AmbiguousEq(convert(left), convert(right), TCInt())
       case EqualityExpression2(left, _, right) =>
-        AmbiguousNeq(convert(left), convert(right), TCInt(signed = true))
+        AmbiguousNeq(convert(left), convert(right), TCInt())
     }
 
   def convert(implicit expr: RelationalExpressionContext): Expr[G] =

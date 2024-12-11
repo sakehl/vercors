@@ -9,10 +9,8 @@ trait BitNotImpl[G] extends BitNotOps[G] {
   this: BitNot[G] =>
   override def t: Type[G] =
     arg.t match {
-      case cint @ TCInt(_) => cint
-      case _
-          if CoercionUtils.getCoercion(arg.t, TCInt(signed = true)).isDefined =>
-        TCInt(signed = true)
+      case cint @ TCInt() => cint
+      case _ if CoercionUtils.getCoercion(arg.t, TCInt()).isDefined => TCInt()
       case _ => TInt()
     }
 

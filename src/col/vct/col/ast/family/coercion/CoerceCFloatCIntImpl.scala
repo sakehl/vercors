@@ -5,5 +5,5 @@ import vct.col.ast.ops.CoerceCFloatCIntOps
 
 trait CoerceCFloatCIntImpl[G] extends CoerceCFloatCIntOps[G] {
   this: CoerceCFloatCInt[G] =>
-  override def target: TCInt[G] = TCInt(true)
+  override def target: TCInt[G] = TCInt()
 }

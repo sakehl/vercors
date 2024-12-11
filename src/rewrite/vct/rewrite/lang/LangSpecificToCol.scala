@@ -515,6 +515,7 @@ case class LangSpecificToCol[Pre <: Generation](
       case t: TCInt[Pre] =>
         val cint = t.rewriteDefault()
         cint.bits = t.bits
+        cint.signed = t.signed
         cint
       case t: CTArray[Pre] => c.arrayType(t)
       case t: CTStruct[Pre] => c.structType(t)

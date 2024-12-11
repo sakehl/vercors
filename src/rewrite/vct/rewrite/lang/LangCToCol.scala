@@ -303,10 +303,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     val indices: ListMap[RefCudaVecDim[Pre], Variable[Post]] = ListMap(
       Seq(RefCudaVecX[Pre](ref), RefCudaVecY[Pre](ref), RefCudaVecZ[Pre](ref))
         .map(dim =>
-          dim ->
-            new Variable[Post](TCInt(signed = false))(CudaIndexVariableOrigin(
-              dim
-            ))
+          dim -> new Variable[Post](TCInt())(CudaIndexVariableOrigin(dim))
         ): _*
     )
   }
@@ -392,15 +389,15 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   def castIsId(exprType: Type[Pre], castType: Type[Pre]): Boolean =
     (castType, getBaseType(exprType)) match {
       case (tc, te) if tc == te => true
-      case (TCInt(_), TBoundedInt(_, _)) => true
-      case (TBoundedInt(_, _), TCInt(_)) => true
+      case (TCInt(), TBoundedInt(_, _)) => true
+      case (TBoundedInt(_, _), TCInt()) => true
       case _ => false
     }
 
   def cast(c: CCast[Pre]): Expr[Post] =
     c match {
       case CCast(e, t) if castIsId(e.t, t) => rw.dispatch(c.expr)
-      case CCast(e, t @ TCInt(_)) if isInt(e.t) =>
+      case CCast(e, t @ TCInt()) if isInt(e.t) =>
         Cast(rw.dispatch(e), TypeValue(rw.dispatch(t))(c.o))(c.o)
       case CCast(e, t)
           if (isFloat(t) && isRatFloatOrInt(e.t)) ||
@@ -435,8 +432,8 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           CoercionUtils.firstElementIsType(newTElement, newEElement)
         ) { Cast(newE, TypeValue(newT)(t.o))(c.o) }
         else { throw UnsupportedCast(c) }
-      case CCast(e, t @ TCInt(signed)) if e.t.asPointer.isDefined =>
-        Cast(rw.dispatch(e), TypeValue(TCInt(signed))(t.o))(c.o)
+      case CCast(e, t @ TCInt()) if e.t.asPointer.isDefined =>
+        Cast(rw.dispatch(e), TypeValue(rw.dispatch(t))(t.o))(c.o)
       case CCast(e, t @ CTPointer(innerType))
           if getBaseType(e.t).isInstanceOf[TCInt[Pre]] =>
         Cast(rw.dispatch(e), TypeValue(TPointer(rw.dispatch(innerType)))(t.o))(
@@ -655,7 +652,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         implicit val o: Origin = getCDecl(d).o
         val varO: Origin = o
           .where(name = s"${C.getDeclaratorInfo(getCDecl(d)).name}_size")
-        val v = new Variable[Post](TCInt(signed = false))(varO)
+        val v = new Variable[Post](TCInt())(varO)
         dynamicSharedMemLengthVar(d) = v
         rw.variables.declare(v)
 //      val decl: Statement[Post] = LocalDecl(cNameSuccessor(d))
@@ -1524,7 +1521,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       val vectorT = TVector(size, elementType)
 
       val x = new Variable[Post](vectorT)(o.where(name = "x"))
-      val i = new Variable[Post](TCInt(signed = false))(o.where(name = "i"))
+      val i = new Variable[Post](TCInt())(o.where(name = "i"))
       val v = new Variable[Post](elementType)(o.where(name = "v"))
       val req = Seq(c_const[Post](0) <= i.get, i.get < c_const[Post](size))
 
@@ -1964,7 +1961,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         case _ => throw WrongVectorType(t)
       }
     rw.dispatch(innerType) match {
-      case innerType @ (TCInt(_) | TCFloat(_, _)) =>
+      case innerType @ (TCInt() | TCFloat(_, _)) =>
         TVector(intSize, innerType)(t.o)
       case _ => throw WrongVectorType(t)
     }

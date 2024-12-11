@@ -267,8 +267,9 @@ case object C {
       filteredSpecs match {
         case Seq(CVoid()) => TVoid()
         case t if C.INTEGER_LIKE_TYPES.contains(t) =>
-          val cint = TCInt[G](isSigned(specs))
+          val cint = TCInt[G]()
           cint.bits = getIntSize(LP64, specs)
+          cint.signed = isSigned(specs)
           cint
         case Seq(CFloat()) => C_ieee754_32bit()
         case Seq(CDouble()) => C_ieee754_64bit()

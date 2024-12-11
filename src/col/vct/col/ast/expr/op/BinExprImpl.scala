@@ -25,10 +25,8 @@ import vct.result.VerificationError
 
 object BinOperatorTypes {
   def isCIntOp[G](lt: Type[G], rt: Type[G]): Boolean =
-    (CoercionUtils.getCoercion(lt, TCInt(signed = true)).isDefined ||
-      CoercionUtils.getCoercion(lt, TCInt(signed = false)).isDefined) &&
-      (CoercionUtils.getCoercion(rt, TCInt(signed = true)).isDefined ||
-        CoercionUtils.getCoercion(rt, TCInt(signed = false)).isDefined)
+    CoercionUtils.getCoercion(lt, TCInt()).isDefined &&
+      CoercionUtils.getCoercion(rt, TCInt()).isDefined
 
   def isIntOp[G](lt: Type[G], rt: Type[G]): Boolean =
     CoercionUtils.getCoercion(lt, TInt()).isDefined &&
@@ -106,7 +104,7 @@ object BinOperatorTypes {
             if l.signed == r.signed && r.bits.isDefined &&
               r.bits.get >= l.bits.getOrElse(0) =>
           r
-        case _ => TCInt[G](signed = true)
+        case _ => TCInt[G]()
       }
     else if (isLLVMIntOp(lt, rt))
       Types.leastCommonSuperType(lt, rt).asInstanceOf[LLVMTInt[G]]

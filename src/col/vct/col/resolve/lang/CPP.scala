@@ -107,7 +107,11 @@ case object CPP {
     specs.collect { case spec: CPPTypeSpecifier[G] => spec } match {
       case Seq(CPPVoid()) => TVoid()
       case Seq(CPPChar()) => TChar()
-      case t if CPP.NUMBER_LIKE_SPECIFIERS.contains(t) => TCInt(isSigned(specs))
+      case t if CPP.NUMBER_LIKE_SPECIFIERS.contains(t) => {
+        val cint = TCInt[G]()
+        cint.signed = isSigned(specs);
+        cint
+      }
       case Seq(CPPSpecificationType(t @ TCFloat(_, _))) => t
       case Seq(CPPBool()) => TBool()
       case Seq(SYCLClassDefName("event", Seq())) => SYCLTEvent()

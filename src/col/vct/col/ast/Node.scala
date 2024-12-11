@@ -2897,10 +2897,10 @@ final case class CLiteralArray[G](exprs: Seq[Expr[G]])(implicit val o: Origin)
     extends CExpr[G] with CLiteralArrayImpl[G]
 
 sealed trait CType[G] extends Type[G] with CTypeImpl[G]
-final case class TCInt[G](signed: Boolean)(
-    implicit val o: Origin = DiagnosticOrigin
-) extends IntType[G] with CType[G] with TCIntImpl[G] with BitwiseType[G] {
+final case class TCInt[G]()(implicit val o: Origin = DiagnosticOrigin)
+    extends IntType[G] with CType[G] with TCIntImpl[G] with BitwiseType[G] {
   var bits: Option[Int] = None
+  var signed: Boolean = true
 }
 final case class TCFloat[G](exponent: Int, mantissa: Int)(
     implicit val o: Origin = DiagnosticOrigin

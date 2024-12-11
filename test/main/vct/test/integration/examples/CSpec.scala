@@ -615,5 +615,5 @@ class CSpec extends VercorsSpec {
     """
   vercors should verify using silicon example "concepts/c/mismatched_provenance.c"
   vercors should verify using silicon example "concepts/c/ptr_comparisons.c"
-  vercors should verify using silicon example "concepts/c/[pointer_tag.c"
+  vercors should verify using silicon example "concepts/c/pointer_tag.c"
 }
