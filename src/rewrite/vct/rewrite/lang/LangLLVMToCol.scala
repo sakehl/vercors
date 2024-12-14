@@ -83,6 +83,11 @@ case object LangLLVMToCol {
   val pallasResArgOrigin: Origin = Origin(
     Seq(PreferredName(Seq("resArg")), LabelContext("result arg"))
   )
+
+  val pallasResArgPermOrigin: Origin = Origin(Seq(
+    PreferredName(Seq("resArg context")),
+    LabelContext("Generated context for resArg"),
+  ))
 }
 
 case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
@@ -426,7 +431,11 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               case contract: VCLLVMFunctionContract[Pre] =>
                 rw.dispatch(contract.data.get)
               case contract: PallasFunctionContract[Pre] =>
-                contractRetArg.having(cRetArg) { rw.dispatch(contract.content) }
+                contractRetArg.having(cRetArg) {
+                  // TODO: If the function is a wrapper, extend contract with
+                  //       Read-permissions for the passed arguments.
+                  extendContractWithSretPerm(contract.content, cRetArg)
+                }
             },
           pure = func.pure,
         )(func.blame)
@@ -451,6 +460,26 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           }
         Some(new Variable(retT)(pallasResArgOrigin).rewriteDefault())
       case None => None
+    }
+  }
+
+  /** If the function returns in an argument, extend the contract with
+    * context_everywhere \pointer(retArg, 1, write);
+    */
+  private def extendContractWithSretPerm(
+      c: ApplicableContract[Pre],
+      retArg: Option[Ref[Post, Variable[Post]]],
+  ): ApplicableContract[Post] = {
+    retArg match {
+      case Some(arg) =>
+        implicit val o: Origin = pallasResArgPermOrigin
+        c.rewrite(contextEverywhere =
+          Star(
+            rw.dispatch(c.contextEverywhere),
+            PermPointer(p = Local(arg), len = const(1), perm = WritePerm[Post]),
+          )
+        )
+      case None => rw.dispatch(c)
     }
   }
 
@@ -923,8 +952,13 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         ))(store.blame)
       }
     }
+    val strippedPtr =
+      pointer match {
+        case DerefPointer(AddrOf(e)) => e
+        case p => p
+      }
     // TODO: Fix assignfailed blame
-    Assign(pointer, rw.dispatch(store.value))(store.blame)
+    Assign(strippedPtr, rw.dispatch(store.value))(store.blame)
   }
 
   def rewriteLoad(load: LLVMLoad[Pre]): Statement[Post] = {
@@ -962,6 +996,16 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
   def rewriteAllocA(alloc: LLVMAllocA[Pre]): Statement[Post] = {
     implicit val o: Origin = alloc.o
+    /*
+    Alloca-instructions should only occur in wrapper-functions when a
+    specification-function is called whose result is returned using an
+    sret-argument. In these cases we rewrite the specification-construct so
+    that the alloca is no longer required.
+     */
+    if (!wrapperRetArg.isEmpty && wrapperRetArg.top.isDefined) {
+      // Skip the initialization if we are in a wrapper function.
+      return Block(Seq())
+    }
     val t =
       localVariableInferredType.getOrElse(
         alloc.variable.decl,
