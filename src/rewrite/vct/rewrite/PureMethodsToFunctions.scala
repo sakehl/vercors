@@ -2,12 +2,9 @@ package vct.col.rewrite
 
 import hre.util.ScopedStack
 import vct.col.ast._
-import vct.col.origin.{DiagnosticOrigin, LabelContext, Origin, PreferredName}
-import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder}
-import vct.col.ast.RewriteHelpers._
+import vct.col.origin.{DiagnosticOrigin, LabelContext, Origin}
 import vct.col.ref.Ref
-import vct.col.util.AstBuildHelpers._
-import vct.col.util.SuccessionMap
+import vct.col.util.StatementToExpression
 import vct.result.VerificationError.UserError
 
 case object PureMethodsToFunctions extends RewriterBuilder {
@@ -33,6 +30,7 @@ case class PureMethodsToFunctions[Pre <: Generation]() extends Rewriter[Pre] {
 
   val currentAbstractMethod: ScopedStack[AbstractMethod[Pre]] = ScopedStack()
 
+  /*
   def countAssignments(v: Variable[Pre], s: Statement[Pre]): Option[Int] =
     s match {
       case Return(_) => Some(0)
@@ -62,7 +60,9 @@ case class PureMethodsToFunctions[Pre <: Generation]() extends Rewriter[Pre] {
       case Assign(_, _) => None
       case _ => None
     }
+   */
 
+  /*
   def toExpression(
       stat: Statement[Pre],
       alt: => Option[Expr[Post]],
@@ -116,6 +116,7 @@ case class PureMethodsToFunctions[Pre <: Generation]() extends Rewriter[Pre] {
       case _ => None
     }
   }
+   */
 
   override def dispatch(decl: Declaration[Pre]): Unit = {
     implicit val o: Origin = decl.o
@@ -137,7 +138,12 @@ case class PureMethodsToFunctions[Pre <: Generation]() extends Rewriter[Pre] {
             body =
               currentAbstractMethod.having(proc) {
                 proc.body.map(
-                  toExpression(_, None).getOrElse(
+                  StatementToExpression.toExpression(
+                    this,
+                    (s: String) => MethodCannotIntoFunction(proc, s),
+                    _,
+                    None,
+                  ).getOrElse(
                     throw MethodCannotIntoFunction(
                       proc,
                       "the method implementation cannot be restructured into a pure expression",
@@ -169,7 +175,12 @@ case class PureMethodsToFunctions[Pre <: Generation]() extends Rewriter[Pre] {
             body =
               currentAbstractMethod.having(method) {
                 method.body.map(
-                  toExpression(_, None).getOrElse(
+                  StatementToExpression.toExpression(
+                    this,
+                    (s: String) => MethodCannotIntoFunction(method, s),
+                    _,
+                    None,
+                  ).getOrElse(
                     throw MethodCannotIntoFunction(
                       method,
                       "the method implementation cannot be restructured into a pure expression",
