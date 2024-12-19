@@ -360,9 +360,9 @@ case class ContextEverywhereFailedInPost(
     s"Context of `$node` may not hold in the postcondition, since $failure."
 }
 case class ContextEverywhereFailedInRunPost(
-                                          failure: ContractFailure,
-                                          node: RunMethod[_],
-                                        ) extends ContractedFailure with WithContractFailure {
+    failure: ContractFailure,
+    node: RunMethod[_],
+) extends ContractedFailure with WithContractFailure {
   override def baseCode: String = "contextRunPostFailed"
   override def descInContext: String =
     "Context may not hold in postcondition, since"
