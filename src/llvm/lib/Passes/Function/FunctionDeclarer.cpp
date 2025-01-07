@@ -112,7 +112,6 @@ FDResult FunctionDeclarer::run(Function &F, FunctionAnalysisManager &FAM) {
         pallas::ErrorReporter::addError(SOURCE_LOC, errorStream.str(), F);
     }
 
-    llvmFuncDef->set_needs_wrapper_result_arg(false);
     if (utils::isPallasExprWrapper(F)) {
         auto mapperResult = FAM.getResult<pallas::ExprWrapperMapper>(F);
         auto *wrapperParent =
@@ -121,9 +120,6 @@ FDResult FunctionDeclarer::run(Function &F, FunctionAnalysisManager &FAM) {
         auto colParent = FAM.getResult<FunctionDeclarer>(*wrapperParent);
         llvmFuncDef->mutable_pallas_expr_wrapper_for()->set_id(
             colParent.getFunctionId());
-        if (mapperResult.getContext() == PallasWrapperContext::FuncContractPost) {
-            llvmFuncDef->set_needs_wrapper_result_arg(true);
-        }
     }
 
     try {

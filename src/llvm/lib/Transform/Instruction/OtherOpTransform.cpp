@@ -360,7 +360,6 @@ void llvm2col::transformPallasSpecResult(llvm::CallInst &callInstruction,
 
     } else {
         // Case 2: Result is returned as a sret parameter
-        // Implement & and add example!
         if (llvmSpecFunc->arg_size() != 1 ||
             !llvmSpecFunc->getArg(0)->hasStructRetAttr()) {
             pallas::ErrorReporter::addError(

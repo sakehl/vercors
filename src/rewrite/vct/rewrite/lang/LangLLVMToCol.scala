@@ -3,17 +3,7 @@ package vct.rewrite.lang
 import com.typesafe.scalalogging.LazyLogging
 import hre.util.ScopedStack
 import vct.col.ast.{Expr, _}
-import vct.col.origin.{
-  AssertFailed,
-  Blame,
-  DiagnosticOrigin,
-  LabelContext,
-  Origin,
-  PanicBlame,
-  PreferredName,
-  TypeName,
-  UnreachableReachedError,
-}
+import vct.col.origin._
 import vct.col.ref.{DirectRef, LazyRef, Ref}
 import vct.col.resolve.ctx.RefLLVMFunctionDefinition
 import vct.col.rewrite.{Generation, Rewritten}
@@ -80,10 +70,6 @@ case object LangLLVMToCol {
       unreachable.blame.blame(UnreachableReachedError(unreachable))
   }
 
-  val pallasResArgOrigin: Origin = Origin(
-    Seq(PreferredName(Seq("resArg")), LabelContext("result arg"))
-  )
-
   val pallasResArgPermOrigin: Origin = Origin(Seq(
     PreferredName(Seq("resArg context")),
     LabelContext("Generated context for resArg"),
@@ -120,14 +106,8 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     .ArrayBuffer()
   private val elidedBackEdges: mutable.Set[LabelDecl[Pre]] = mutable.Set()
 
-  // If the LLVM-function that is currently being transformed is a wrapper-function,
-  // this contains the argument that is used to pass the value of \result
-  private val wrapperRetArg: ScopedStack[Option[Variable[Post]]] = ScopedStack()
-
-  // If the LLVM-function that is currently being transformed returns its result in
-  // an argument, this contains the variable that contains the result.
-  private val contractRetArg: ScopedStack[Option[Ref[Post, Variable[Post]]]] =
-    ScopedStack()
+  // Keeps track if the currently transformed function is a wrapper-function.
+  private val inWrapperFunction: ScopedStack[Boolean] = ScopedStack()
 
   def gatherBackEdges(program: Program[Pre]): Unit = {
     program.collect { case loop: LLVMLoop[Pre] =>
@@ -391,14 +371,12 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           rw.dispatch(localVariableInferredType.getOrElse(it, it.t))
         )(it.o)
       }
-      // if func is a pallas wrapper, this is the additional arg used to pass the value of \result
-      val wRetArg = getPallasSpecRetArg(func)
       val argList =
         rw.variables.collect {
           func.args.zip(newArgs).foreach { case (a, b) =>
             rw.variables.succeed(a, b)
           }
-        }._1 ++ wRetArg
+        }._1
       // If func returns its result in an argument, this is a reference to that argument
       val cRetArg =
         func.returnInParam match {
@@ -413,7 +391,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           outArgs = Nil,
           typeArgs = Nil,
           body =
-            wrapperRetArg.having(wRetArg) {
+            inWrapperFunction.having(func.pallasExprWrapperFor.isDefined) {
               func.functionBody match {
                 case None => None
                 case Some(functionBody) =>
@@ -431,36 +409,15 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               case contract: VCLLVMFunctionContract[Pre] =>
                 rw.dispatch(contract.data.get)
               case contract: PallasFunctionContract[Pre] =>
-                contractRetArg.having(cRetArg) {
-                  // TODO: If the function is a wrapper, extend contract with
-                  //       Read-permissions for the passed arguments.
-                  extendContractWithSretPerm(contract.content, cRetArg)
-                }
+                extendContractWithSretPerm(contract.content, cRetArg)
             },
           pure = func.pure,
+          pallasWrapper = func.pallasExprWrapperFor.isDefined,
         )(func.blame)
       )
 
     }
     llvmFunctionMap.update(func, procedure)
-  }
-
-  private def getPallasSpecRetArg(
-      wFunc: LLVMFunctionDefinition[Pre]
-  ): Option[Variable[Post]] = {
-    if (!wFunc.needsWrapperResultArg) { return None }
-    wFunc.pallasExprWrapperFor match {
-      case Some(pFunc) =>
-        val retT =
-          pFunc.decl.returnInParam match {
-            case Some((idx, _)) =>
-              val preArg = pFunc.decl.args(idx)
-              localVariableInferredType.getOrElse(preArg, preArg.t)
-            case None => pFunc.decl.returnType
-          }
-        Some(new Variable(retT)(pallasResArgOrigin).rewriteDefault())
-      case None => None
-    }
   }
 
   /** If the function returns in an argument, extend the contract with
@@ -524,20 +481,17 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
     new ProcedureInvocation[Post](
       ref = new LazyRef[Post, Procedure[Post]](llvmFunctionMap(inv.ref.decl)),
-      args = extendWithPallasSpecArgs(
-        inv,
-        inv.args.zipWithIndex.map {
-          // TODO: This is really ugly, can we do the type inference in the resolve step and then do coercions to do this?
-          case (a, i) =>
-            val requiredType = localVariableInferredType
-              .getOrElse(inv.ref.decl.args(i), inv.ref.decl.args(i).t)
-            if (
-              a.t != requiredType && a.t.asPointer.isDefined &&
-              requiredType.asPointer.isDefined
-            ) { Cast(a, TypeValue(requiredType)) }
-            else { a }
-        }.map(rw.dispatch),
-      ),
+      args = inv.args.zipWithIndex.map {
+        // TODO: This is really ugly, can we do the type inference in the resolve step and then do coercions to do this?
+        case (a, i) =>
+          val requiredType = localVariableInferredType
+            .getOrElse(inv.ref.decl.args(i), inv.ref.decl.args(i).t)
+          if (
+            a.t != requiredType && a.t.asPointer.isDefined &&
+            requiredType.asPointer.isDefined
+          ) { Cast(a, TypeValue(requiredType)) }
+          else { a }
+      }.map(rw.dispatch),
       givenMap = inv.givenMap.map { case (Ref(v), e) =>
         (rw.succ(v), rw.dispatch(e))
       },
@@ -547,36 +501,6 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       outArgs = Seq.empty,
       typeArgs = Seq.empty,
     )(inv.blame)
-  }
-
-  /** If the given invocation invokes a wrapper-function for a Pallas
-    * specification, the list of passed arguments is extended to pass the value
-    * of \result of the parent function into the wrapper-function.
-    */
-  private def extendWithPallasSpecArgs(
-      inv: LLVMFunctionInvocation[Pre],
-      args: Seq[Expr[Post]],
-  ): Seq[Expr[Post]] = {
-    val wFunc = inv.ref.decl
-    if (!wFunc.needsWrapperResultArg) { return args }
-
-    var newArgs = args
-    wFunc.pallasExprWrapperFor match {
-      case Some(pFunc) if pFunc.decl.returnInParam.isDefined =>
-        if (contractRetArg.isEmpty || contractRetArg.top.isEmpty) {
-          throw UnexpectedLLVMNode(inv)
-        }
-        newArgs =
-          newArgs :+ new Local[Post](contractRetArg.top.get)(pallasResArgOrigin)
-      case Some(pFunc) if pFunc.decl.returnInParam.isEmpty =>
-        newArgs =
-          newArgs :+ new Result[Post](llvmFunctionMap.ref(pFunc.decl))(
-            pallasResArgOrigin
-          )
-      case None =>
-    }
-
-    return newArgs
   }
 
   def rewriteGlobal(decl: LLVMGlobalSpecification[Pre]): Unit = {
@@ -914,19 +838,9 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       case LLVMPointerValue(Ref(v)) =>
         globalVariableInferredType
           .getOrElse(v.asInstanceOf[LLVMGlobalVariable[Pre]], e.t)
-      case LLVMResult(Ref(f)) => getResultType(f)
+      case res: LLVMResult[Pre] => res.t
       case _ => e.t
     }
-
-  /** Determines the type of the functions result, taking into account whether
-    * the function returns its result in a parameter.
-    */
-  private def getResultType(func: LLVMFunctionDefinition[Pre]): Type[Pre] = {
-    func.returnInParam match {
-      case Some((_, t)) => t
-      case None => func.returnType
-    }
-  }
 
   def rewriteStore(store: LLVMStore[Pre]): Statement[Post] = {
     implicit val o: Origin = store.o
@@ -998,11 +912,12 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     implicit val o: Origin = alloc.o
     /*
     Alloca-instructions should only occur in wrapper-functions when a
-    specification-function is called whose result is returned using an
-    sret-argument. In these cases we rewrite the specification-construct so
-    that the alloca is no longer required.
+    specification-function is called whose result is returned using a
+    sret-argument. In these cases the initialization of the alloca is
+    not needed and causes problems when converting the wrapper into
+    an expression
      */
-    if (!wrapperRetArg.isEmpty && wrapperRetArg.top.isDefined) {
+    if (!inWrapperFunction.isEmpty && inWrapperFunction.top) {
       // Skip the initialization if we are in a wrapper function.
       return Block(Seq())
     }
@@ -1048,12 +963,20 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     )
   }
 
-  def rewriteResult(res: LLVMResult[Pre]): Local[Post] = {
+  def rewriteResult(res: LLVMResult[Pre]): LLVMIntermediaryResult[Post] = {
     implicit val o: Origin = res.o
-    if (wrapperRetArg.isEmpty || wrapperRetArg.top.isEmpty) {
-      throw UnexpectedLLVMNode(res)
-    }
-    new Local[Post](ref = wrapperRetArg.top.get.ref)
+    LLVMIntermediaryResult(
+      applicable =
+        new LazyRef[Post, Procedure[Post]](llvmFunctionMap(res.func.decl)),
+      sretArg =
+        res.func.decl.returnInParam match {
+          case Some((idx, _)) =>
+            val oldArg = res.func.decl.args(idx)
+            Some(rw.succ(oldArg))
+          case None => None
+        },
+    )
+
   }
 
   def result(ref: RefLLVMFunctionDefinition[Pre])(

@@ -37,6 +37,7 @@ import vct.rewrite.{
   ExplicitResourceValues,
   GenerateSingleOwnerPermissions,
   HeapVariableToRef,
+  InlinePallasWrappers,
   InlineTrivialLets,
   LowerLocalHeapVariables,
   MonomorphizeClass,
@@ -353,6 +354,8 @@ case class SilverTransformation(
         // Replace leftover SYCL types
         ReplaceSYCLTypes,
         CFloatIntCoercion,
+        // Inline pallas-specifications
+        InlinePallasWrappers,
 
         // BIP transformations
         ComputeBipGlue,

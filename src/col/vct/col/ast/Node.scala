@@ -709,6 +709,7 @@ final class Procedure[G](
     val inline: Boolean = false,
     val pure: Boolean = false,
     val vesuv_entry: Boolean = false,
+    val pallasWrapper: Boolean = false,
 )(val blame: Blame[CallableFailure])(implicit val o: Origin)
     extends GlobalDeclaration[G] with AbstractMethod[G] with ProcedureImpl[G]
 @scopes[LabelDecl]
@@ -3530,9 +3531,6 @@ final class LLVMFunctionDefinition[G](
     // If this function is a wrapper function for an expression of a
     // pallas specification of a function F, then this field references F.
     val pallasExprWrapperFor: Option[Ref[G, LLVMFunctionDefinition[G]]],
-    // Indicates that a new argument has to be added to pass the value for \result
-    // to the expression-wrapper.
-    val needsWrapperResultArg: Boolean = false,
 )(val blame: Blame[CallableFailure])(implicit val o: Origin)
     extends LLVMCallable[G]
     with Applicable[G]
@@ -3673,10 +3671,22 @@ final class LLVMGlobalSpecification[G](val value: String)(
   var data: Option[Seq[GlobalDeclaration[G]]] = None
 }
 
-// Node that represents the \result-construct in a Pallas contract.
+/*
+ Nodes that represents the \result-construct in a Pallas contract.
+ - Keep a reference to the function whose result they represent.
+ - The LLVMResult-Node is the node that is generated in the C++-part
+ of Pallas. In LangLLVMToCol, it is transformed into an
+ LLVMIntermediaryResult, which in turn is converted when the Pallas
+ expression-wrappers are inlined.
+ */
 final case class LLVMResult[G](func: Ref[G, LLVMFunctionDefinition[G]])(
     implicit val o: Origin
 ) extends LLVMExpr[G] with LLVMResultImpl[G]
+final case class LLVMIntermediaryResult[G](
+    applicable: Ref[G, Procedure[G]],
+    sretArg: Option[Ref[G, Variable[G]]],
+)(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMIntermediaryResultImpl[G]
 
 @family
 sealed trait LLVMMemoryOrdering[G]
