@@ -5,7 +5,7 @@ import vct.col.origin.{LabelContext, Origin, PreferredName}
 import vct.col.ref.Ref
 import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder, Rewritten}
 import vct.col.util.AstBuildHelpers.assignLocal
-import vct.col.util.StatementToExpression
+import vct.col.util.{StatementToExpression, SubstituteReferences}
 import vct.result.Message
 import vct.result.VerificationError.SystemError
 import vct.rewrite.InlinePallasWrappers.{
@@ -61,7 +61,7 @@ case class InlinePallasWrappers[Pre <: Generation]() extends Rewriter[Pre] {
           case None => Result[Post](applicable = succ(res.applicable.decl))
         }
       case inv: ProcedureInvocation[Pre] if inv.ref.decl.pallasWrapper =>
-        // TODO: Implement inlining of pallas wrappers
+        // Inline pallas wrapper into their call-sites
         val wFunc = inv.ref.decl
 
         if (wFunc.body.isEmpty) {
@@ -80,17 +80,17 @@ case class InlinePallasWrappers[Pre <: Generation]() extends Rewriter[Pre] {
             wFunc.args.map(arg => new Variable[Pre](arg.t)(arg.o))
           }
         }
-
+        // Assign the passed-in values from the call-site to the new variables.
         val assigns = newArgs.zip(inv.args).map { case (v, e) =>
           assignLocal(new Local[Pre](v.ref)(v.o), e)(InlineArgAssignOrigin)
         }
+        // Substitute references to the original arguments of the function-definition with the new variables
+        val varSubstitutions = wFunc.args.zip(newArgs)
+        val substBody = Option(
+          SubstituteReferences(varSubstitutions.toMap).dispatch(wFunc.body.get)
+        )
 
-        /*
-        TODO: The function body is a scope, hence the assignments are not in the
-        same scope as the rest of the instructions of the function-body
-         */
-        val bodyWithAssign = Block(assigns ++ wFunc.body)(inv.o)
-
+        val bodyWithAssign = Block(assigns ++ substBody)(inv.o)
         val inlinedBody = StatementToExpression.toExpression(
           this,
           (s: String) => WrapperInlineFailed(inv, s),
