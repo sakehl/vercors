@@ -5,6 +5,8 @@ import vct.col.ast.{
   Block,
   BooleanValue,
   Branch,
+  Cast,
+  DerefPointer,
   Expr,
   Let,
   Local,
@@ -54,7 +56,7 @@ case object StatementToExpression {
         ))
       case Scope(locals, impl) =>
         if (!locals.forall(countAssignments(_, impl).exists(_ <= 1))) {
-          return None
+          throw errorBuilder("Variables may only be assigned once.")
         }
         toExpression(rw, errorBuilder, impl, alt)
       case Assign(Local(ref), e) =>
