@@ -1543,6 +1543,11 @@ object JavaArrayInitializerBlame
 object NonNullPointerNull
     extends PanicBlame("A non-null pointer can never be null")
 
+object LLVMSretPerm
+    extends PanicBlame(
+      "Contracts always contain write-permission for function-arguments with an LLVM sret-attribute."
+    )
+
 object UnsafeDontCare {
   case class Satisfiability(reason: String)
       extends UnsafeDontCare[NontrivialUnsatisfiable]

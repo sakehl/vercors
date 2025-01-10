@@ -57,6 +57,7 @@ case class InlinePallasWrappers[Pre <: Generation]() extends Rewriter[Pre] {
       case res: LLVMIntermediaryResult[Pre] =>
         implicit val o: Origin = res.o
         res.sretArg match {
+          // TODO: This should probably be a dereference, not a local!!!!
           case Some(Ref(retArg)) => Local[Post](ref = succ(retArg))
           case None => Result[Post](applicable = succ(res.applicable.decl))
         }

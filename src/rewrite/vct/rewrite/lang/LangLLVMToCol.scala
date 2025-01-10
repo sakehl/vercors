@@ -431,10 +431,15 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       case Some(arg) =>
         implicit val o: Origin = pallasResArgPermOrigin
         c.rewrite(contextEverywhere =
-          Star(
-            rw.dispatch(c.contextEverywhere),
-            PermPointer(p = Local(arg), len = const(1), perm = WritePerm[Post]),
-          )
+          (Local(arg) !== Null()) &* Perm(
+            AmbiguousLocation(Local(arg))(LLVMSretPerm),
+            WritePerm[Post],
+          ) &* Perm(
+            AmbiguousLocation(DerefPointer(Local(arg))(LLVMSretPerm))(
+              LLVMSretPerm
+            ),
+            WritePerm[Post],
+          ) &* rw.dispatch(c.contextEverywhere)
         )
       case None => rw.dispatch(c)
     }
