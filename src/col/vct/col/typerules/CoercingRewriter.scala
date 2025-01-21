@@ -2149,6 +2149,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case LLVMZeroedAggregateValue(_) => e
       case LLVMResult(_) => e
       case LLVMIntermediaryResult(_, _) => e
+      case LLVMPerm(_, _) => e
       case PVLEndpointExpr(_, _) => e
       case EndpointExpr(ref, expr) => e
       case ChorExpr(expr) => ChorExpr(bool(expr))
@@ -2265,6 +2266,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
         LLVMLoad(variable, loadType, p, ordering)(load.blame)
       case store @ LLVMStore(value, p, ordering) =>
         LLVMStore(value, p, ordering)(store.blame)
+      case fracOf: LLVMFracOf[Pre] => fracOf
       case unreachable: LLVMBranchUnreachable[Pre] => unreachable
       case ModelDo(model, perm, after, action, impl) =>
         ModelDo(model, rat(perm), after, action, impl)

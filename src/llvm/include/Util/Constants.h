@@ -15,6 +15,8 @@ const std::string PALLAS_SRC_LOC_ID = "pallas.srcLoc";
 
 const std::string PALLAS_SPEC_LIB_MARKER = "pallas.specLib";
 const std::string PALLAS_SPEC_RESULT = "pallas.result";
+const std::string PALLAS_SPEC_FRAC_OF = "pallas.fracOf";
+const std::string PALLAS_SPEC_PERM = "pallas.perm";
 
 // Legacy VCLLVM constants
 const std::string VC_PREFIX = "VC.";

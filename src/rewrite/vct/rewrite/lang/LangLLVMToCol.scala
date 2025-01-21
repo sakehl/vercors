@@ -106,8 +106,27 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     .ArrayBuffer()
   private val elidedBackEdges: mutable.Set[LabelDecl[Pre]] = mutable.Set()
 
+  /** Encoding the pallas specification requires changing the types of some
+    * variables:
+    *   - bool --> resource
+    *   - ptr fracT --> TRational
+    */
+  private val typeSubstitutions: mutable.Map[Variable[Pre], Type[Pre]] = mutable
+    .Map()
+
   // Keeps track if the currently transformed function is a wrapper-function.
   private val inWrapperFunction: ScopedStack[Boolean] = ScopedStack()
+
+  def gatherPallasTypeSubst(program: Program[Pre]): Unit = {
+    program.collect {
+      // Resource
+      case Assign(Local(Ref(v)), LLVMPerm(_, _)) =>
+        typeSubstitutions(v) = TResource()
+      // Rational
+      case LLVMFracOf(Ref(v), _, _) => typeSubstitutions(v) = TRational()
+      case LLVMPerm(_, Ref(v)) => typeSubstitutions(v) = TRational()
+    }
+  }
 
   def gatherBackEdges(program: Program[Pre]): Unit = {
     program.collect { case loop: LLVMLoop[Pre] =>
@@ -206,11 +225,11 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         val superType = findMostSpecific(guessBuffer)
         if (superType.isEmpty) {
           val newType = findAcceptable(guessBuffer)
-          val updated = currentType == newType
+          val updated = currentType != newType
           currentType = newType
           updated
         } else {
-          val updated = currentType == superType.get
+          val updated = currentType != superType.get
           currentType = superType.get
           updated
         }
@@ -318,6 +337,19 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               ),
           )
         )
+        getVariable(store.value).foreach(v =>
+          getVariable(store.pointer).foreach(p =>
+            addTypeGuess(
+              v,
+              Set(p),
+              _ =>
+                typeGuesses.get(p).map(_.currentType) match {
+                  case Some(LLVMTPointer(Some(innerType))) => innerType
+                  case _ => store.value.t
+                },
+            )
+          )
+        )
       case inv: LLVMFunctionInvocation[Pre] =>
         inv.ref.decl.importedArguments.getOrElse(inv.ref.decl.args).zipWithIndex
           .foreach { case (a, i) =>
@@ -333,7 +365,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     val updateQueue = mutable.ArrayDeque.from(typeGuesses.keys)
 
     while (updateQueue.nonEmpty) {
-      val obj = updateQueue.removeLast()
+      val obj = updateQueue.removeHead()
       val guess = typeGuesses(obj)
       if (guess.update()) { updateQueue.appendAll(guess.dependents) }
     }
@@ -357,7 +389,8 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     rw.variables.succeed(
       v,
       new Variable[Post](rw.dispatch(
-        localVariableInferredType.getOrElse(v, v.t)
+        typeSubstitutions
+          .getOrElse(v, localVariableInferredType.getOrElse(v, v.t))
       )),
     )
   }
@@ -383,15 +416,19 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           case Some((idx, _)) => Some(argList(idx).ref)
           case None => None
         }
+      val isWrapper = func.pallasExprWrapperFor.isDefined
       rw.globalDeclarations.declare(
         new Procedure[Post](
-          returnType = rw
-            .dispatch(func.importedReturnType.getOrElse(func.returnType)),
+          returnType =
+            if (isWrapper) { TResource() }
+            else {
+              rw.dispatch(func.importedReturnType.getOrElse(func.returnType))
+            },
           args = argList,
           outArgs = Nil,
           typeArgs = Nil,
           body =
-            inWrapperFunction.having(func.pallasExprWrapperFor.isDefined) {
+            inWrapperFunction.having(isWrapper) {
               func.functionBody match {
                 case None => None
                 case Some(functionBody) =>
@@ -412,7 +449,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                 extendContractWithSretPerm(contract.content, cRetArg)
             },
           pure = func.pure,
-          pallasWrapper = func.pallasExprWrapperFor.isDefined,
+          pallasWrapper = isWrapper,
         )(func.blame)
       )
 
@@ -491,8 +528,14 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         case (a, i) =>
           val requiredType = localVariableInferredType
             .getOrElse(inv.ref.decl.args(i), inv.ref.decl.args(i).t)
+          val givenType =
+            a match {
+              // TODO: Make this more general
+              case Local(Ref(v)) => localVariableInferredType.getOrElse(v, v.t)
+              case _ => a.t
+            }
           if (
-            a.t != requiredType && a.t.asPointer.isDefined &&
+            givenType != requiredType && givenType.asPointer.isDefined &&
             requiredType.asPointer.isDefined
           ) { Cast(a, TypeValue(requiredType)) }
           else { a }
@@ -969,6 +1012,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   }
 
   def rewriteResult(res: LLVMResult[Pre]): LLVMIntermediaryResult[Post] = {
+    requireInWrapper(res)
     implicit val o: Origin = res.o
     LLVMIntermediaryResult(
       applicable =
@@ -981,7 +1025,28 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           case None => None
         },
     )
+  }
 
+  def rewriteFracOf(fracOf: LLVMFracOf[Pre]): Statement[Post] = {
+    requireInWrapper(fracOf)
+    implicit val o: Origin = fracOf.o
+    // fracOf(v, num, denom) --> v = num / denom.
+    assignLocal(
+      Local(rw.succ(fracOf.sret.decl)),
+      new RatDiv[Post](rw.dispatch(fracOf.num), rw.dispatch(fracOf.denom))(
+        fracOf.blame
+      ),
+    )
+  }
+
+  def rewritePerm(llvmPerm: LLVMPerm[Pre]): Expr[Post] = {
+    requireInWrapper(llvmPerm)
+    implicit val o: Origin = llvmPerm.o
+    val locExpr = Local[Post](rw.succ(llvmPerm.loc.decl))
+    Perm[Post](
+      AmbiguousLocation[Post](locExpr)(llvmPerm.blame),
+      Local[Post](rw.succ(llvmPerm.perm.decl)),
+    )
   }
 
   def result(ref: RefLLVMFunctionDefinition[Pre])(
@@ -1096,6 +1161,12 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           },
         )
       ))
+    }
+  }
+
+  private def requireInWrapper(node: Node[_]): Unit = {
+    if (inWrapperFunction.isEmpty || !inWrapperFunction.top) {
+      throw UnexpectedLLVMNode(node)
     }
   }
 

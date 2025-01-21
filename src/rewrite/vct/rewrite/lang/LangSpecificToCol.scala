@@ -157,6 +157,7 @@ case class LangSpecificToCol[Pre <: Generation](
   override def dispatch(program: Program[Pre]): Program[Post] = {
     llvm.gatherBackEdges(program)
     llvm.gatherTypeHints(program)
+    llvm.gatherPallasTypeSubst(program)
     super.dispatch(program)
   }
 
@@ -277,6 +278,7 @@ case class LangSpecificToCol[Pre <: Generation](
       case block: LLVMBasicBlock[Pre] => llvm.rewriteBasicBlock(block)
       case unreachable: LLVMBranchUnreachable[Pre] =>
         llvm.rewriteUnreachable(unreachable)
+      case fracOf: LLVMFracOf[Pre] => llvm.rewriteFracOf(fracOf)
       case other => other.rewriteDefault()
     }
 
@@ -395,6 +397,7 @@ case class LangSpecificToCol[Pre <: Generation](
       case trunc: LLVMTruncate[Pre] => llvm.rewriteTruncate(trunc)
       case fpext: LLVMFloatExtend[Pre] => llvm.rewriteFloatExtend(fpext)
       case result: LLVMResult[Pre] => llvm.rewriteResult(result)
+      case llvmPerm: LLVMPerm[Pre] => llvm.rewritePerm(llvmPerm)
       case other => rewriteDefault(other)
     }
 

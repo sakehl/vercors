@@ -57,6 +57,22 @@ void transformPallasSpecResult(llvm::CallInst &callInstruction,
                                col::Block &colBlock,
                                pallas::FunctionCursor &funcCursor);
 
+/**
+ * Transform call-instruction to the fracOf-function of the pallas
+ * specification library.
+ */
+void transformPallasFracOf(llvm::CallInst &callInstruction,
+                           col::Block &colBlock,
+                           pallas::FunctionCursor &funcCursor);
+
+/**
+ * Transform call-instruction to the Perm-function of the pallas
+ * specification library.
+ */
+void transformPallasPerm(llvm::CallInst &callInstruction,
+                           col::Block &colBlock,
+                           pallas::FunctionCursor &funcCursor);
+
 } // namespace llvm2col
 
 #endif // PALLAS_OTHEROPTRANSFORM_H

@@ -2,6 +2,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/FMF.h>
 #include <llvm/IR/Instruction.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
 
@@ -305,6 +306,10 @@ void llvm2col::transformPallasSpecLibCall(llvm::CallInst &callInstruction,
 
     if (specLibType == pallas::constants::PALLAS_SPEC_RESULT) {
         transformPallasSpecResult(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_FRAC_OF) {
+        transformPallasFracOf(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_PERM) {
+        transformPallasPerm(callInstruction, colBlock, funcCursor);
     } else {
         pallas::ErrorReporter::addError(
             SOURCE_LOC, "Unsupported Pallas specification function",
@@ -392,6 +397,75 @@ void llvm2col::transformPallasSpecResult(llvm::CallInst &callInstruction,
         memOrder->set_allocated_origin(
             llvm2col::generateFunctionCallOrigin(callInstruction));
     }
+}
 
-    // TODO: Handle cases, where the result is returned in other ways
+void llvm2col::transformPallasFracOf(llvm::CallInst &callInstruction,
+                                     col::Block &colBlock,
+                                     pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+
+    //  Check that the signature matches
+    if (llvmSpecFunc->arg_size() != 3 ||
+        !llvmSpecFunc->getArg(0)->hasStructRetAttr() ||
+        !llvmSpecFunc->getArg(1)->getType()->isIntegerTy() ||
+        !llvmSpecFunc->getArg(2)->getType()->isIntegerTy()) {
+        pallas::ErrorReporter::addError(
+            SOURCE_LOC, "Malformed pallas spec-lib fracOf-function.",
+            callInstruction);
+        return;
+    }
+
+    // Check that the value of the sret-argument is an alloca
+    auto *sretAlloc =
+        dyn_cast_if_present<llvm::AllocaInst>(callInstruction.getArgOperand(0));
+    if (sretAlloc == nullptr) {
+        pallas::ErrorReporter::addError(
+            SOURCE_LOC,
+            "Malformed call to fracOf. First argument should be alloca",
+            callInstruction);
+        return;
+    }
+
+    col::LlvmFracOf *fracOf = colBlock.add_statements()->mutable_llvm_frac_of();
+    fracOf->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    fracOf->set_allocated_blame(new col::Blame());
+
+    fracOf->mutable_sret()->set_id(
+        funcCursor.getVariableMapEntry(*sretAlloc, false).id());
+    llvm2col::transformAndSetExpr(funcCursor, callInstruction,
+                                  *callInstruction.getArgOperand(1),
+                                  *fracOf->mutable_num());
+    llvm2col::transformAndSetExpr(funcCursor, callInstruction,
+                                  *callInstruction.getArgOperand(2),
+                                  *fracOf->mutable_denom());
+}
+
+void llvm2col::transformPallasPerm(llvm::CallInst &callInstruction,
+                                   col::Block &colBlock,
+                                   pallas::FunctionCursor &funcCursor) {
+    // Check that the function signature is wellformed
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    if (llvmSpecFunc->arg_size() != 2 ||
+        !llvmSpecFunc->getArg(0)->getType()->isPointerTy() ||
+        !llvmSpecFunc->getArg(1)->getType()->isPointerTy() ||
+        !llvmSpecFunc->getArg(1)->hasByValAttr()) {
+        pallas::ErrorReporter::addError(
+            SOURCE_LOC, "Malformed pallas spec-lib definition (Perm).",
+            callInstruction);
+        return;
+    }
+
+    col::Assign &assignment =
+        funcCursor.createAssignmentAndDeclaration(callInstruction, colBlock);
+    auto *perm = assignment.mutable_value()->mutable_llvm_perm();
+    perm->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    perm->set_allocated_blame(new col::Blame());
+    perm->mutable_loc()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(0), false)
+            .id());
+    perm->mutable_perm()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(1), false)
+            .id());
 }

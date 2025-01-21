@@ -3688,6 +3688,19 @@ final case class LLVMIntermediaryResult[G](
 )(implicit val o: Origin)
     extends LLVMExpr[G] with LLVMIntermediaryResultImpl[G]
 
+final case class LLVMFracOf[G](
+    sret: Ref[G, Variable[G]],
+    num: Expr[G],
+    denom: Expr[G],
+)(val blame: Blame[DivByZero])(implicit val o: Origin)
+    extends ExceptionalStatement[G] with LLVMFracOfImpl[G]
+
+final case class LLVMPerm[G](
+    loc: Ref[G, Variable[G]],
+    perm: Ref[G, Variable[G]],
+)(val blame: Blame[PointerLocationError])(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMPermImpl[G]
+
 @family
 sealed trait LLVMMemoryOrdering[G]
     extends NodeFamily[G] with LLVMMemoryOrderingImpl[G]
