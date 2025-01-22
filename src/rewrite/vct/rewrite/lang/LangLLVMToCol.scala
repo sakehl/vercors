@@ -351,10 +351,27 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           )
         )
       case inv: LLVMFunctionInvocation[Pre] =>
-        inv.ref.decl.importedArguments.getOrElse(inv.ref.decl.args).zipWithIndex
-          .foreach { case (a, i) =>
-            getVariable(inv.args(i))
-              .foreach(v => addTypeGuess(v, Set.empty, _ => a.t))
+        val calledFunc = inv.ref.decl
+        val isWrapperFunc = calledFunc.pallasExprWrapperFor.isDefined
+        calledFunc.importedArguments.getOrElse(calledFunc.args).zipWithIndex
+          .foreach { case (arg, idx) =>
+            // Infer type of variable that is used as arg in function call
+            // from function definition
+            getVariable(inv.args(idx))
+              .foreach(v => addTypeGuess(v, Set.empty, _ => arg.t))
+
+            // If the invoked function is a wrapper function, we infer the
+            // type of the pointer-typed argument from the call-site.
+            if (isWrapperFunc && arg.t.asPointer.isDefined) {
+              val dependencies = findDependencies(inv.args(idx))
+              // TODO: Check if this can be simplified I.e. the expression
+              //  should almost always be resolvable with getVariable
+              addTypeGuess(
+                arg,
+                dependencies,
+                _ => replaceWithGuesses(inv.args(idx), dependencies).t,
+              )
+            }
           }
     }
 
