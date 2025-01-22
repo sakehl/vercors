@@ -33,6 +33,7 @@ case object ExampleFiles {
     "examples/concepts/llvm/void-contracts.pvl",
     "examples/concepts/llvm/pallas/pallas_function_contract.c",
     "examples/concepts/llvm/pallas/pallas_function_contract_fail.c",
+    "examples/concepts/llvm/pallas/pallas_result.c",
   ).map(_.replaceAll("/", File.separator))
 
   val EXCLUSIONS: Seq[Path => Boolean] = Seq(
