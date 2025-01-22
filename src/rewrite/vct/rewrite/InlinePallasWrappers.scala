@@ -91,12 +91,11 @@ case class InlinePallasWrappers[Pre <: Generation]() extends Rewriter[Pre] {
         )
 
         val bodyWithAssign = Block(assigns ++ substBody)(inv.o)
-        val inlinedBody = StatementToExpression.toExpression(
+        val inlinedBody = StatementToExpression(
           this,
           (s: String) => WrapperInlineFailed(inv, s),
-          bodyWithAssign,
-          None,
-        )
+          true,
+        ).toExpression(bodyWithAssign, None)
 
         inlinedBody match {
           case Some(e) => e

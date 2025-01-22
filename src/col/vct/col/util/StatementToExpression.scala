@@ -1,30 +1,27 @@
 package vct.col.util
 
-import vct.col.ast.{
-  Assign,
-  Block,
-  BooleanValue,
-  Branch,
-  Cast,
-  DerefPointer,
-  Expr,
-  Let,
-  Local,
-  Return,
-  Scope,
-  Select,
-  Statement,
-  Variable,
-}
+import hre.util.ScopedStack
+import vct.col.ast._
 import vct.col.origin.{DiagnosticOrigin, Origin}
+import vct.col.ref.Ref
 import vct.col.rewrite.{Generation, NonLatchingRewriter}
 import vct.result.VerificationError
 
-case object StatementToExpression {
+/** @param inlinePermLet
+  *   Specified if let-expressions that contain Perm(...) should be inlined.
+  *   This should only be relevant for the wrapper-inlining of pallas
+  *   specifications
+  */
+case class StatementToExpression[Pre <: Generation, Post <: Generation](
+    rw: NonLatchingRewriter[Pre, Post],
+    errorBuilder: String => VerificationError,
+    inlinePermLet: Boolean = false,
+) {
 
-  def toExpression[Pre <: Generation, Post <: Generation](
-      rw: NonLatchingRewriter[Pre, Post],
-      errorBuilder: String => VerificationError,
+  private val letSubstitutions
+      : ScopedStack[Map[Ref[Pre, Variable[Pre]], Expr[Pre]]] = ScopedStack()
+
+  def toExpression(
       stat: Statement[Pre],
       alt: => Option[Expr[Post]],
   ): Option[Expr[Post]] = {
@@ -34,44 +31,48 @@ case object StatementToExpression {
         alt match {
           case Some(_) =>
             throw errorBuilder("Dead code after return is not allowed.")
-          case None => Some(rw.dispatch(e))
+          case None => Some(dispatchExpr(e))
         }
       case Block(Nil) => alt
       case Block(stat +: tail) =>
-        toExpression(
-          rw,
-          errorBuilder,
-          stat,
-          toExpression(rw, errorBuilder, Block(tail), alt),
-        )
+        toExpression(stat, toExpression(Block(tail), alt))
       case Branch(Nil) => alt
-      case Branch((BooleanValue(true), impl) +: _) =>
-        toExpression(rw, errorBuilder, impl, alt)
+      case Branch((BooleanValue(true), impl) +: _) => toExpression(impl, alt)
       case Branch((cond, impl) +: branches) =>
         Some(Select(
-          rw.dispatch(cond),
-          toExpression(rw, errorBuilder, impl, alt).getOrElse(return None),
-          toExpression(rw, errorBuilder, Branch(branches), alt)
-            .getOrElse(return None),
+          dispatchExpr(cond),
+          toExpression(impl, alt).getOrElse(return None),
+          toExpression(Branch(branches), alt).getOrElse(return None),
         ))
       case Scope(locals, impl) =>
         if (!locals.forall(countAssignments(_, impl).exists(_ <= 1))) {
           throw errorBuilder("Variables may only be assigned once.")
         }
-        toExpression(rw, errorBuilder, impl, alt)
+        toExpression(impl, alt)
       case Assign(Local(ref), e) =>
         rw.localHeapVariables.scope {
           rw.variables.scope {
-            alt match {
-              case Some(exprAlt) =>
-                Some(Let[Post](
-                  rw.variables.collect { rw.dispatch(ref.decl) }._1.head,
-                  rw.dispatch(e),
-                  exprAlt,
-                ))
-              case None =>
-                throw errorBuilder("Assign may not be the last statement")
+            e match {
+              case Perm(_, _) if inlinePermLet =>
+                // Inline the assignment
+                letSubstitutions.having(
+                  letSubstitutions.topOption.getOrElse(Map.empty)
+                    .updated(ref, e)
+                ) { alt }
+              case _ =>
+                // Turn into let-expression
+                alt match {
+                  case Some(exprAlt) =>
+                    Some(Let[Post](
+                      rw.variables.collect { rw.dispatch(ref.decl) }._1.head,
+                      dispatchExpr(e),
+                      exprAlt,
+                    ))
+                  case None =>
+                    throw errorBuilder("Assign may not be the last statement")
+                }
             }
+
           }
         }
 
@@ -79,7 +80,16 @@ case object StatementToExpression {
     }
   }
 
-  def countAssignments[G <: Generation](
+  private def dispatchExpr(e: Expr[Pre]): Expr[Post] = {
+    if (!inlinePermLet || letSubstitutions.isEmpty) { return rw.dispatch(e) }
+    val subMap = letSubstitutions.top.map[Expr[Pre], Expr[Pre]] {
+      case (ref, expr) => (Local[Pre](ref)(DiagnosticOrigin), expr)
+    }
+    val sub = Substitute(subMap)
+    rw.dispatch(sub.dispatch(e))
+  }
+
+  private def countAssignments[G <: Generation](
       v: Variable[G],
       s: Statement[G],
   ): Option[Int] =

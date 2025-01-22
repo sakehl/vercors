@@ -487,12 +487,12 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         c.rewrite(contextEverywhere =
           (Local(arg) !== Null()) &* Perm(
             AmbiguousLocation(Local(arg))(LLVMSretPerm),
-            WritePerm[Post],
+            WritePerm[Post](),
           ) &* Perm(
             AmbiguousLocation(DerefPointer(Local(arg))(LLVMSretPerm))(
               LLVMSretPerm
             ),
-            WritePerm[Post],
+            WritePerm[Post](),
           ) &* rw.dispatch(c.contextEverywhere)
         )
       case None => rw.dispatch(c)
