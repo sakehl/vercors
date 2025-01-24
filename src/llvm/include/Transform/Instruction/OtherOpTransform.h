@@ -73,6 +73,15 @@ void transformPallasPerm(llvm::CallInst &callInstruction,
                            col::Block &colBlock,
                            pallas::FunctionCursor &funcCursor);
 
+/**
+ * Transform call-instruction to the Implication-function of the pallas
+ * specification library.
+ */
+void transformPallasImply(llvm::CallInst &callInstruction,
+                           col::Block &colBlock,
+                           pallas::FunctionCursor &funcCursor);
+
+
 } // namespace llvm2col
 
 #endif // PALLAS_OTHEROPTRANSFORM_H

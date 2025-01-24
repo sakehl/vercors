@@ -310,9 +310,11 @@ void llvm2col::transformPallasSpecLibCall(llvm::CallInst &callInstruction,
         transformPallasFracOf(callInstruction, colBlock, funcCursor);
     } else if (specLibType == pallas::constants::PALLAS_SPEC_PERM) {
         transformPallasPerm(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_IMPLY) {
+        transformPallasImply(callInstruction, colBlock, funcCursor);
     } else {
         pallas::ErrorReporter::addError(
-            SOURCE_LOC, "Unsupported Pallas specification function",
+            SOURCE_LOC, "Unsupported Pallas specification function ",
             callInstruction);
     }
 }
@@ -466,6 +468,32 @@ void llvm2col::transformPallasPerm(llvm::CallInst &callInstruction,
         funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(0), false)
             .id());
     perm->mutable_perm()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(1), false)
+            .id());
+}
+
+void llvm2col::transformPallasImply(llvm::CallInst &callInstruction, col::Block &colBlock,
+                          pallas::FunctionCursor &funcCursor) {
+    // Check that the function signature is wellformed
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    if (llvmSpecFunc->arg_size() != 2 ||
+        !llvmSpecFunc->getArg(0)->getType()->isIntegerTy(1) ||
+        !llvmSpecFunc->getArg(1)->getType()->isIntegerTy(1)) {
+        pallas::ErrorReporter::addError(
+            SOURCE_LOC, "Malformed pallas spec-lib definition (Imply).",
+            callInstruction);
+        return;
+    }
+
+    col::Assign &assignment =
+        funcCursor.createAssignmentAndDeclaration(callInstruction, colBlock);
+    auto *imply = assignment.mutable_value()->mutable_llvm_implies();
+    imply->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    imply->mutable_left()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(0), false)
+            .id());
+    imply->mutable_right()->set_id(
         funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(1), false)
             .id());
 }

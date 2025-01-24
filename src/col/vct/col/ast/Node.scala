@@ -3702,6 +3702,12 @@ final case class LLVMPerm[G](
 )(val blame: Blame[PointerLocationError])(implicit val o: Origin)
     extends LLVMExpr[G] with LLVMPermImpl[G]
 
+final case class LLVMImplies[G](
+    left: Ref[G, Variable[G]],
+    right: Ref[G, Variable[G]],
+)(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMImpliesImpl[G]
+
 @family
 sealed trait LLVMMemoryOrdering[G]
     extends NodeFamily[G] with LLVMMemoryOrderingImpl[G]

@@ -398,6 +398,7 @@ case class LangSpecificToCol[Pre <: Generation](
       case fpext: LLVMFloatExtend[Pre] => llvm.rewriteFloatExtend(fpext)
       case result: LLVMResult[Pre] => llvm.rewriteResult(result)
       case llvmPerm: LLVMPerm[Pre] => llvm.rewritePerm(llvmPerm)
+      case llvmImply: LLVMImplies[Pre] => llvm.rewriteImplies(llvmImply)
       case other => rewriteDefault(other)
     }
 
