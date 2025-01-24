@@ -481,6 +481,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             },
           pure = func.pure,
           pallasWrapper = isWrapper,
+          pallasFunction = true,
         )(func.blame)
       )
 

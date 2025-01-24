@@ -38,7 +38,7 @@ case class InlinePallasPermLets[Pre <: Generation]() extends Rewriter[Pre] {
 
     // Only inline things when we are in a Pallas-function
     if (inPallasFunc.isEmpty || inPallasFunc.top == false) {
-      expr.rewriteDefault()
+      return expr.rewriteDefault()
     }
 
     expr match {
