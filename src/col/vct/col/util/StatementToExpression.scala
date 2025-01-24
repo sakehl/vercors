@@ -38,16 +38,18 @@ case class StatementToExpression[Pre <: Generation, Post <: Generation](
           throw errorBuilder("Variables may only be assigned once.")
         }
         toExpression(impl, alt)
-      case Assign(Local(ref), e) =>
+      case a @ Assign(Local(ref), e) =>
         rw.localHeapVariables.scope {
           rw.variables.scope {
             alt match {
               case Some(exprAlt) =>
-                Some(Let[Post](
-                  rw.variables.collect { rw.dispatch(ref.decl) }._1.head,
-                  rw.dispatch(e),
-                  exprAlt,
-                ))
+                Some(
+                  Let[Post](
+                    rw.variables.collect { rw.dispatch(ref.decl) }._1.head,
+                    rw.dispatch(e),
+                    exprAlt,
+                  )(a.o)
+                )
               case None =>
                 throw errorBuilder("Assign may not be the last statement")
             }
