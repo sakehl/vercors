@@ -1,4 +1,4 @@
-package vct.rewrite
+package vct.rewrite.pallas
 
 import vct.col.ast._
 import vct.col.origin.{LabelContext, Origin, PreferredName}
@@ -8,7 +8,7 @@ import vct.col.util.AstBuildHelpers.assignLocal
 import vct.col.util.{StatementToExpression, SubstituteReferences}
 import vct.result.Message
 import vct.result.VerificationError.SystemError
-import vct.rewrite.InlinePallasWrappers.{
+import vct.rewrite.pallas.InlinePallasWrappers.{
   InlineArgAssignOrigin,
   WrapperInlineFailed,
 }
@@ -94,7 +94,6 @@ case class InlinePallasWrappers[Pre <: Generation]() extends Rewriter[Pre] {
         val inlinedBody = StatementToExpression(
           this,
           (s: String) => WrapperInlineFailed(inv, s),
-          true,
         ).toExpression(bodyWithAssign, None)
 
         inlinedBody match {

@@ -710,6 +710,7 @@ final class Procedure[G](
     val pure: Boolean = false,
     val vesuv_entry: Boolean = false,
     val pallasWrapper: Boolean = false,
+    val pallasFunction: Boolean = false,
 )(val blame: Blame[CallableFailure])(implicit val o: Origin)
     extends GlobalDeclaration[G] with AbstractMethod[G] with ProcedureImpl[G]
 @scopes[LabelDecl]

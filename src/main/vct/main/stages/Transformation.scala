@@ -37,7 +37,6 @@ import vct.rewrite.{
   ExplicitResourceValues,
   GenerateSingleOwnerPermissions,
   HeapVariableToRef,
-  InlinePallasWrappers,
   InlineTrivialLets,
   LowerLocalHeapVariables,
   MonomorphizeClass,
@@ -45,6 +44,7 @@ import vct.rewrite.{
   VariableToPointer,
 }
 import vct.rewrite.lang.ReplaceSYCLTypes
+import vct.rewrite.pallas.{InlinePallasPermLets, InlinePallasWrappers}
 import vct.rewrite.veymont._
 import vct.rewrite.veymont.generation._
 import vct.rewrite.veymont.verification._
@@ -356,7 +356,7 @@ case class SilverTransformation(
         CFloatIntCoercion,
         // Inline pallas-specifications
         InlinePallasWrappers,
-
+        InlinePallasPermLets,
         // BIP transformations
         ComputeBipGlue,
         InstantiateBipSynchronizations,
