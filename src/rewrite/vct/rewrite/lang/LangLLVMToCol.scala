@@ -118,6 +118,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   private val inWrapperFunction: ScopedStack[Boolean] = ScopedStack()
 
   def gatherPallasTypeSubst(program: Program[Pre]): Unit = {
+    // Get all variables that are assigned a new type directly
     program.collect {
       // Resource
       case Assign(Local(Ref(v)), LLVMPerm(_, _)) =>
@@ -125,6 +126,19 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       // Rational
       case LLVMFracOf(Ref(v), _, _) => typeSubstitutions(v) = TRational()
       case LLVMPerm(_, Ref(v)) => typeSubstitutions(v) = TRational()
+    }
+
+    // Propagate the new types across trivial assignments.
+    // TODO: Improve this. This does not cover all cases and is slow.
+    //  It would be nicer to do this in a separate pass before the type-inference.
+    var oldSize = -1
+    while (typeSubstitutions.size != oldSize) {
+      oldSize = typeSubstitutions.size
+      program.collect {
+        case Assign(Local(Ref(targetVar)), Local(Ref(sourceVar))) =>
+          typeSubstitutions.get(sourceVar)
+            .foreach(sT => typeSubstitutions(targetVar) = sT)
+      }
     }
   }
 
