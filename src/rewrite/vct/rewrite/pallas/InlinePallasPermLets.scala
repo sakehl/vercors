@@ -53,6 +53,9 @@ case class InlinePallasPermLets[Pre <: Generation]() extends Rewriter[Pre] {
         substitutions.having(substitution.updated(v, dispatch(e))) {
           dispatch(inner)
         }
+      case Let(v1, e, inner @ Local(Ref(v2))) if v1 == v2 =>
+        // Remove trivial let of shape (\let v = ... ; v)
+        dispatch(e)
       case Local(Ref(v)) if substitution.contains(v) => substitution(v)
       case _ => expr.rewriteDefault()
     }

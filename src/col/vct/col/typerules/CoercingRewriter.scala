@@ -2151,6 +2151,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case LLVMIntermediaryResult(_, _) => e
       case LLVMPerm(_, _) => e
       case LLVMImplies(_, _) => e
+      case LLVMStar(_, _) => e
       case PVLEndpointExpr(_, _) => e
       case EndpointExpr(ref, expr) => e
       case ChorExpr(expr) => ChorExpr(bool(expr))

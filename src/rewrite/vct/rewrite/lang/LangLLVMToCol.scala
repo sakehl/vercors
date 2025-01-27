@@ -123,6 +123,10 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       // Resource
       case Assign(Local(Ref(v)), LLVMPerm(_, _)) =>
         typeSubstitutions(v) = TResource()
+      case Assign(Local(Ref(v)), LLVMStar(Ref(left), Ref(right))) =>
+        typeSubstitutions(v) = TResource()
+        typeSubstitutions(left) = TResource()
+        typeSubstitutions(right) = TResource()
       // Rational
       case LLVMFracOf(Ref(v), _, _) => typeSubstitutions(v) = TRational()
       case LLVMPerm(_, Ref(v)) => typeSubstitutions(v) = TRational()
@@ -1087,6 +1091,15 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     Implies[Post](
       Local[Post](rw.succ(llvmImply.left.decl)),
       Local[Post](rw.succ(llvmImply.right.decl)),
+    )
+  }
+
+  def rewriteStar(llvmStar: LLVMStar[Pre]): Expr[Post] = {
+    requireInWrapper(llvmStar)
+    implicit val o: Origin = llvmStar.o
+    Star[Post](
+      Local[Post](rw.succ(llvmStar.left.decl)),
+      Local[Post](rw.succ(llvmStar.right.decl)),
     )
   }
 

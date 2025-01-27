@@ -81,6 +81,13 @@ void transformPallasImply(llvm::CallInst &callInstruction,
                            col::Block &colBlock,
                            pallas::FunctionCursor &funcCursor);
 
+/**
+ * Transform call the separating conjunction of the pallas spec-library.
+ */
+void transformPallasStar(llvm::CallInst &callInstruction,
+                           col::Block &colBlock,
+                           pallas::FunctionCursor &funcCursor);
+
 
 } // namespace llvm2col
 

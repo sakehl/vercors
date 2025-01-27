@@ -312,6 +312,8 @@ void llvm2col::transformPallasSpecLibCall(llvm::CallInst &callInstruction,
         transformPallasPerm(callInstruction, colBlock, funcCursor);
     } else if (specLibType == pallas::constants::PALLAS_SPEC_IMPLY) {
         transformPallasImply(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_STAR) {
+        transformPallasStar(callInstruction, colBlock, funcCursor);
     } else {
         pallas::ErrorReporter::addError(
             SOURCE_LOC, "Unsupported Pallas specification function ",
@@ -472,13 +474,15 @@ void llvm2col::transformPallasPerm(llvm::CallInst &callInstruction,
             .id());
 }
 
-void llvm2col::transformPallasImply(llvm::CallInst &callInstruction, col::Block &colBlock,
-                          pallas::FunctionCursor &funcCursor) {
+void llvm2col::transformPallasImply(llvm::CallInst &callInstruction,
+                                    col::Block &colBlock,
+                                    pallas::FunctionCursor &funcCursor) {
     // Check that the function signature is wellformed
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     if (llvmSpecFunc->arg_size() != 2 ||
         !llvmSpecFunc->getArg(0)->getType()->isIntegerTy(1) ||
-        !llvmSpecFunc->getArg(1)->getType()->isIntegerTy(1)) {
+        !llvmSpecFunc->getArg(1)->getType()->isIntegerTy(1) ||
+        !llvmSpecFunc->getReturnType()->isIntegerTy(1)) {
         pallas::ErrorReporter::addError(
             SOURCE_LOC, "Malformed pallas spec-lib definition (Imply).",
             callInstruction);
@@ -494,6 +498,35 @@ void llvm2col::transformPallasImply(llvm::CallInst &callInstruction, col::Block 
         funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(0), false)
             .id());
     imply->mutable_right()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(1), false)
+            .id());
+}
+
+void llvm2col::transformPallasStar(
+    llvm::CallInst &callInstruction, col::Block &colBlock,
+
+    pallas::FunctionCursor &funcCursor) {
+    // Check that the function signature is wellformed
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    if (llvmSpecFunc->arg_size() != 2 ||
+        !llvmSpecFunc->getArg(0)->getType()->isIntegerTy(1) ||
+        !llvmSpecFunc->getArg(1)->getType()->isIntegerTy(1) ||
+        !llvmSpecFunc->getReturnType()->isIntegerTy(1)) {
+        pallas::ErrorReporter::addError(
+            SOURCE_LOC, "Malformed pallas spec-lib definition (Star).",
+            callInstruction);
+        return;
+    }
+
+    col::Assign &assignment =
+        funcCursor.createAssignmentAndDeclaration(callInstruction, colBlock);
+    auto *star = assignment.mutable_value()->mutable_llvm_star();
+    star->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    star->mutable_left()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(0), false)
+            .id());
+    star->mutable_right()->set_id(
         funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(1), false)
             .id());
 }
