@@ -15,11 +15,12 @@ typedef struct S {
 
 /*@
 requires s != NULL && Perm(s, fracOf(1, 2));
-requires Perm(&s->a, fracOf(1, 1));
+requires sep(Perm(&s->a, fracOf(1, 1)), Perm(&s->b, fracOf(1, 1)));
 ensures Perm(s, fracOf(1, 2));
-ensures Perm(&s->a, fracOf(1, 1));
-ensures s->a == 0;
+ensures sep(Perm(&s->a, fracOf(1, 1)), Perm(&s->b, fracOf(1, 1)));
+ensures s->a == 0 && s->b == 0;
 @*/
 void bar(BigStruct *s) {
     s->a = 0;
+    s->b = 0;
 }
