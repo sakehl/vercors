@@ -1,7 +1,7 @@
 package vct.rewrite.pallas
 
 import vct.col.ast._
-import vct.col.origin.{LabelContext, Origin, PreferredName}
+import vct.col.origin.{LabelContext, Origin, PanicBlame, PreferredName}
 import vct.col.ref.Ref
 import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder, Rewritten}
 import vct.col.util.AstBuildHelpers.assignLocal
@@ -60,6 +60,11 @@ case class InlinePallasWrappers[Pre <: Generation]() extends Rewriter[Pre] {
           case Some(Ref(retArg)) => Local[Post](ref = succ(retArg))
           case None => Result[Post](applicable = succ(res.applicable.decl))
         }
+      case old: LLVMOld[Pre] =>
+        implicit val o: Origin = old.o
+        Old[Post](Local(succ(old.v.decl)), None)(PanicBlame(
+          "Cannot refer to invalid label."
+        ))
       case inv: ProcedureInvocation[Pre] if inv.ref.decl.pallasWrapper =>
         // Inline pallas wrapper into their call-sites
         val wFunc = inv.ref.decl

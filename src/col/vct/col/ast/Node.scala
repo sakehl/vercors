@@ -3689,6 +3689,9 @@ final case class LLVMIntermediaryResult[G](
 )(implicit val o: Origin)
     extends LLVMExpr[G] with LLVMIntermediaryResultImpl[G]
 
+final case class LLVMOld[G](v: Ref[G, Variable[G]])(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMOldImpl[G]
+
 final case class LLVMFracOf[G](
     sret: Ref[G, Variable[G]],
     num: Expr[G],

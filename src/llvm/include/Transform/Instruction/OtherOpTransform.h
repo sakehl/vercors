@@ -69,25 +69,24 @@ void transformPallasFracOf(llvm::CallInst &callInstruction,
  * Transform call-instruction to the Perm-function of the pallas
  * specification library.
  */
-void transformPallasPerm(llvm::CallInst &callInstruction,
-                           col::Block &colBlock,
-                           pallas::FunctionCursor &funcCursor);
+void transformPallasPerm(llvm::CallInst &callInstruction, col::Block &colBlock,
+                         pallas::FunctionCursor &funcCursor);
 
 /**
  * Transform call-instruction to the Implication-function of the pallas
  * specification library.
  */
-void transformPallasImply(llvm::CallInst &callInstruction,
-                           col::Block &colBlock,
-                           pallas::FunctionCursor &funcCursor);
+void transformPallasImply(llvm::CallInst &callInstruction, col::Block &colBlock,
+                          pallas::FunctionCursor &funcCursor);
 
 /**
  * Transform call the separating conjunction of the pallas spec-library.
  */
-void transformPallasStar(llvm::CallInst &callInstruction,
-                           col::Block &colBlock,
-                           pallas::FunctionCursor &funcCursor);
+void transformPallasStar(llvm::CallInst &callInstruction, col::Block &colBlock,
+                         pallas::FunctionCursor &funcCursor);
 
+void transformPallasOld(llvm::CallInst &callInstruction, col::Block &colBlock,
+                        pallas::FunctionCursor &funcCursor);
 
 } // namespace llvm2col
 

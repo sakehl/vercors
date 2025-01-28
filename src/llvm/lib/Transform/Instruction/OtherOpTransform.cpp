@@ -314,6 +314,8 @@ void llvm2col::transformPallasSpecLibCall(llvm::CallInst &callInstruction,
         transformPallasImply(callInstruction, colBlock, funcCursor);
     } else if (specLibType == pallas::constants::PALLAS_SPEC_STAR) {
         transformPallasStar(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_OLD) {
+        transformPallasOld(callInstruction, colBlock, funcCursor);
     } else {
         pallas::ErrorReporter::addError(
             SOURCE_LOC, "Unsupported Pallas specification function ",
@@ -502,10 +504,10 @@ void llvm2col::transformPallasImply(llvm::CallInst &callInstruction,
             .id());
 }
 
-void llvm2col::transformPallasStar(
-    llvm::CallInst &callInstruction, col::Block &colBlock,
+void llvm2col::transformPallasStar(llvm::CallInst &callInstruction,
+                                   col::Block &colBlock,
 
-    pallas::FunctionCursor &funcCursor) {
+                                   pallas::FunctionCursor &funcCursor) {
     // Check that the function signature is wellformed
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     if (llvmSpecFunc->arg_size() != 2 ||
@@ -529,4 +531,33 @@ void llvm2col::transformPallasStar(
     star->mutable_right()->set_id(
         funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(1), false)
             .id());
+}
+
+void llvm2col::transformPallasOld(llvm::CallInst &callInstruction,
+                                  col::Block &colBlock,
+                                  pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    bool isRegularReturn = !llvmSpecFunc->getReturnType()->isVoidTy();
+    bool isRegularPass =
+        llvmSpecFunc->arg_size() == 1 &&
+        !llvmSpecFunc->getArg(0)->hasByValAttr() &&
+        (llvmSpecFunc->getArg(0)->getType() == llvmSpecFunc->getReturnType());
+
+    // "Normal" return and pass of value.
+    if (isRegularReturn && isRegularPass) {
+        auto *type = llvmSpecFunc->getReturnType();
+        col::Assign &assignment = funcCursor.createAssignmentAndDeclaration(
+            callInstruction, colBlock);
+        auto *old = assignment.mutable_value()->mutable_llvm_old();
+        old->set_allocated_origin(
+            llvm2col::generateFunctionCallOrigin(callInstruction));
+        old-> mutable_v()->set_id(funcCursor.getVariableMapEntry(
+            *callInstruction.getArgOperand(0), false).id());
+    } else {
+        pallas::ErrorReporter::addError(SOURCE_LOC, "Unsupported use of \\old.",
+                                        callInstruction);
+        return;
+    }
+
+    // TODO: Handle other cases (big structs, small structs, ...)
 }

@@ -42,20 +42,11 @@ case class InlinePallasPermLets[Pre <: Generation]() extends Rewriter[Pre] {
     }
 
     expr match {
-      case Let(v, p @ Perm(_, _), inner) =>
-        // Inline stuff that contains Perm
-        substitutions.having(substitution.updated(v, dispatch(p))) {
-          dispatch(inner)
-        }
-      // TODO: Potentially drop the condition and just inline all trivial lets.
-      case Let(v, e @ Local(Ref(v2)), inner) if substitution.contains(v2) =>
-        // Propagate the inlining across trivial lets.
+      case Let(v, e, inner) =>
+        // Inline Let expressions:
         substitutions.having(substitution.updated(v, dispatch(e))) {
           dispatch(inner)
         }
-      case Let(v1, e, inner @ Local(Ref(v2))) if v1 == v2 =>
-        // Remove trivial let of shape (\let v = ... ; v)
-        dispatch(e)
       case Local(Ref(v)) if substitution.contains(v) => substitution(v)
       case _ => expr.rewriteDefault()
     }

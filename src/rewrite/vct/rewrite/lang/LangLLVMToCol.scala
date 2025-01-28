@@ -1103,6 +1103,12 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     )
   }
 
+  def rewriteOld(llvmOld: LLVMOld[Pre]): Expr[Post] = {
+    requireInWrapper(llvmOld)
+    implicit val o: Origin = llvmOld.o
+    LLVMOld[Post](rw.succ(llvmOld.v.decl))
+  }
+
   def result(ref: RefLLVMFunctionDefinition[Pre])(
       implicit o: Origin
   ): Expr[Post] = Result[Post](llvmFunctionMap.ref(ref.decl))

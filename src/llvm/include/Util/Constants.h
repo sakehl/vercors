@@ -19,6 +19,7 @@ const std::string PALLAS_SPEC_FRAC_OF = "pallas.fracOf";
 const std::string PALLAS_SPEC_PERM = "pallas.perm";
 const std::string PALLAS_SPEC_IMPLY = "pallas.imply";
 const std::string PALLAS_SPEC_STAR = "pallas.sepConj";
+const std::string PALLAS_SPEC_OLD = "pallas.old";
 
 
 // Legacy VCLLVM constants

@@ -400,6 +400,7 @@ case class LangSpecificToCol[Pre <: Generation](
       case llvmPerm: LLVMPerm[Pre] => llvm.rewritePerm(llvmPerm)
       case llvmImply: LLVMImplies[Pre] => llvm.rewriteImplies(llvmImply)
       case llvmStar: LLVMStar[Pre] => llvm.rewriteStar(llvmStar)
+      case llvmOld: LLVMOld[Pre] => llvm.rewriteOld(llvmOld)
       case other => rewriteDefault(other)
     }
 
