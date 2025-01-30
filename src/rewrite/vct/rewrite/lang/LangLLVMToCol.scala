@@ -1094,6 +1094,24 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     )
   }
 
+  def rewriteAnd(llvmAnd: LLVMAnd[Pre]): Expr[Post] = {
+    requireInWrapper(llvmAnd)
+    implicit val o: Origin = llvmAnd.o
+    And[Post](
+      Local[Post](rw.succ(llvmAnd.left.decl)),
+      Local[Post](rw.succ(llvmAnd.right.decl)),
+    )
+  }
+
+  def rewriteOr(llvmOr: LLVMOr[Pre]): Expr[Post] = {
+    requireInWrapper(llvmOr)
+    implicit val o: Origin = llvmOr.o
+    Or[Post](
+      Local[Post](rw.succ(llvmOr.left.decl)),
+      Local[Post](rw.succ(llvmOr.right.decl)),
+    )
+  }
+
   def rewriteStar(llvmStar: LLVMStar[Pre]): Expr[Post] = {
     requireInWrapper(llvmStar)
     implicit val o: Origin = llvmStar.o

@@ -79,9 +79,12 @@ void transformPallasPerm(llvm::CallInst &callInstruction, col::Block &colBlock,
 void transformPallasImply(llvm::CallInst &callInstruction, col::Block &colBlock,
                           pallas::FunctionCursor &funcCursor);
 
-/**
- * Transform call the separating conjunction of the pallas spec-library.
- */
+void transformPallasAnd(llvm::CallInst &callInstruction, col::Block &colBlock,
+                        pallas::FunctionCursor &funcCursor);
+
+void transformPallasOr(llvm::CallInst &callInstruction, col::Block &colBlock,
+                       pallas::FunctionCursor &funcCursor);
+
 void transformPallasStar(llvm::CallInst &callInstruction, col::Block &colBlock,
                          pallas::FunctionCursor &funcCursor);
 
@@ -92,14 +95,17 @@ void transformPallasBoundVar(llvm::CallInst &callInstruction,
                              col::Block &colBlock,
                              pallas::FunctionCursor &funcCursor);
 
-void transformPallasForall(llvm::CallInst &callInstruction, 
-    col::Block &colBlock, pallas::FunctionCursor &funcCursor);
+void transformPallasForall(llvm::CallInst &callInstruction,
+                           col::Block &colBlock,
+                           pallas::FunctionCursor &funcCursor);
 
-void transformPallasSepForall(llvm::CallInst &callInstruction, 
-    col::Block &colBlock, pallas::FunctionCursor &funcCursor);
+void transformPallasSepForall(llvm::CallInst &callInstruction,
+                              col::Block &colBlock,
+                              pallas::FunctionCursor &funcCursor);
 
-void transformPallasExists(llvm::CallInst &callInstruction, 
-    col::Block &colBlock, pallas::FunctionCursor &funcCursor);
+void transformPallasExists(llvm::CallInst &callInstruction,
+                           col::Block &colBlock,
+                           pallas::FunctionCursor &funcCursor);
 
 } // namespace llvm2col
 

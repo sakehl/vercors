@@ -3711,6 +3711,18 @@ final case class LLVMImplies[G](
 )(implicit val o: Origin)
     extends LLVMExpr[G] with LLVMImpliesImpl[G]
 
+final case class LLVMAnd[G](
+    left: Ref[G, Variable[G]],
+    right: Ref[G, Variable[G]],
+)(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMAndImpl[G]
+
+final case class LLVMOr[G](
+    left: Ref[G, Variable[G]],
+    right: Ref[G, Variable[G]],
+)(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMOrImpl[G]
+
 final case class LLVMStar[G](
     left: Ref[G, Variable[G]],
     right: Ref[G, Variable[G]],

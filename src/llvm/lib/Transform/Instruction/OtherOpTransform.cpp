@@ -314,6 +314,10 @@ void llvm2col::transformPallasSpecLibCall(llvm::CallInst &callInstruction,
         transformPallasPerm(callInstruction, colBlock, funcCursor);
     } else if (specLibType == pallas::constants::PALLAS_SPEC_IMPLY) {
         transformPallasImply(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_AND) {
+        transformPallasAnd(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_OR) {
+        transformPallasOr(callInstruction, colBlock, funcCursor);
     } else if (specLibType == pallas::constants::PALLAS_SPEC_STAR) {
         transformPallasStar(callInstruction, colBlock, funcCursor);
     } else if (specLibType == pallas::constants::PALLAS_SPEC_OLD) {
@@ -332,6 +336,40 @@ void llvm2col::transformPallasSpecLibCall(llvm::CallInst &callInstruction,
             callInstruction);
     }
 }
+
+
+namespace {
+bool checkQuantifierSpecFuncWellformed(llvm::Function &specFunc,
+                                       const std::string &errorDesc) {
+    if (specFunc.arg_size() == 2 &&
+        specFunc.getArg(0)->getType()->isIntegerTy(1) &&
+        specFunc.getArg(0)->getType()->isIntegerTy(1) &&
+        specFunc.getReturnType()->isIntegerTy(1)) {
+        return true;
+    }
+    pallas::ErrorReporter::addError(
+        SOURCE_LOC, "Malformed pallas spec-lib definition (" + errorDesc + ").",
+        specFunc);
+    return false;
+}
+
+// Checks if the definition of a given given specification-function
+// is a function that takes two booleans and returns a boolean.
+bool checkBinaryBoolOpWellformed(llvm::Function &specFunc,
+                                 const std::string &errorDesc) {
+    if (specFunc.arg_size() == 2 &&
+        specFunc.getArg(0)->getType()->isIntegerTy(1) &&
+        specFunc.getArg(1)->getType()->isIntegerTy(1) &&
+        specFunc.getReturnType()->isIntegerTy(1)) {
+        return true;
+    }
+    pallas::ErrorReporter::addError(
+        SOURCE_LOC, "Malformed pallas spec-lib definition (" + errorDesc + ").",
+        specFunc);
+    return false;
+}
+
+} // namespace
 
 void llvm2col::transformPallasSpecResult(llvm::CallInst &callInstruction,
                                          col::Block &colBlock,
@@ -489,15 +527,9 @@ void llvm2col::transformPallasPerm(llvm::CallInst &callInstruction,
 void llvm2col::transformPallasImply(llvm::CallInst &callInstruction,
                                     col::Block &colBlock,
                                     pallas::FunctionCursor &funcCursor) {
-    // Check that the function signature is wellformed
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
-    if (llvmSpecFunc->arg_size() != 2 ||
-        !llvmSpecFunc->getArg(0)->getType()->isIntegerTy(1) ||
-        !llvmSpecFunc->getArg(1)->getType()->isIntegerTy(1) ||
-        !llvmSpecFunc->getReturnType()->isIntegerTy(1)) {
-        pallas::ErrorReporter::addError(
-            SOURCE_LOC, "Malformed pallas spec-lib definition (Imply).",
-            callInstruction);
+    // Check that the function signature is wellformed
+    if (!checkBinaryBoolOpWellformed(*llvmSpecFunc, "Imply")) {
         return;
     }
 
@@ -514,19 +546,55 @@ void llvm2col::transformPallasImply(llvm::CallInst &callInstruction,
             .id());
 }
 
+void llvm2col::transformPallasAnd(llvm::CallInst &callInstruction,
+                                    col::Block &colBlock,
+                                    pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    // Check that the function signature is wellformed
+    if (!checkBinaryBoolOpWellformed(*llvmSpecFunc, "And")) {
+        return;
+    }
+    col::Assign &assignment =
+        funcCursor.createAssignmentAndDeclaration(callInstruction, colBlock);
+    auto *imply = assignment.mutable_value()->mutable_llvm_and();
+    imply->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    imply->mutable_left()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(0), false)
+            .id());
+    imply->mutable_right()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(1), false)
+            .id());
+}
+
+void llvm2col::transformPallasOr(llvm::CallInst &callInstruction,
+                                    col::Block &colBlock,
+                                    pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    // Check that the function signature is wellformed
+    if (!checkBinaryBoolOpWellformed(*llvmSpecFunc, "Or")) {
+        return;
+    }
+    col::Assign &assignment =
+        funcCursor.createAssignmentAndDeclaration(callInstruction, colBlock);
+    auto *imply = assignment.mutable_value()->mutable_llvm_or();
+    imply->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    imply->mutable_left()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(0), false)
+            .id());
+    imply->mutable_right()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(1), false)
+            .id());
+}
+
 void llvm2col::transformPallasStar(llvm::CallInst &callInstruction,
                                    col::Block &colBlock,
 
                                    pallas::FunctionCursor &funcCursor) {
     // Check that the function signature is wellformed
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
-    if (llvmSpecFunc->arg_size() != 2 ||
-        !llvmSpecFunc->getArg(0)->getType()->isIntegerTy(1) ||
-        !llvmSpecFunc->getArg(1)->getType()->isIntegerTy(1) ||
-        !llvmSpecFunc->getReturnType()->isIntegerTy(1)) {
-        pallas::ErrorReporter::addError(
-            SOURCE_LOC, "Malformed pallas spec-lib definition (Star).",
-            callInstruction);
+        if (!checkBinaryBoolOpWellformed(*llvmSpecFunc, "**")) {
         return;
     }
 
@@ -615,22 +683,6 @@ void llvm2col::transformPallasBoundVar(llvm::CallInst &callInstruction,
     }
     // TODO: Handle other cases
 }
-
-namespace {
-bool checkQuantifierSpecFuncWellformed(llvm::Function &specFunc,
-                                       const std::string &errorDesc) {
-    if (specFunc.arg_size() == 2 &&
-        specFunc.getArg(0)->getType()->isIntegerTy(1) &&
-        specFunc.getArg(0)->getType()->isIntegerTy(1) &&
-        specFunc.getReturnType()->isIntegerTy(1)) {
-        return true;
-    }
-    pallas::ErrorReporter::addError(
-        SOURCE_LOC, "Malformed pallas spec-lib definition (" + errorDesc + ").",
-        specFunc);
-    return false;
-}
-} // namespace
 
 void llvm2col::transformPallasForall(llvm::CallInst &callInstruction,
                                      col::Block &colBlock,
