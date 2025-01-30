@@ -1,6 +1,8 @@
 #include "Transform/Instruction/OtherOpTransform.h"
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/FMF.h>
+#include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Metadata.h>
@@ -316,6 +318,14 @@ void llvm2col::transformPallasSpecLibCall(llvm::CallInst &callInstruction,
         transformPallasStar(callInstruction, colBlock, funcCursor);
     } else if (specLibType == pallas::constants::PALLAS_SPEC_OLD) {
         transformPallasOld(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_BV) {
+        transformPallasBoundVar(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_FORALL) {
+        transformPallasForall(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_SEPFORALL) {
+        transformPallasSepForall(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_EXISTS) {
+        transformPallasExists(callInstruction, colBlock, funcCursor);
     } else {
         pallas::ErrorReporter::addError(
             SOURCE_LOC, "Unsupported Pallas specification function ",
@@ -551,8 +561,10 @@ void llvm2col::transformPallasOld(llvm::CallInst &callInstruction,
         auto *old = assignment.mutable_value()->mutable_llvm_old();
         old->set_allocated_origin(
             llvm2col::generateFunctionCallOrigin(callInstruction));
-        old-> mutable_v()->set_id(funcCursor.getVariableMapEntry(
-            *callInstruction.getArgOperand(0), false).id());
+        old->mutable_v()->set_id(
+            funcCursor
+                .getVariableMapEntry(*callInstruction.getArgOperand(0), false)
+                .id());
     } else {
         pallas::ErrorReporter::addError(SOURCE_LOC, "Unsupported use of \\old.",
                                         callInstruction);
@@ -560,4 +572,125 @@ void llvm2col::transformPallasOld(llvm::CallInst &callInstruction,
     }
 
     // TODO: Handle other cases (big structs, small structs, ...)
+}
+
+void llvm2col::transformPallasBoundVar(llvm::CallInst &callInstruction,
+                                       col::Block &colBlock,
+                                       pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    bool isRegularReturn = !llvmSpecFunc->getReturnType()->isVoidTy();
+
+    // "Normal" return.
+    if (llvmSpecFunc->arg_size() == 1 && isRegularReturn) {
+        auto *type = llvmSpecFunc->getReturnType();
+        col::Assign &assignment = funcCursor.createAssignmentAndDeclaration(
+            callInstruction, colBlock);
+        auto *bv = assignment.mutable_value()->mutable_llvm_bound_var();
+        bv->set_allocated_origin(
+            llvm2col::generateFunctionCallOrigin(callInstruction));
+        // Extract the string-literal that is used as the
+        //  identifier of the bound variable.
+        auto *idVar = llvm::dyn_cast<llvm::GlobalVariable>(
+            callInstruction.getArgOperand(0));
+        if (idVar == nullptr) {
+            pallas::ErrorReporter::addError(
+                SOURCE_LOC, "Invalid identifier (BoundVar)", callInstruction);
+            return;
+        }
+        auto *constArr = dyn_cast_if_present<llvm::ConstantDataArray>(
+            idVar->getInitializer());
+        if (constArr == nullptr || !constArr->isString()) {
+            pallas::ErrorReporter::addError(
+                SOURCE_LOC, "Invalid identifier (BoundVar)", callInstruction);
+            return;
+        }
+        auto strRepr = constArr->isCString() ? constArr->getAsCString()
+                                             : constArr->getAsString();
+        bv->set_id(strRepr.str());
+        llvm2col::transformAndSetType(*type, *bv->mutable_var_type());
+    } else {
+        pallas::ErrorReporter::addError(
+            SOURCE_LOC, "Unsupported use of bound variable.", callInstruction);
+        return;
+    }
+    // TODO: Handle other cases
+}
+
+namespace {
+bool checkQuantifierSpecFuncWellformed(llvm::Function &specFunc,
+                                       const std::string &errorDesc) {
+    if (specFunc.arg_size() == 2 &&
+        specFunc.getArg(0)->getType()->isIntegerTy(1) &&
+        specFunc.getArg(0)->getType()->isIntegerTy(1) &&
+        specFunc.getReturnType()->isIntegerTy(1)) {
+        return true;
+    }
+    pallas::ErrorReporter::addError(
+        SOURCE_LOC, "Malformed pallas spec-lib definition (" + errorDesc + ").",
+        specFunc);
+    return false;
+}
+} // namespace
+
+void llvm2col::transformPallasForall(llvm::CallInst &callInstruction,
+                                     col::Block &colBlock,
+                                     pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    if (!checkQuantifierSpecFuncWellformed(*llvmSpecFunc, "forall")) {
+        return;
+    }
+
+    col::Assign &assignment =
+        funcCursor.createAssignmentAndDeclaration(callInstruction, colBlock);
+    auto *quantifier = assignment.mutable_value()->mutable_llvm_forall();
+    quantifier->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    llvm2col::transformAndSetExpr(funcCursor, callInstruction,
+                                  *callInstruction.getArgOperand(0),
+                                  *quantifier->mutable_binding_expr());
+    llvm2col::transformAndSetExpr(funcCursor, callInstruction,
+                                  *callInstruction.getArgOperand(1),
+                                  *quantifier->mutable_body_expr());
+}
+
+void llvm2col::transformPallasSepForall(llvm::CallInst &callInstruction,
+                                        col::Block &colBlock,
+                                        pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    if (!checkQuantifierSpecFuncWellformed(*llvmSpecFunc, "forall*")) {
+        return;
+    }
+
+    col::Assign &assignment =
+        funcCursor.createAssignmentAndDeclaration(callInstruction, colBlock);
+    auto *quantifier = assignment.mutable_value()->mutable_llvm_sep_forall();
+    quantifier->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    llvm2col::transformAndSetExpr(funcCursor, callInstruction,
+                                  *callInstruction.getArgOperand(0),
+                                  *quantifier->mutable_binding_expr());
+    llvm2col::transformAndSetExpr(funcCursor, callInstruction,
+                                  *callInstruction.getArgOperand(1),
+                                  *quantifier->mutable_body_expr());
+}
+
+void llvm2col::transformPallasExists(llvm::CallInst &callInstruction,
+                                     col::Block &colBlock,
+                                     pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    if (!checkQuantifierSpecFuncWellformed(*llvmSpecFunc, "exists")) {
+        return;
+    }
+
+    col::Assign &assignment =
+        funcCursor.createAssignmentAndDeclaration(callInstruction, colBlock);
+    auto *quantifier = assignment.mutable_value()->mutable_llvm_exists();
+    quantifier->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    llvm2col::transformAndSetExpr(funcCursor, callInstruction,
+                                  *callInstruction.getArgOperand(0),
+                                  *quantifier->mutable_binding_expr());
+    llvm2col::transformAndSetExpr(funcCursor, callInstruction,
+                                  *callInstruction.getArgOperand(1),
+                                  *quantifier->mutable_body_expr());
 }

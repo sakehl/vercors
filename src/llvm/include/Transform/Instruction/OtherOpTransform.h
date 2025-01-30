@@ -88,6 +88,19 @@ void transformPallasStar(llvm::CallInst &callInstruction, col::Block &colBlock,
 void transformPallasOld(llvm::CallInst &callInstruction, col::Block &colBlock,
                         pallas::FunctionCursor &funcCursor);
 
+void transformPallasBoundVar(llvm::CallInst &callInstruction,
+                             col::Block &colBlock,
+                             pallas::FunctionCursor &funcCursor);
+
+void transformPallasForall(llvm::CallInst &callInstruction, 
+    col::Block &colBlock, pallas::FunctionCursor &funcCursor);
+
+void transformPallasSepForall(llvm::CallInst &callInstruction, 
+    col::Block &colBlock, pallas::FunctionCursor &funcCursor);
+
+void transformPallasExists(llvm::CallInst &callInstruction, 
+    col::Block &colBlock, pallas::FunctionCursor &funcCursor);
+
 } // namespace llvm2col
 
 #endif // PALLAS_OTHEROPTRANSFORM_H

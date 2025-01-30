@@ -20,6 +20,10 @@ const std::string PALLAS_SPEC_PERM = "pallas.perm";
 const std::string PALLAS_SPEC_IMPLY = "pallas.imply";
 const std::string PALLAS_SPEC_STAR = "pallas.sepConj";
 const std::string PALLAS_SPEC_OLD = "pallas.old";
+const std::string PALLAS_SPEC_BV = "pallas.boundVar";
+const std::string PALLAS_SPEC_FORALL = "pallas.forall";
+const std::string PALLAS_SPEC_SEPFORALL = "pallas.forallSep";
+const std::string PALLAS_SPEC_EXISTS = "pallas.exists";
 
 
 // Legacy VCLLVM constants

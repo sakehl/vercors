@@ -3717,6 +3717,24 @@ final case class LLVMStar[G](
 )(implicit val o: Origin)
     extends LLVMExpr[G] with LLVMStarImpl[G]
 
+final case class LLVMBoundVar[G](id: String, varType: Type[G])(
+    implicit val o: Origin
+) extends LLVMExpr[G] with LLVMBoundVarImpl[G]
+
+sealed trait LLVMQuantifier[G] extends LLVMExpr[G] with LLVMQuantifierImpl[G]
+
+final case class LLVMForall[G](bindingExpr: Expr[G], bodyExpr: Expr[G])(
+    implicit val o: Origin
+) extends LLVMQuantifier[G] with LLVMForallImpl[G]
+
+final case class LLVMSepForall[G](bindingExpr: Expr[G], bodyExpr: Expr[G])(
+    implicit val o: Origin
+) extends LLVMQuantifier[G] with LLVMSepForallImpl[G]
+
+final case class LLVMExists[G](bindingExpr: Expr[G], bodyExpr: Expr[G])(
+    implicit val o: Origin
+) extends LLVMQuantifier[G] with LLVMExistsImpl[G]
+
 @family
 sealed trait LLVMMemoryOrdering[G]
     extends NodeFamily[G] with LLVMMemoryOrderingImpl[G]
