@@ -101,7 +101,7 @@ case class ResolvePallasQuantifiers[Pre <: Generation]() extends Rewriter[Pre] {
     variables.scope {
       localHeapVariables.scope {
         bVars.foreach { case (id, vType) =>
-          val v = new Variable[Post](dispatch(vType))(q.o)
+          val v = new Variable[Post](dispatch(vType))(q.o.where(name = id))
           newBVMap = newBVMap.updated((id, vType), v)
         }
       }
