@@ -337,7 +337,6 @@ void llvm2col::transformPallasSpecLibCall(llvm::CallInst &callInstruction,
     }
 }
 
-
 namespace {
 bool checkQuantifierSpecFuncWellformed(llvm::Function &specFunc,
                                        const std::string &errorDesc) {
@@ -547,8 +546,8 @@ void llvm2col::transformPallasImply(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasAnd(llvm::CallInst &callInstruction,
-                                    col::Block &colBlock,
-                                    pallas::FunctionCursor &funcCursor) {
+                                  col::Block &colBlock,
+                                  pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     // Check that the function signature is wellformed
     if (!checkBinaryBoolOpWellformed(*llvmSpecFunc, "And")) {
@@ -568,8 +567,8 @@ void llvm2col::transformPallasAnd(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasOr(llvm::CallInst &callInstruction,
-                                    col::Block &colBlock,
-                                    pallas::FunctionCursor &funcCursor) {
+                                 col::Block &colBlock,
+                                 pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     // Check that the function signature is wellformed
     if (!checkBinaryBoolOpWellformed(*llvmSpecFunc, "Or")) {
@@ -594,7 +593,7 @@ void llvm2col::transformPallasStar(llvm::CallInst &callInstruction,
                                    pallas::FunctionCursor &funcCursor) {
     // Check that the function signature is wellformed
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
-        if (!checkBinaryBoolOpWellformed(*llvmSpecFunc, "**")) {
+    if (!checkBinaryBoolOpWellformed(*llvmSpecFunc, "**")) {
         return;
     }
 
@@ -718,6 +717,7 @@ void llvm2col::transformPallasSepForall(llvm::CallInst &callInstruction,
     auto *quantifier = assignment.mutable_value()->mutable_llvm_sep_forall();
     quantifier->set_allocated_origin(
         llvm2col::generateFunctionCallOrigin(callInstruction));
+    quantifier->set_allocated_blame(new col::Blame());
     llvm2col::transformAndSetExpr(funcCursor, callInstruction,
                                   *callInstruction.getArgOperand(0),
                                   *quantifier->mutable_binding_expr());

@@ -3740,8 +3740,9 @@ final case class LLVMForall[G](bindingExpr: Expr[G], bodyExpr: Expr[G])(
 ) extends LLVMQuantifier[G] with LLVMForallImpl[G]
 
 final case class LLVMSepForall[G](bindingExpr: Expr[G], bodyExpr: Expr[G])(
-    implicit val o: Origin
-) extends LLVMQuantifier[G] with LLVMSepForallImpl[G]
+    val blame: Blame[ReceiverNotInjective]
+)(implicit val o: Origin)
+    extends LLVMQuantifier[G] with LLVMSepForallImpl[G]
 
 final case class LLVMExists[G](bindingExpr: Expr[G], bodyExpr: Expr[G])(
     implicit val o: Origin
