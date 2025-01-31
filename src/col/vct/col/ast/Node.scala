@@ -3748,6 +3748,21 @@ final case class LLVMExists[G](bindingExpr: Expr[G], bodyExpr: Expr[G])(
     implicit val o: Origin
 ) extends LLVMQuantifier[G] with LLVMExistsImpl[G]
 
+final case class LLVMPtrBlockLength[G](ptr: Ref[G, Variable[G]])(
+    val blame: Blame[PointerNull]
+)(implicit val o: Origin)
+    extends Expr[G] with LLVMPtrBlockLengthImpl[G]
+
+final case class LLVMPtrBlockOffset[G](ptr: Ref[G, Variable[G]])(
+    val blame: Blame[PointerNull]
+)(implicit val o: Origin)
+    extends Expr[G] with LLVMPtrBlockOffsetImpl[G]
+
+final case class LLVMPtrLength[G](ptr: Ref[G, Variable[G]])(
+    val blame: Blame[PointerNull]
+)(implicit val o: Origin)
+    extends Expr[G] with LLVMPtrLengthImpl[G]
+
 @family
 sealed trait LLVMMemoryOrdering[G]
     extends NodeFamily[G] with LLVMMemoryOrderingImpl[G]

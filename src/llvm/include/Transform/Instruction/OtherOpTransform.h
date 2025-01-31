@@ -72,10 +72,18 @@ void transformPallasFracOf(llvm::CallInst &callInstruction,
 void transformPallasPerm(llvm::CallInst &callInstruction, col::Block &colBlock,
                          pallas::FunctionCursor &funcCursor);
 
-/**
- * Transform call-instruction to the Implication-function of the pallas
- * specification library.
- */
+void transformPallasPtrBlockLength(llvm::CallInst &callInstruction,
+                                   col::Block &colBlock,
+                                   pallas::FunctionCursor &funcCursor);
+
+void transformPallasPtrBlockOffset(llvm::CallInst &callInstruction,
+                                   col::Block &colBlock,
+                                   pallas::FunctionCursor &funcCursor);
+
+void transformPallasPtrLength(llvm::CallInst &callInstruction,
+                                   col::Block &colBlock,
+                                   pallas::FunctionCursor &funcCursor);
+
 void transformPallasImply(llvm::CallInst &callInstruction, col::Block &colBlock,
                           pallas::FunctionCursor &funcCursor);
 

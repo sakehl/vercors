@@ -2150,6 +2150,9 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case LLVMResult(_) => e
       case LLVMIntermediaryResult(_, _) => e
       case LLVMPerm(_, _) => e
+      case LLVMPtrBlockLength(_) => e
+      case LLVMPtrBlockOffset(_) => e
+      case LLVMPtrLength(_) => e
       case LLVMImplies(_, _) => e
       case LLVMAnd(_, _) => e
       case LLVMOr(_, _) => e

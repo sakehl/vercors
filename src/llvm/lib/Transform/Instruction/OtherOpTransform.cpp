@@ -312,6 +312,12 @@ void llvm2col::transformPallasSpecLibCall(llvm::CallInst &callInstruction,
         transformPallasFracOf(callInstruction, colBlock, funcCursor);
     } else if (specLibType == pallas::constants::PALLAS_SPEC_PERM) {
         transformPallasPerm(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_PTR_BLOCK_LENGTH) {
+        transformPallasPtrBlockLength(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_PTR_BLOCK_OFFSET) {
+        transformPallasPtrBlockOffset(callInstruction, colBlock, funcCursor);
+    } else if (specLibType == pallas::constants::PALLAS_SPEC_PTR_LENGTH) {
+        transformPallasPtrLength(callInstruction, colBlock, funcCursor);
     } else if (specLibType == pallas::constants::PALLAS_SPEC_IMPLY) {
         transformPallasImply(callInstruction, colBlock, funcCursor);
     } else if (specLibType == pallas::constants::PALLAS_SPEC_AND) {
@@ -360,6 +366,21 @@ bool checkBinaryBoolOpWellformed(llvm::Function &specFunc,
         specFunc.getArg(0)->getType()->isIntegerTy(1) &&
         specFunc.getArg(1)->getType()->isIntegerTy(1) &&
         specFunc.getReturnType()->isIntegerTy(1)) {
+        return true;
+    }
+    pallas::ErrorReporter::addError(
+        SOURCE_LOC, "Malformed pallas spec-lib definition (" + errorDesc + ").",
+        specFunc);
+    return false;
+}
+
+// Checks if the definition of a pointer-block spec function is wellformed.
+// (I.e. it is a function that takes a pointer and returns an i64.
+bool checkPtrBlockSpecFuncWellformed(llvm::Function &specFunc,
+                                     const std::string &errorDesc) {
+    if (specFunc.arg_size() == 1 &&
+        specFunc.getArg(0)->getType()->isPointerTy() &&
+        specFunc.getReturnType()->isIntegerTy(64)) {
         return true;
     }
     pallas::ErrorReporter::addError(
@@ -520,6 +541,63 @@ void llvm2col::transformPallasPerm(llvm::CallInst &callInstruction,
             .id());
     perm->mutable_perm()->set_id(
         funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(1), false)
+            .id());
+}
+
+void llvm2col::transformPallasPtrBlockLength(
+    llvm::CallInst &callInstruction, col::Block &colBlock,
+    pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    if (!checkPtrBlockSpecFuncWellformed(*llvmSpecFunc, "PtrBlockLength")) {
+        return;
+    }
+
+    col::Assign &assignment =
+        funcCursor.createAssignmentAndDeclaration(callInstruction, colBlock);
+    auto *pbl = assignment.mutable_value()->mutable_llvm_ptr_block_length();
+    pbl->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    pbl->set_allocated_blame(new col::Blame());
+    pbl->mutable_ptr()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(0), false)
+            .id());
+}
+
+void llvm2col::transformPallasPtrBlockOffset(
+    llvm::CallInst &callInstruction, col::Block &colBlock,
+    pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    if (!checkPtrBlockSpecFuncWellformed(*llvmSpecFunc, "PtrBlockOffset")) {
+        return;
+    }
+
+    col::Assign &assignment =
+        funcCursor.createAssignmentAndDeclaration(callInstruction, colBlock);
+    auto *pbo = assignment.mutable_value()->mutable_llvm_ptr_block_offset();
+    pbo->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    pbo->set_allocated_blame(new col::Blame());
+    pbo->mutable_ptr()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(0), false)
+            .id());
+}
+
+void llvm2col::transformPallasPtrLength(llvm::CallInst &callInstruction,
+                                        col::Block &colBlock,
+                                        pallas::FunctionCursor &funcCursor) {
+    auto *llvmSpecFunc = callInstruction.getCalledFunction();
+    if (!checkPtrBlockSpecFuncWellformed(*llvmSpecFunc, "PtrLength")) {
+        return;
+    }
+
+    col::Assign &assignment =
+        funcCursor.createAssignmentAndDeclaration(callInstruction, colBlock);
+    auto *pl = assignment.mutable_value()->mutable_llvm_ptr_length();
+    pl->set_allocated_origin(
+        llvm2col::generateFunctionCallOrigin(callInstruction));
+    pl->set_allocated_blame(new col::Blame());
+    pl->mutable_ptr()->set_id(
+        funcCursor.getVariableMapEntry(*callInstruction.getArgOperand(0), false)
             .id());
 }
 

@@ -398,6 +398,11 @@ case class LangSpecificToCol[Pre <: Generation](
       case fpext: LLVMFloatExtend[Pre] => llvm.rewriteFloatExtend(fpext)
       case result: LLVMResult[Pre] => llvm.rewriteResult(result)
       case llvmPerm: LLVMPerm[Pre] => llvm.rewritePerm(llvmPerm)
+      case llvmPBL: LLVMPtrBlockLength[Pre] =>
+        llvm.rewritePtrBlockLength(llvmPBL)
+      case llvmPBO: LLVMPtrBlockOffset[Pre] =>
+        llvm.rewritePtrBlockOffset(llvmPBO)
+      case llvmPL: LLVMPtrLength[Pre] => llvm.rewritePtrLength(llvmPL)
       case llvmImply: LLVMImplies[Pre] => llvm.rewriteImplies(llvmImply)
       case llvmAnd: LLVMAnd[Pre] => llvm.rewriteAnd(llvmAnd)
       case llvmOr: LLVMOr[Pre] => llvm.rewriteOr(llvmOr)

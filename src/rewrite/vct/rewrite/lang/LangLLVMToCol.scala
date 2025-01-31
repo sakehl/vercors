@@ -1116,6 +1116,28 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     )
   }
 
+  def rewritePtrBlockLength(llvmPBL: LLVMPtrBlockLength[Pre]): Expr[Post] = {
+    requireInWrapper(llvmPBL)
+    implicit val o: Origin = llvmPBL.o
+    PointerBlockLength[Post](Local[Post](rw.succ(llvmPBL.ptr.decl)))(
+      llvmPBL.blame
+    )
+  }
+
+  def rewritePtrBlockOffset(llvmPBO: LLVMPtrBlockOffset[Pre]): Expr[Post] = {
+    requireInWrapper(llvmPBO)
+    implicit val o: Origin = llvmPBO.o
+    PointerBlockOffset[Post](Local[Post](rw.succ(llvmPBO.ptr.decl)))(
+      llvmPBO.blame
+    )
+  }
+
+  def rewritePtrLength(llvmPL: LLVMPtrLength[Pre]): Expr[Post] = {
+    requireInWrapper(llvmPL)
+    implicit val o: Origin = llvmPL.o
+    PointerLength[Post](Local[Post](rw.succ(llvmPL.ptr.decl)))(llvmPL.blame)
+  }
+
   def rewriteImplies(llvmImply: LLVMImplies[Pre]): Expr[Post] = {
     requireInWrapper(llvmImply)
     implicit val o: Origin = llvmImply.o
