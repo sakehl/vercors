@@ -33,6 +33,16 @@ case object LangLLVMToCol {
       )
   }
 
+  private final case class UnsupportedArrayIndex(origin: Origin)
+      extends UserError {
+    override def code: String = "unsupportedArrayIndex"
+
+    override def text: String =
+      origin.messageInContext(
+        s"This array-indexing operation (getelementptr) is currently not supported."
+      )
+  }
+
   private final case class UnsupportedSignExtension(sext: LLVMSignExtend[_])
       extends UserError {
     override def code: String = "unsupportedSignExtension"
@@ -74,6 +84,9 @@ case object LangLLVMToCol {
     PreferredName(Seq("resArg context")),
     LabelContext("Generated context for resArg"),
   ))
+
+  // TODO: This should be replaced with the correct blames!
+  object InvalidGEP extends PanicBlame("Invalid use of getelementpointer!")
 }
 
 case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
@@ -703,7 +716,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               Deref[Post](
                 pointer,
                 structFieldMap.ref((struct, value.value.intValue)),
-              )(o),
+              )(InvalidGEP),
               struct.elements(value.value.intValue),
               indices.tail,
             )
@@ -712,7 +725,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               Deref[Post](
                 pointer,
                 structFieldMap.ref((struct, value.value.intValue)),
-              )(o),
+              )(InvalidGEP),
               struct.elements(value.value.intValue),
               indices.tail,
             )
@@ -817,10 +830,28 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     implicit val o: Origin = gep.o
     val t = gep.structureType
     t match {
+      case integer: LLVMTInt[Pre] =>
+        // Encode simple array-indexing
+        if (gep.indices.size != 1) { throw UnsupportedArrayIndex(o) }
+        // Check that the inferred type of the pointer matches the return=-type of gep
+        val ptrType = {
+          gep.pointer match {
+            case Local(Ref(v)) if localVariableInferredType.get(v).isDefined =>
+              localVariableInferredType.get(v).get
+            case _ => gep.pointer.t
+          }
+        }
+        ptrType match {
+          case LLVMTPointer(Some(t2)) if t == t2 => // All is fine
+          case _ => throw UnsupportedArrayIndex(o)
+        }
+        PointerAdd[Post](
+          rw.dispatch(gep.pointer),
+          rw.dispatch(gep.indices.head),
+        )(InvalidGEP)
       case struct: LLVMTStruct[Pre] => {
         // TODO: We don't support variables in GEP yet and this just assumes all the indices are integer constants
         // TODO: Use an actual Blame
-
         // Acquire the actual struct through a PointerAdd
         gep.pointer.t match {
           case LLVMTPointer(None) =>
@@ -829,8 +860,8 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                 PointerAdd(
                   rw.dispatch(gep.pointer),
                   rw.dispatch(gep.indices.head),
-                )(o)
-              )(o)
+                )(InvalidGEP)
+              )(InvalidGEP)
             AddrOf(rewritePointerChain(structPointer, struct, gep.indices.tail))
           case LLVMTPointer(Some(inner)) if inner == t =>
             val structPointer =
@@ -838,8 +869,8 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                 PointerAdd(
                   rw.dispatch(gep.pointer),
                   rw.dispatch(gep.indices.head),
-                )(o)
-              )(o)
+                )(InvalidGEP)
+              )(InvalidGEP)
             AddrOf(rewritePointerChain(structPointer, struct, gep.indices.tail))
           case LLVMTPointer(Some(_)) =>
             val pointerInferredType = getInferredType(gep.pointer)
@@ -852,8 +883,8 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             )
             val structPointer =
               DerefPointer(
-                PointerAdd(pointer, rw.dispatch(gep.indices.head))(o)
-              )(o)
+                PointerAdd(pointer, rw.dispatch(gep.indices.head))(InvalidGEP)
+              )(InvalidGEP)
             val ret = AddrOf(
               rewritePointerChain(structPointer, struct, gep.indices.tail)
             )
