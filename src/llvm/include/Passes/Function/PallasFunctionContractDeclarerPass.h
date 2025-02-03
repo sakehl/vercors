@@ -115,16 +115,6 @@ class PallasFunctionContractDeclarerPass
      */
     bool hasConflictingContract(Function &f);
 
-    /**
-     * Checks if the given metadata-node is a wellformed encoding of a
-     * pallas source-location.
-     */
-    bool isWellformedPallasLocation(const MDNode *mdNode);
-
-    /**
-     * Checks if the given metadata-node refers to a integer-constant.
-     */
-    bool isConstantInt(llvm::Metadata *md);
 };
 } // namespace pallas
 #endif // PALLAS_PALLASFUNCTIONCONTRACTDECLARERPASS_H

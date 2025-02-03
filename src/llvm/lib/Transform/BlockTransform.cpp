@@ -1,6 +1,7 @@
 #include "Transform/BlockTransform.h"
 
 #include "Origin/OriginProvider.h"
+#include "Transform/LoopContractTransform.h"
 #include "Transform/Instruction/BinaryOpTransform.h"
 #include "Transform/Instruction/CastOpTransform.h"
 #include "Transform/Instruction/FuncletPadOpTransform.h"
@@ -28,6 +29,8 @@ void llvm2col::transformLLVMBlock(llvm::BasicBlock &llvmBlock,
             functionCursor.getLoopInfo().getLoopFor(&llvmBlock);
         col::LlvmLoop *loop = labeled.bb.mutable_loop();
         loop->set_allocated_origin(generateLoopOrigin(*llvmLoop));
+        transformLoopContract(*llvmLoop, *loop->mutable_contract());
+        /*
         col::LoopContract *contract = loop->mutable_contract();
         col::LoopInvariant *invariant = contract->mutable_loop_invariant();
         col::BooleanValue *tt =
@@ -37,6 +40,7 @@ void llvm2col::transformLLVMBlock(llvm::BasicBlock &llvmBlock,
         invariant->set_allocated_origin(
             generateLabelledOrigin("constant true"));
         invariant->mutable_blame();
+        */
 
         loop->mutable_header()->set_id(labeled.bb.label().id());
         pallas::LabeledColBlock labeled_latch =
@@ -89,12 +93,6 @@ void llvm2col::transformInstruction(pallas::FunctionCursor &funcCursor,
     } else {
         reportUnsupportedOperatorError(SOURCE_LOC, llvmInstruction);
     }
-}
-
-void llvm2col::transformLoop(llvm::BasicBlock &llvmBlock,
-                             pallas::FunctionCursor &functionCursor) {
-    pallas::ErrorReporter::addError(SOURCE_LOC, "Unsupported loop detected",
-                                    llvmBlock);
 }
 
 void llvm2col::reportUnsupportedOperatorError(

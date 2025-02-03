@@ -1,7 +1,9 @@
 #ifndef PALLAS_MD_H
 #define PALLAS_MD_H
 
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Metadata.h>
 #include <optional>
 #include <string>
 
@@ -34,10 +36,21 @@ bool hasPallasContract(const llvm::Function &f);
 bool hasVcllvmContract(const llvm::Function &f);
 
 /**
- * Checks if the given llvm function is marked as an expression wrapper of a 
- * pallas specification. 
+ * Checks if the given llvm function is marked as an expression wrapper of a
+ * pallas specification.
  */
 bool isPallasExprWrapper(const llvm::Function &f);
+
+/**
+ * Checks if the given metadata-node is a wellformed encoding of a
+ * pallas source-location.
+ */
+bool isWellformedPallasLocation(const llvm::MDNode *mdNode);
+
+/**
+ * Checks if the given metadata-node refers to a integer-constant.
+ */
+bool isConstantInt(llvm::Metadata *md);
 
 } // namespace pallas::utils
 
