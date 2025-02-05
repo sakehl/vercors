@@ -11,11 +11,17 @@ case object EncodePointerComparison extends RewriterBuilder {
   override def desc: String =
     "Encodes comparison between pointers taking into account pointer provenance."
 
+  // Probably overkill to keep track of all of these separately, but this might be useful in the future for disambiguating contexts
   private sealed trait Context
   private final case class InAxiom() extends Context
   private final case class InPrecondition() extends Context
   private final case class InPostcondition() extends Context
   private final case class InLoopInvariant() extends Context
+  private final case class InAssertion() extends Context
+  private final case class InExhale() extends Context
+  private final case class InInhale() extends Context
+  private final case class InQuantifier() extends Context
+  private final case class InPredicate() extends Context
 }
 
 case class EncodePointerComparison[Pre <: Generation]() extends Rewriter[Pre] {
@@ -29,6 +35,9 @@ case class EncodePointerComparison[Pre <: Generation]() extends Rewriter[Pre] {
         context.having(InAxiom()) {
           allScopes.anySucceed(axiom, axiom.rewriteDefault())
         }
+      case resource: AbstractPredicate[Pre] => context.having(InPredicate()) {
+        allScopes.anySucceed(resource, resource.rewriteDefault())
+      }
       case decl => allScopes.anySucceed(decl, decl.rewriteDefault())
     }
 
@@ -55,6 +64,14 @@ case class EncodePointerComparison[Pre <: Generation]() extends Rewriter[Pre] {
           ensures = context.having(InPostcondition()) { dispatch(ensures) },
         )
     }
+  }
+
+  override def dispatch(stat: Statement[Pre]): Statement[Post] = stat match {
+    case assert@Assert(res) => assert.rewrite(res=context.having(InAssertion()) {dispatch(res)})
+    case exhale@Exhale(res) => exhale.rewrite(res=context.having(InExhale()) {dispatch(res)})
+    case inhale@Inhale(res) => inhale.rewrite(res=context.having(InInhale()) {dispatch(res)})
+    case assume@Assume(assn) => assume.rewrite(assn=context.having(InInhale()) {dispatch(assn)})
+    case _ => super.dispatch(stat)
   }
 
   override def dispatch(e: Expr[Pre]): Expr[Post] = {
@@ -120,6 +137,37 @@ case class EncodePointerComparison[Pre <: Generation]() extends Rewriter[Pre] {
           eitherNull = (l, _) => l === Null(),
           compareAddress = true,
         )
+
+      case asserting@Asserting(condition, _) => asserting.rewrite(condition=context.having(InAssertion()) {dispatch(condition)})
+      // Match on all quantifiers
+      case binder: Binder[Pre] => binder match {
+        case exists@Exists(_, _, body) => exists.rewrite(body = context.having(InQuantifier()) {
+          dispatch(body)
+        })
+        case forall@Forall(_, _, body) => forall.rewrite(body = context.having(InQuantifier()) {
+          dispatch(body)
+        })
+        case starall@Starall(_, _, body) => starall.rewrite(body = context.having(InQuantifier()) {
+          dispatch(body)
+        })
+        case forperm@ForPerm(_, _, body) => forperm.rewrite(body = context.having(InQuantifier()) {
+          dispatch(body)
+        })
+        case forperm@ForPermWithValue(_, body) => forperm.rewrite(body = context.having(InQuantifier()) {
+          dispatch(body)
+        })
+        case sum@Sum(_, condition, main) => sum.rewrite(condition=context.having(InQuantifier()){
+          dispatch(condition)
+        }, main = context.having(InQuantifier()) {
+          dispatch(main)
+        })
+        case product@Product(_, condition, main) => product.rewrite(condition=context.having(InQuantifier()){
+          dispatch(condition)
+        }, main = context.having(InQuantifier()) {
+          dispatch(main)
+        })
+        case let@Let(_, _, _) => super.dispatch(let)
+      }
       case e => super.dispatch(e)
     }
   }
@@ -164,7 +212,7 @@ case class EncodePointerComparison[Pre <: Generation]() extends Rewriter[Pre] {
             )
           case Some(
                 InAxiom() | InPrecondition() | InPostcondition() |
-                InLoopInvariant()
+                InLoopInvariant() | InAssertion() | InInhale() | InExhale() |  InQuantifier() | InPredicate()
               ) =>
             if (compareAddress) { And(blockEq, addressComp(newL, newR)) }
             else { comp(newL, newR) }

@@ -428,6 +428,8 @@ case class CToCol[G](
 
   def convert(implicit params: ParameterListContext): Seq[CParam[G]] =
     params match {
+      // foo(void)
+      case ParameterList0(ParameterDeclaration1(DeclarationSpecifiers20(Seq(DeclarationSpecifier1(TypeSpecifier0("void")))), None)) => Nil
       case ParameterList0(decl) => Seq(convert(decl))
       case ParameterList1(init, _, last) => convert(init) :+ convert(last)
     }
