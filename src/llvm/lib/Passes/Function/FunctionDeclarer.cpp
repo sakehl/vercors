@@ -119,6 +119,9 @@ FDResult FunctionDeclarer::run(Function &F, FunctionAnalysisManager &FAM) {
             auto colParent = FAM.getResult<FunctionDeclarer>(*wrapperParent);
             llvmFuncDef->mutable_pallas_expr_wrapper_for()->set_id(
                 colParent.getFunctionId());
+        } else {
+            pallas::ErrorReporter::addError(
+                SOURCE_LOC, "Wrapper-function without parent!", F);
         }
     }
 

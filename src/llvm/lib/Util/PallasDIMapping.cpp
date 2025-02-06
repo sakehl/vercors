@@ -28,7 +28,7 @@ getIntrinsicsForDIVar(llvm::Function &f, llvm::DILocalVariable &diVar) {
 
 } // namespace
 
-llvm::Value *mapDIVarToVar(llvm::Function &f, llvm::DIVariable &diVar) {
+llvm::Value *mapDIVarToValue(llvm::Function &f, llvm::DIVariable &diVar) {
     auto *locDiVar = llvm::dyn_cast<llvm::DILocalVariable>(&diVar);
     // TODO: Also support global variables
     if (locDiVar == nullptr) {

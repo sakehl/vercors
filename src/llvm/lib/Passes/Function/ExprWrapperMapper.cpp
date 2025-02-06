@@ -67,8 +67,9 @@ ExprWrapperMapper::Result ExprWrapperMapper::run(Function &F,
         }
 
         // Check all loop-contracts
-        LoopInfo &loopInfo = FAM.getResult<LoopAnalysis>(F);
-        for (Loop *loop : loopInfo.getLoopsInPreorder()) {
+        LoopInfo &loopInfo = FAM.getResult<LoopAnalysis>(parentF);
+        auto loops = loopInfo.getLoopsInPreorder();
+        for (Loop *loop : loops) {
             if (loop == nullptr)
                 continue;
             // Get loop-contract
@@ -80,7 +81,7 @@ ExprWrapperMapper::Result ExprWrapperMapper::run(Function &F,
             auto numOps = contractMD->getNumOperands();
             for (unsigned int invIdx = 2; invIdx < numOps; ++invIdx) {
                 // Cast operand into MDNode
-                llvm::MDNode *invMD = llvm::dyn_cast_if_present<llvm::MDNode>(
+                auto *invMD = dyn_cast_if_present<MDNode>(
                     contractMD->getOperand(invIdx).get());
                 if (invMD == nullptr)
                     continue;

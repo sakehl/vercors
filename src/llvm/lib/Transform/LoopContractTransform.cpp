@@ -10,6 +10,7 @@
 #include <llvm/IR/Argument.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/Metadata.h>
 #include <string>
 
@@ -64,19 +65,17 @@ void llvm2col::transformLoopContract(llvm::Loop &llvmLoop,
         }
         // Add invariant to contract
         if (!addInvariantToContract(*invMD, llvmLoop, *colInvariant,
-                                    functionCursor)) {
+                                    *contractSrcLoc, functionCursor)) {
             return;
         }
         ++opIdx;
     }
-
-    // TODO: Ensure that the loop-contract has been fully initialized
-
     return;
 }
 
 bool llvm2col::addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
                                       col::LoopInvariant &colContract,
+                                      llvm::MDNode &contractLoc,
                                       pallas::FunctionCursor &functionCursor) {
     pallas::FunctionAnalysisManager &fam =
         functionCursor.getFunctionAnalysisManager();
@@ -139,50 +138,59 @@ bool llvm2col::addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
     col::LlvmFunctionDefinition &colParentFunc =
         colFResult.getAssociatedColFuncDef();
 
-    // Match DIVariables to COL variables
-    llvm::SmallVector<col::Variable *, 8> colVars;
-    for (auto *diVar : diVars) {
-        llvm::Value *llvmVal =
-            pallas::utils::mapDIVarToVar(*llvmParentFunc, *diVar);
-        if (llvmVal == nullptr) {
-            pallas::ErrorReporter::addError(
-                SOURCE_LOC, "Unable to map DIVariable to value.",
-                *llvmParentFunc);
-            return false;
-        }
-
-        // Get the col-variable that corresponds to the llvm-value
-        // If value is an argumet, get it from fucntion's arg-map.
-        // Otherwise, check the var-map of the function cursor.
-        // TODO: Make this work with global variables!
-        if (auto *arg = llvm::dyn_cast<llvm::Argument>(llvmVal)) {
-            colVars.push_back(&colFResult.getFuncArgMapEntry(*arg));
-        } else {
-            colVars.push_back(
-                &functionCursor.getVariableMapEntry(*llvmVal, false));
-            // TODO: Make this fail more gracefully
-        }
-    }
-
     // Build call to wrapper-function
     auto *wrapperCall = new col::LlvmFunctionInvocation();
     wrapperCall->set_allocated_origin(
         llvm2col::generatePallasWrapperCallOrigin(*llvmWFunc, *srcLoc));
     wrapperCall->set_allocated_blame(new col::Blame());
     wrapperCall->mutable_ref()->set_id(colWFunc.id());
+
     // Add arguments to wrapper-call
-    for (auto *v : colVars) {
-        auto *argExpr = wrapperCall->add_args()->mutable_local();
-        // TODO: Make origin more fine-grained
-        argExpr->set_allocated_origin(
-            llvm2col::generatePallasWrapperCallOrigin(*llvmWFunc, *srcLoc));
-        argExpr->mutable_ref()->set_id(v->id());
+    for (auto *diVar : diVars) {
+        // Match DIVariables to LLVM-Values
+        llvm::Value *llvmVal =
+            pallas::utils::mapDIVarToValue(*llvmParentFunc, *diVar);
+        if (llvmVal == nullptr) {
+            pallas::ErrorReporter::addError(
+                SOURCE_LOC, "Unable to map DIVariable to value.",
+                *llvmParentFunc);
+            return false;
+        }
+        // Get variables from llvm-values and build argument-expressions
+        if (auto *alloca = llvm::dyn_cast<llvm::AllocaInst>(llvmVal)) {
+            // Deref ptr
+            col::Variable *colVar =
+                &functionCursor.getVariableMapEntry(*llvmVal, false);
+            auto *ptrDeref = wrapperCall->add_args()->mutable_deref_pointer();
+            ptrDeref->set_allocated_origin(
+                llvm2col::generatePallasWrapperCallOrigin(*llvmWFunc, *srcLoc));
+            ptrDeref->set_allocated_blame(new col::Blame());
+            // Local to var of alloca
+            auto *local = ptrDeref->mutable_pointer()->mutable_local();
+            local->set_allocated_origin(
+                llvm2col::generatePallasWrapperCallOrigin(*llvmWFunc, *srcLoc));
+            local->mutable_ref()->set_id(colVar->id());
+        } else if (auto *arg = llvm::dyn_cast<llvm::Argument>(llvmVal)) {
+            col::Variable *colVar = &colFResult.getFuncArgMapEntry(*arg);
+            auto *argExpr = wrapperCall->add_args()->mutable_local();
+            argExpr->set_allocated_origin(
+                llvm2col::generatePallasWrapperCallOrigin(*llvmWFunc, *srcLoc));
+            argExpr->mutable_ref()->set_id(colVar->id());
+        } else {
+            pallas::ErrorReporter::addError(
+                SOURCE_LOC, "Unable to map DIVariable to col-variable.",
+                *llvmParentFunc);
+            return false;
+        }
     }
 
     // Append wrapper-call to loop-contract
     if (colContract.has_invariant()) {
         auto *oldInv = colContract.release_invariant();
         auto *newInv = colContract.mutable_invariant()->mutable_and_();
+        // TODO: set the origin
+        newInv->set_allocated_origin(
+            generatePallasLoopContractOrigin(llvmLoop, contractLoc));
         newInv->set_allocated_left(oldInv);
         newInv->mutable_right()->set_allocated_llvm_function_invocation(
             wrapperCall);
@@ -190,9 +198,7 @@ bool llvm2col::addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
         colContract.mutable_invariant()->set_allocated_llvm_function_invocation(
             wrapperCall);
     }
-
-    // TODO: Change to true
-    return false;
+    return true;
 }
 
 void llvm2col::initializeEmptyLoopContract(col::LoopContract &colContract) {

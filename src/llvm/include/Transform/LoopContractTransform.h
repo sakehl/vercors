@@ -21,6 +21,7 @@ void initializeEmptyLoopContract(col::LoopContract &colContract);
 
 bool addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
                             col::LoopInvariant &colContract,
+                            llvm::MDNode &contractLoc,
                             pallas::FunctionCursor &functionCursor);
 
 } // namespace llvm2col

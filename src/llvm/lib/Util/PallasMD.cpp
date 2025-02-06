@@ -92,18 +92,19 @@ llvm::MDNode *getPallasLoopContract(const llvm::Loop &llvmLoop) {
         return nullptr;
 
     for (const llvm::MDOperand &op : loopID->operands()) {
-        if (auto *opNode = dyn_cast<llvm::MDNode>(op.get())) {
-            // Check that the first operand is a MDString identifier for a
-            // loop contract
-            if (opNode->getNumOperands() <= 2 ||
-                !opNode->getOperand(0).equalsStr(
-                    pallas::constants::PALLAS_LOOP_CONTR_ID)) {
-                continue;
+        auto *opNode = llvm::dyn_cast_if_present<llvm::MDNode>(op.get());
+        // Check that the first operand is a MDString identifier for a
+        // loop contract
+        if (opNode != nullptr && opNode->getNumOperands() >= 2) {
+            auto *idStr = llvm::dyn_cast_if_present<llvm::MDString>(
+                opNode->getOperand(0).get());
+            if (idStr != nullptr &&
+                idStr->getString().str() ==
+                    pallas::constants::PALLAS_LOOP_CONTR_ID) {
+                return opNode;
             }
-            return opNode;
         }
     }
     return nullptr;
 }
-
 } // namespace pallas::utils

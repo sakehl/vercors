@@ -10,7 +10,7 @@
  */
 namespace pallas::utils {
 
-llvm::Value *mapDIVarToVar(llvm::Function &f, llvm::DIVariable &diVar);
+llvm::Value *mapDIVarToValue(llvm::Function &f, llvm::DIVariable &diVar);
 
 
 } // namespace pallas::utils
