@@ -367,7 +367,7 @@ Function *PallasFunctionContractDeclarerPass::getWrapperFuncFromClause(
 
     // Check that the function is marked as a pallas wrapper function.
     auto *wrapperF = cast<Function>(wrapperFuncMD->getValue());
-    if (!wrapperF->hasMetadata(pallas::constants::PALLAS_WRAPPER_FUNC)) {
+    if (!utils::isPallasExprWrapper(*wrapperF)) {
         pallas::ErrorReporter::addError(
             SOURCE_LOC,
             "Ill-formed contract clause. Second operand does not point to "

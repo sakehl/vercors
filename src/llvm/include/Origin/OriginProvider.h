@@ -45,6 +45,9 @@ col::Origin *generateLoopOrigin(llvm::Loop &llvmLoop);
 col::Origin *generatePallasFunctionContractOrigin(const llvm::Function &f,
                                                   const llvm::MDNode &mdSrcLoc);
 
+col::Origin *generatePallasLoopContractOrigin(const llvm::Loop &loop,
+                                              const llvm::MDNode &mdSrcLoc);
+
 col::Origin *generateSingleStatementOrigin(llvm::Instruction &llvmInstruction);
 
 col::Origin *generateAssignTargetOrigin(llvm::Instruction &llvmInstruction);

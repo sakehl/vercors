@@ -4,8 +4,8 @@
 #include <utility>
 
 #include <llvm/IR/DebugInfoMetadata.h>
-#include <llvm/IR/Instruction.h>
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/Instruction.h>
 #include <llvm/IR/Module.h>
 
 #include "Origin/ContextDeriver.h"
@@ -215,7 +215,8 @@ std::pair<unsigned int, unsigned int> getEndPosFromMD(const llvm::Function &f) {
     if (sProg != nullptr)
         maxLine = sProg->getLine();
 
-    for (auto it = llvm::inst_begin(f), end = llvm::inst_end(f); it != end; ++it) {
+    for (auto it = llvm::inst_begin(f), end = llvm::inst_end(f); it != end;
+         ++it) {
         const llvm::Instruction *inst = &*it;
         auto &loc = inst->getDebugLoc();
         if (!loc)
@@ -223,13 +224,13 @@ std::pair<unsigned int, unsigned int> getEndPosFromMD(const llvm::Function &f) {
         unsigned int line = loc.getLine();
         unsigned int col = loc.getCol();
         if (line > maxLine) {
-            maxLine = line; 
+            maxLine = line;
             maxCol = col;
         } else if (line == maxLine && col > maxCol) {
             maxCol = col;
-        }   
+        }
     }
-    return { maxLine, maxCol };
+    return {maxLine, maxCol};
 }
 } // namespace
 
@@ -245,9 +246,10 @@ col::Origin *llvm2col::generateFuncDefOrigin(llvm::Function &llvmFunction) {
     if (sProg != nullptr) {
         auto endPos = getEndPosFromMD(llvmFunction);
         auto endLine = std::make_optional(endPos.first);
-        auto endCol = std::make_optional(endPos.second);;
-        generateSourceRangeOrigin(origin, *sProg, sProg->getLine(), 0,
-                                  endLine, endCol);
+        auto endCol = std::make_optional(endPos.second);
+        ;
+        generateSourceRangeOrigin(origin, *sProg, sProg->getLine(), 0, endLine,
+                                  endCol);
         return origin;
     }
 
@@ -286,6 +288,31 @@ llvm2col::generatePallasFunctionContractOrigin(const llvm::Function &f,
     generateSourceRangeOrigin(origin, *scope, startLine, startCol, endLine,
                               endCol);
 
+    return origin;
+}
+
+col::Origin *
+llvm2col::generatePallasLoopContractOrigin(const llvm::Loop &loop,
+                                           const llvm::MDNode &srcLoc) {
+    col::Origin *origin = new col::Origin();
+    col::OriginContent *preferredNameContent = origin->add_content();
+    col::PreferredName *preferredName = new col::PreferredName();
+    preferredName->add_preferred_name("Loop contract (" + loop.getName().str() +
+                                      ")");
+    preferredNameContent->set_allocated_preferred_name(preferredName);
+
+    llvm::Function *parentFunc = loop.getHeader()->getParent();
+    if (parentFunc == nullptr || parentFunc->getSubprogram() == nullptr) {
+        return origin;
+    }
+
+    llvm::DIScope *scope = parentFunc->getSubprogram();
+    auto startLine = getIntValue(srcLoc.getOperand(1).get());
+    auto startCol = getIntValue(srcLoc.getOperand(2).get());
+    auto endLine = std::make_optional(getIntValue(srcLoc.getOperand(3).get()));
+    auto endCol = std::make_optional(getIntValue(srcLoc.getOperand(4).get()));
+    generateSourceRangeOrigin(origin, *scope, startLine, startCol, endLine,
+                              endCol);
     return origin;
 }
 

@@ -1,7 +1,6 @@
 #include "Transform/BlockTransform.h"
 
 #include "Origin/OriginProvider.h"
-#include "Transform/LoopContractTransform.h"
 #include "Transform/Instruction/BinaryOpTransform.h"
 #include "Transform/Instruction/CastOpTransform.h"
 #include "Transform/Instruction/FuncletPadOpTransform.h"
@@ -9,6 +8,7 @@
 #include "Transform/Instruction/OtherOpTransform.h"
 #include "Transform/Instruction/TermOpTransform.h"
 #include "Transform/Instruction/UnaryOpTransform.h"
+#include "Transform/LoopContractTransform.h"
 #include "Util/Exceptions.h"
 
 const std::string SOURCE_LOC = "Transform::BlockTransform";
@@ -29,18 +29,8 @@ void llvm2col::transformLLVMBlock(llvm::BasicBlock &llvmBlock,
             functionCursor.getLoopInfo().getLoopFor(&llvmBlock);
         col::LlvmLoop *loop = labeled.bb.mutable_loop();
         loop->set_allocated_origin(generateLoopOrigin(*llvmLoop));
-        transformLoopContract(*llvmLoop, *loop->mutable_contract());
-        /*
-        col::LoopContract *contract = loop->mutable_contract();
-        col::LoopInvariant *invariant = contract->mutable_loop_invariant();
-        col::BooleanValue *tt =
-            invariant->mutable_invariant()->mutable_boolean_value();
-        tt->set_value(true);
-        tt->set_allocated_origin(generateLabelledOrigin("constant true"));
-        invariant->set_allocated_origin(
-            generateLabelledOrigin("constant true"));
-        invariant->mutable_blame();
-        */
+        transformLoopContract(*llvmLoop, *loop->mutable_contract(),
+                              functionCursor);
 
         loop->mutable_header()->set_id(labeled.bb.label().id());
         pallas::LabeledColBlock labeled_latch =

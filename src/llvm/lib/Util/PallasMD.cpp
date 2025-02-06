@@ -1,5 +1,5 @@
-#include "Util/Constants.h"
 #include "Util/PallasMD.h"
+#include "Util/Constants.h"
 #include <llvm/Support/Casting.h>
 
 #include <llvm/IR/Function.h>
@@ -32,8 +32,7 @@ bool isPallasExprWrapper(const llvm::Function &f) {
     return f.hasMetadata(pallas::constants::PALLAS_WRAPPER_FUNC);
 }
 
-bool isWellformedPallasLocation(
-    const llvm::MDNode *mdNode) {
+bool isWellformedPallasLocation(const llvm::MDNode *mdNode) {
 
     if (mdNode == nullptr)
         return false;
@@ -67,6 +66,44 @@ bool isConstantInt(llvm::Metadata *md) {
         }
     }
     return false;
+}
+
+llvm::Function *getWrapperFromLoopInv(const llvm::MDNode &invMD) {
+    if (invMD.getNumOperands() < 2) {
+        return nullptr;
+    }
+    auto *wFuncMD = llvm::dyn_cast_if_present<llvm::ValueAsMetadata>(
+        invMD.getOperand(1).get());
+    if (wFuncMD == nullptr) {
+        return nullptr;
+    }
+    auto *wFunc =
+        llvm::dyn_cast_if_present<llvm::Function>(wFuncMD->getValue());
+    if (wFunc == nullptr || !pallas::utils::isPallasExprWrapper(*wFunc)) {
+        return nullptr;
+    }
+    return wFunc;
+}
+
+llvm::MDNode *getPallasLoopContract(const llvm::Loop &llvmLoop) {
+    // Extract the LoopID
+    llvm::MDNode *loopID = llvmLoop.getLoopID();
+    if (loopID == nullptr)
+        return nullptr;
+
+    for (const llvm::MDOperand &op : loopID->operands()) {
+        if (auto *opNode = dyn_cast<llvm::MDNode>(op.get())) {
+            // Check that the first operand is a MDString identifier for a
+            // loop contract
+            if (opNode->getNumOperands() <= 2 ||
+                !opNode->getOperand(0).equalsStr(
+                    pallas::constants::PALLAS_LOOP_CONTR_ID)) {
+                continue;
+            }
+            return opNode;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace pallas::utils
