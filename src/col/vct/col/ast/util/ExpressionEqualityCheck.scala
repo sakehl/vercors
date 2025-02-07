@@ -300,6 +300,11 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
   def isNonZero(e: Expr[G]): Option[Boolean] = {
     e match {
       case v: Local[G] if info.exists(_.variableNotZero.contains(v)) => return Some(true)
+      case Mult(l, r) =>
+        (isNonZero(l), isNonZero(r)) match {
+          case (Some(l), Some(r)) => return Some(l && r)
+          case _ =>
+        }
       case _ =>
     }
     isConstantInt(e).map(i => i != 0) orElse

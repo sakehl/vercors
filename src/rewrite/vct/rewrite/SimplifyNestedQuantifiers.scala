@@ -831,11 +831,14 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
         if (quantifierData.bindings.isEmpty)
           return None
         for (v <- quantifierData.bindings) {
-          if (
-            !(linearExpressions.contains(v) &&
-              quantifierData.upperExclusiveBounds.contains(v) &&
-              quantifierData.upperExclusiveBounds(v).nonEmpty)
-          ) { return None }
+          if (!(// Must have an a_i
+              linearExpressions.contains(v) &&
+            // must have lower bound
+            quantifierData.upperExclusiveBounds.contains(v) &&
+              quantifierData.upperExclusiveBounds(v).nonEmpty &&
+              // the a_i must be non zero
+              equalityChecker.isNonZero(linearExpressions(v)).getOrElse(false)
+            )) { return None }
         }
 
         def sortVar(v: Variable[Pre]): Option[BigInt] =
@@ -888,9 +891,6 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
       ): Option[SubstituteForall] = {
         val x0 = vars.head
         val a0 = linearExpressions(x0)
-        if(!equalityChecker.isNonZero(a0).getOrElse(false)){
-          return None
-        }
         // x_{i-1}
         var xPrev = x0
         var linLast: Expr[Pre] = IntegerValue(0)
@@ -962,8 +962,9 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
         // (a_0>0 => 0 <= x_new - offset < a_k * n_k) &&
         // (a_0<0 => a_k * n_k < x_new <= 0)
         val aLast = linearExpressions(xPrev)
-        val ifAPos = const[Post](0) <= base && base < newGen(simplifiedMult(aLast, nLast))
-        val ifANeg = newGen(simplifiedMult(aLast, nLast)) < base && base <= const(0)
+        val extent = newGen(simplifiedMult(aLast, nLast))
+        val ifAPos = const[Post](0) <= base && base < extent
+        val ifANeg = extent < base && base <= const(0)
 
         var newBounds = sign match {
           case Some(Pos()) => ifAPos
@@ -1114,7 +1115,7 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
       ): Option[FoundBound] = {
         val a = linearExpressions(x)
         val aLast = linearExpressions(xPrev)
-        val hasSameSign = equalityChecker.isSameSign(a, aLast).getOrElse(false) && sign.isDefined
+        val hasSameSign = equalityChecker.isSameSign(a, aLast).getOrElse(false)
 
         var otherUpperBounds: Set[Expr[Pre]] =
           quantifierData.upperExclusiveBounds(xPrev).toSet
@@ -1124,8 +1125,10 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
         for (up <- quantifierData.upperExclusiveBounds(xPrev)) {
           for (low <- quantifierData.lowerBounds(xPrev)) {
             val nLastCandidate = simplifiedMinus(up, low)
+            val n_is_pos = equalityChecker.lowerBound(nLastCandidate).exists(_ > 0)
+
             // Check 1
-            if (
+            if (n_is_pos &&
               equalityChecker
                 .equalExpressions(a, simplifiedMult(aLast, nLastCandidate))
             ) {
@@ -1140,17 +1143,10 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
                 FoundBound(otherLowerBounds, otherUpperBounds, low, linLast)
               )
             }
-
+            // |a_{i-1}| * n_{i-1} <= |a_i|
             // Check 2
-            if (hasSameSign &&
-              //sign(a) == pos ==> |a_{i-1}| * n_{i-1} <= |a_i|
-              (!equalityChecker.isPos(sign.get) || equalityChecker
-                .lessThenEq(simplifiedMult(aLast, nLastCandidate), a)
-                .getOrElse(false)) &&
-              //sign(a) == neg ==> a_i <= a_{i-1} * n_{i-1}
-              (equalityChecker.isPos(sign.get) || equalityChecker
-                .lessThenEq(a, simplifiedMult(aLast, nLastCandidate))
-                .getOrElse(false))
+            if (n_is_pos && hasSameSign &&
+              equalityChecker.lessThenEq(simplifiedMult(abs(aLast, sign), nLastCandidate), abs(a, sign)).getOrElse(false)
             ) {
               // This is also valid, we take a stride of a_i, but in that case it will stop earlier
               // So we do not remove the upperbound we found
@@ -1168,7 +1164,7 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
 
         // Check 3
         // If we have something like f[8*z + 3*y + x] and the bound 3*y+x<8, we are valid as well
-        if(hasSameSign) {
+        if(hasSameSign && sign.isDefined) {
           for (low <- quantifierData.lowerBounds(xPrev)) {
             val linLast = simplifiedPlus(
               simplifiedMult(aLast, simplifiedMinus(Local(xPrev.ref), low)),
