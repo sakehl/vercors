@@ -187,8 +187,7 @@ bool llvm2col::addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
     // Append wrapper-call to loop-contract
     if (colContract.has_invariant()) {
         auto *oldInv = colContract.release_invariant();
-        auto *newInv = colContract.mutable_invariant()->mutable_and_();
-        // TODO: set the origin
+        auto *newInv = colContract.mutable_invariant()->mutable_star();
         newInv->set_allocated_origin(
             generatePallasLoopContractOrigin(llvmLoop, contractLoc));
         newInv->set_allocated_left(oldInv);
