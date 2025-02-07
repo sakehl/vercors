@@ -224,7 +224,7 @@ case class CToCol[G](
       case TypeSpecifier3(struct) => convert(struct)
       case TypeSpecifier4(_) => ??(typeSpec)
       case TypeSpecifier5(name) =>
-        name match { case TypedefName0(name) => CTypedefName(convert(name)) }
+        name match { case TypedefName0(name) => CTypedefName(name) }
       case TypeSpecifier6(_, _, _, _) => ??(typeSpec)
       case TypeSpecifier7(_, _, t, _, size, _) =>
         CSpecificationType(TOpenCLVector(BigInt(size), convert(t)))
@@ -857,11 +857,11 @@ case class CToCol[G](
 
   def convert(implicit expr: CastExpressionContext): Expr[G] =
     expr match {
-      case CastExpression0(inner) => convert(inner)
-      case CastExpression1(_, typeName, _, e) =>
+      case CastExpression0(_, typeName, _, e) =>
         CCast(convert(e), convert(typeName))
-      case CastExpression1(_, _, _, _) => ??(expr)
-      case CastExpression2(_, _, _, _, _) => ??(expr)
+      case CastExpression0(_, _, _, _) => ??(expr)
+      case CastExpression1(_, _, _, _, _) => ??(expr)
+      case CastExpression2(inner) => convert(inner)
     }
 
   def convert(implicit expr: UnaryExpressionContext): Expr[G] =

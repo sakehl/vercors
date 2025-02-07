@@ -115,7 +115,6 @@ case class LangTypesToCol[Pre <: Generation](platformContext: PlatformContext)
         pointer.storedByteSize = platformContext.pointerSize
         pointer
       case t @ TCInt() =>
-        // TODO: Where do these originate!!
         val cint = TCInt[Post]()
         cint.storedByteSize = t.storedByteSize
         cint.signed = t.signed

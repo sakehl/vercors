@@ -32,7 +32,7 @@ import LangOMPParser, LangGPGPUParser;
 
 primaryExpression
     :   valExpr
-    |   clangIdentifier
+    |   {!isTypedefName($ctx)}? clangIdentifier
     |   Constant
     |   StringLiteral+
     |   '(' expression ')'
@@ -107,9 +107,9 @@ unaryOperator
     ;
 
 castExpression
-    :   unaryExpression
-    |   '(' typeName ')' castExpression
+    : '(' typeName ')' castExpression
     |   '__extension__' '(' typeName ')' castExpression
+    | unaryExpression
     ;
 
 prependExpression
@@ -224,7 +224,7 @@ constantExpression
     ;
 
 declaration
-    :   valEmbedContract? declarationSpecifiers initDeclaratorList? ';'
+    :   valEmbedContract? declarationSpecifiers initDeclaratorList? ';' {collectTypedef();}
     |   staticAssertDeclaration
     ;
 
@@ -474,7 +474,7 @@ directAbstractDeclarator
     ;
 
 typedefName
-    :   clangIdentifier
+    :  {isTypedefName($ctx)}? Identifier
     ;
 
 initializer

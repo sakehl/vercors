@@ -9,6 +9,8 @@ import vct.col.resolve.ctx._
 import vct.col.typerules.{PlatformContext, TypeSize}
 import vct.result.VerificationError.{SystemError, UserError}
 
+import scala.annotation.tailrec
+
 case object C {
   implicit private val o: Origin = DiagnosticOrigin
 
@@ -99,7 +101,7 @@ case object C {
     )
   }
 
-  def getIntSize(
+  private def getIntSize(
       platformContext: PlatformContext,
       specs: Seq[CDeclarationSpecifier[_]],
   ): TypeSize = {
@@ -222,7 +224,8 @@ case object C {
         DeclaratorInfo(params = None, typeOrReturnType = (t => t), name)
     }
 
-  def getSpecs[G](
+  @tailrec
+  private def getSpecs[G](
       decl: CDeclarator[G],
       acc: Seq[CDeclarationSpecifier[G]] = Nil,
   ): Seq[CDeclarationSpecifier[G]] =
@@ -232,7 +235,7 @@ case object C {
       case _ => acc
     }
 
-  def getTypeFromTypeDef[G](
+  private def getTypeFromTypeDef[G](
       decl: CDeclaration[G],
       platformContext: Option[PlatformContext],
       context: Option[Node[G]] = None,
@@ -397,7 +400,7 @@ case object C {
     }
   }
 
-  def getCStructDeref[G](
+  private def getCStructDeref[G](
       decl: CGlobalDeclaration[G],
       name: String,
   ): Option[CDerefTarget[G]] =
