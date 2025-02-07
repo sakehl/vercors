@@ -332,7 +332,6 @@ case class ColToSilver(program: col.Program[_]) {
       case col.TInt() => silver.Int
       case col.TRational() => silver.Perm
       case col.TRef() => silver.Ref
-      case col.TResource() => silver.Bool
       case col.TSeq(element) => silver.SeqType(typ(element))
       case col.TSet(element) => silver.SetType(typ(element))
       case col.TBag(element) => silver.MultisetType(typ(element))
