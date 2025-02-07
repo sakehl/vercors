@@ -1172,6 +1172,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
         BitOr(int(left), int(right), bits, signed)(op.blame)
       case op @ BitShl(left, right, bits, signed) =>
         BitShl(int(left), int(right), bits, signed)(op.blame)
+      case op @ AmbiguousBitShr(left, right) =>
+        AmbiguousBitShr(int(left), int(right))(op.blame)
       case op @ BitShr(left, right, bits) =>
         BitShr(int(left), int(right), bits)(op.blame)
       case op @ BitUShr(left, right, bits, signed) =>

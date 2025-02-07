@@ -73,6 +73,7 @@ case object Parsing {
       cSystemInclude = options.cIncludePath,
       cOtherIncludes = Nil,
       cDefines = options.cDefine,
+      targetString = options.targetString,
     )
 }
 
@@ -88,6 +89,7 @@ case class Parsing[G <: Generation](
     cppSystemInclude: Path = Resources.getCPPIncludePath,
     cppOtherIncludes: Seq[Path] = Nil,
     cppDefines: Map[String, String] = Map.empty,
+    targetString: Option[String] = None,
 ) extends Stage[Seq[Readable], ParseResult[G]] {
   override def friendlyName: String = "Parsing"
   override def progressWeight: Int = 4
@@ -110,6 +112,7 @@ case class Parsing[G <: Generation](
                 readable.underlyingPath.map(_.toAbsolutePath.getParent).toSeq ++
                   cOtherIncludes,
                 cDefines,
+                targetString,
               )
             case Language.InterpretedC =>
               ColIParser(debugOptions, blameProvider, cOrigin = None)

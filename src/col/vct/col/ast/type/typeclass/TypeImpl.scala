@@ -11,7 +11,9 @@ import vct.col.util.IdentitySuccessorsProvider
 
 trait TypeImpl[G] extends TypeFamilyOps[G] {
   this: Type[G] =>
-  def byteSize: TypeSize = TypeSize.Unknown()
+  var storedByteSize: TypeSize = TypeSize.Unknown()
+
+  def byteSize: TypeSize = storedByteSize
 
   def superTypeOf(other: Type[G]): Boolean =
     CoercionUtils.getCoercion(other, this).isDefined

@@ -41,10 +41,15 @@ void foo() {
     //@ assert lshr16 == 4096;
     //@ assert lshr32 == 268435456;
     //@ assert lshr64 == 1152921504606846976ULL;
-    int8_t  ashr8  = ((int8_t)                 -128  ) >> ((int8_t) 3);
-    int16_t ashr16 = ((int16_t)              -32768  ) >> ((int16_t)3);
-    int32_t ashr32 = ((int32_t)         -2147483648  ) >> ((int32_t)3);
-    int64_t ashr64 = ((int64_t)-9223372036854775808LL) >> ((int64_t)3);
+    // We need to use variables here since the parser breaks
+    int8_t  num8  =                   -128;
+    int16_t num16 =                 -32768;
+    int32_t num32 =            -2147483648;
+    int64_t num64 = -9223372036854775808LL;
+    int8_t  ashr8  = ((int8_t) num8)  >> ((int8_t) 3);
+    int16_t ashr16 = ((int16_t)num16) >> ((int16_t)3);
+    int32_t ashr32 = ((int32_t)num32) >> ((int32_t)3);
+    int64_t ashr64 = ((int64_t)num64) >> ((int64_t)3);
     //@ assert ashr8  == -16;
     //@ assert ashr16 == -4096;
     //@ assert ashr32 == -268435456;

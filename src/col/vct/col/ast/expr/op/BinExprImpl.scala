@@ -20,7 +20,7 @@ import vct.col.ast.{
 }
 import vct.col.origin.Origin
 import vct.col.resolve.lang.C
-import vct.col.typerules.{CoercionUtils, Types}
+import vct.col.typerules.{CoercionUtils, TypeSize, Types}
 import vct.result.VerificationError
 
 object BinOperatorTypes {
@@ -93,16 +93,23 @@ object BinOperatorTypes {
     override def code: String = "numericBinError"
   }
 
+  def getBits[G](t: Type[G]): Int =
+    t.byteSize match {
+      case TypeSize.Unknown() => 0
+      case TypeSize.Exact(size) => size.intValue
+      case TypeSize.Minimally(_) => 0
+    }
+
   def getNumericType[G](lt: Type[G], rt: Type[G], o: Origin): Type[G] = {
     if (isCIntOp(lt, rt))
       (lt, rt) match {
         case (l: BitwiseType[G], r: BitwiseType[G])
-            if l.signed == r.signed && l.bits.isDefined &&
-              l.bits.get >= r.bits.getOrElse(0) =>
+            if l.signed == r.signed && getBits(l) != 0 &&
+              getBits(l) >= getBits(r) =>
           l
         case (l: BitwiseType[G], r: BitwiseType[G])
-            if l.signed == r.signed && r.bits.isDefined &&
-              r.bits.get >= l.bits.getOrElse(0) =>
+            if l.signed == r.signed && getBits(r) != 0 &&
+              getBits(r) >= getBits(l) =>
           r
         case _ => TCInt[G]()
       }

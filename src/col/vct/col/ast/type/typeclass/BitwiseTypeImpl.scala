@@ -6,5 +6,4 @@ trait BitwiseTypeImpl[G] {
   this: BitwiseType[G] =>
 
   def signed: Boolean
-  def bits: Option[Int]
 }

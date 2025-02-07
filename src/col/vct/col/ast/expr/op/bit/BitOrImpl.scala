@@ -1,15 +1,17 @@
 package vct.col.ast.expr.op.bit
 
-import vct.col.ast.{BitOr, TCInt, TInt, Type}
-import vct.col.print.{Ctx, Doc, Precedence}
+import vct.col.ast.expr.op.BinOperatorTypes
 import vct.col.ast.ops.BitOrOps
+import vct.col.ast.{BitOr, TCInt, Type}
+import vct.col.print.{Ctx, Doc, Precedence}
+import vct.col.typerules.TypeSize
 
 trait BitOrImpl[G] extends BitOrOps[G] {
   this: BitOr[G] =>
   override def t: Type[G] =
     getNumericType match {
-      case t: TCInt[G] if t.bits.isEmpty && bits != 0 =>
-        t.bits = Some(bits)
+      case t: TCInt[G] if BinOperatorTypes.getBits(t) != 0 && bits != 0 =>
+        t.storedByteSize = TypeSize.Exact(bits)
         t
       case t => t
     }

@@ -3,6 +3,7 @@ package vct.rewrite.lang
 import com.typesafe.scalalogging.LazyLogging
 import hre.util.ScopedStack
 import vct.col.ast._
+import vct.col.ast.expr.op.BinOperatorTypes
 import vct.col.origin._
 import vct.col.ref.Ref
 import vct.col.resolve.ctx._
@@ -480,6 +481,21 @@ case class LangSpecificToCol[Pre <: Generation](
           determineBitVectorSize(e, left, right),
           determineBitVectorSignedness(e, left, right),
         )(b.blame)(e.o)
+      case b @ AmbiguousBitShr(left, right) =>
+        if (isSigned(left.t) || isSigned(right.t)) {
+          BitShr(
+            dispatch(left),
+            dispatch(right),
+            determineBitVectorSize(e, left, right),
+          )(b.blame)(e.o)
+        } else {
+          BitUShr(
+            dispatch(left),
+            dispatch(right),
+            determineBitVectorSize(e, left, right),
+            false,
+          )(b.blame)(e.o)
+        }
       case b @ BitShr(left, right, 0) =>
         if (!determineBitVectorSignedness(e, left, right)) {
           throw UnsignedArithmeticShift(b)
@@ -506,32 +522,46 @@ case class LangSpecificToCol[Pre <: Generation](
       case other => super.dispatch(other)
     }
 
-  override def dispatch(t: Type[Pre]): Type[Post] =
+  private def setSize(t: Type[Post], size: TypeSize): Type[Post] = {
+    t.storedByteSize = size
+    t
+  }
+
+  private def isSigned(t: Type[Pre]): Boolean =
     t match {
-      case t: JavaTClass[Pre] => java.classType(t)
-      case t: CTPointer[Pre] => c.pointerType(t)
-      case t: CTVector[Pre] => c.vectorType(t)
-      case t: TOpenCLVector[Pre] => c.vectorType(t)
-      case t: TCInt[Pre] =>
-        val cint = t.rewriteDefault()
-        cint.bits = t.bits
-        cint.signed = t.signed
-        cint
-      case t: CTArray[Pre] => c.arrayType(t)
-      case t: CTStruct[Pre] => c.structType(t)
-      case t: LLVMTInt[Pre] => TInt()(t.o)
-      case t: LLVMTFloat[Pre] => TFloat(t.exponent, t.mantissa)
-      case t: LLVMTStruct[Pre] => llvm.structType(t)
-      case t: LLVMTPointer[Pre] => llvm.pointerType(t)
-      case t: LLVMTArray[Pre] => llvm.arrayType(t)
-      case t: LLVMTVector[Pre] => llvm.vectorType(t)
-      case t: LLVMTMetadata[Pre] =>
-        TInt()(
-          t.o
-        ) // TODO: Ignore these by just assuming they're integers... or could we do TVoid?
-      case t: CPPTArray[Pre] => cpp.arrayType(t)
-      case other => super.dispatch(other)
+      case t: BitwiseType[Pre] => t.signed
+      case _ => true
     }
+
+  override def dispatch(t: Type[Pre]): Type[Post] = {
+    setSize(
+      t match {
+        case t: JavaTClass[Pre] => java.classType(t)
+        case t: CTPointer[Pre] => c.pointerType(t)
+        case t: CTVector[Pre] => c.vectorType(t)
+        case t: TOpenCLVector[Pre] => c.vectorType(t)
+        case t: TCInt[Pre] =>
+          val cint = t.rewriteDefault()
+          cint.signed = t.signed
+          cint
+        case t: CTArray[Pre] => c.arrayType(t)
+        case t: CTStruct[Pre] => c.structType(t)
+        case t: LLVMTInt[Pre] => TInt()(t.o)
+        case t: LLVMTFloat[Pre] => TFloat(t.exponent, t.mantissa)
+        case t: LLVMTStruct[Pre] => llvm.structType(t)
+        case t: LLVMTPointer[Pre] => llvm.pointerType(t)
+        case t: LLVMTArray[Pre] => llvm.arrayType(t)
+        case t: LLVMTVector[Pre] => llvm.vectorType(t)
+        case t: LLVMTMetadata[Pre] =>
+          TInt()(
+            t.o
+          ) // TODO: Ignore these by just assuming they're integers... or could we do TVoid?
+        case t: CPPTArray[Pre] => cpp.arrayType(t)
+        case other => super.dispatch(other)
+      },
+      t.storedByteSize,
+    )
+  }
 
   private def determineBitVectorSize(
       op: Expr[Pre],
@@ -540,10 +570,10 @@ case class LangSpecificToCol[Pre <: Generation](
   ): Int = {
     (left.t, right.t) match {
       case (l: BitwiseType[Pre], r: BitwiseType[Pre]) =>
-        (l.bits, r.bits) match {
-          case (None, _) | (_, None) => throw IndeterminableBitVectorSize(op)
-          case (Some(l), Some(r)) if l == r => l
-          case (Some(l), Some(r)) => throw IncompatibleBitVectorSize(op, l, r)
+        (BinOperatorTypes.getBits(l), BinOperatorTypes.getBits(r)) match {
+          case (0, _) | (_, 0) => throw IndeterminableBitVectorSize(op)
+          case (l, r) if l == r => l
+          case (l, r) => throw IncompatibleBitVectorSize(op, l, r)
         }
       case _ => throw IndeterminableBitVectorSize(op)
     }

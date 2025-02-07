@@ -429,7 +429,15 @@ case class CToCol[G](
   def convert(implicit params: ParameterListContext): Seq[CParam[G]] =
     params match {
       // foo(void)
-      case ParameterList0(ParameterDeclaration1(DeclarationSpecifiers20(Seq(DeclarationSpecifier1(TypeSpecifier0("void")))), None)) => Nil
+      case ParameterList0(
+            ParameterDeclaration1(
+              DeclarationSpecifiers20(
+                Seq(DeclarationSpecifier1(TypeSpecifier0("void")))
+              ),
+              None,
+            )
+          ) =>
+        Nil
       case ParameterList0(decl) => Seq(convert(decl))
       case ParameterList1(init, _, last) => convert(init) :+ convert(last)
     }
@@ -687,11 +695,7 @@ case class CToCol[G](
               case "+=" => col.AmbiguousPlus(target, value)(blame(valueNode))
               case "-=" => col.AmbiguousMinus(target, value)((blame(valueNode)))
               case "<<=" => BitShl(target, value, 0, signed = true)(blame(expr))
-              case ">>=" =>
-                if (isSigned(target.t) || isSigned(value.t))
-                  BitShr(target, value, 0)(blame(expr))
-                else
-                  BitUShr(target, value, 0, signed = true)(blame(expr))
+              case ">>=" => AmbiguousBitShr(target, value)(blame(expr))
               case "&=" => BitAnd(target, value, 0, signed = true)(blame(expr))
               case "^=" => BitXor(target, value, 0, signed = true)(blame(expr))
               case "|=" => BitOr(target, value, 0, signed = true)(blame(expr))
@@ -786,10 +790,7 @@ case class CToCol[G](
         val l = convert(left)
         val r = convert(right)
         // The true in BitUShr will be replaced in LangSpecificToCol
-        if (isSigned(l.t) || isSigned(r.t))
-          BitShr(l, r, 0)(blame(expr))
-        else
-          BitUShr(l, r, 0, signed = true)(blame(expr))
+        AmbiguousBitShr(l, r)(blame(expr))
     }
 
   def convert(implicit expr: AdditiveExpressionContext): Expr[G] =
@@ -2096,9 +2097,4 @@ case class CToCol[G](
         )
     }
 
-  def isSigned(t: Type[G]): Boolean =
-    t match {
-      case t: BitwiseType[G] => t.signed
-      case _ => true
-    }
 }

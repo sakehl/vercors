@@ -1720,6 +1720,10 @@ final case class BitShl[G](
     signed: Boolean,
 )(val blame: Blame[IntegerOutOfBounds])(implicit val o: Origin)
     extends BinExpr[G] with BitShlImpl[G]
+final case class AmbiguousBitShr[G](left: Expr[G], right: Expr[G])(
+    val blame: Blame[IntegerOutOfBounds]
+)(implicit val o: Origin)
+    extends BinExpr[G] with AmbiguousBitShrImpl[G]
 final case class BitShr[G](left: Expr[G], right: Expr[G], bits: Int)(
     val blame: Blame[IntegerOutOfBounds]
 )(implicit val o: Origin)
@@ -2899,7 +2903,6 @@ final case class CLiteralArray[G](exprs: Seq[Expr[G]])(implicit val o: Origin)
 sealed trait CType[G] extends Type[G] with CTypeImpl[G]
 final case class TCInt[G]()(implicit val o: Origin = DiagnosticOrigin)
     extends IntType[G] with CType[G] with TCIntImpl[G] with BitwiseType[G] {
-  var bits: Option[Int] = None
   var signed: Boolean = true
 }
 final case class TCFloat[G](exponent: Int, mantissa: Int)(
