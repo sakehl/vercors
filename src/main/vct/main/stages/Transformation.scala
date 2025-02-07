@@ -44,6 +44,11 @@ import vct.rewrite.{
   VariableToPointer,
 }
 import vct.rewrite.lang.ReplaceSYCLTypes
+import vct.rewrite.pallas.{
+  InlinePallasPermLets,
+  InlinePallasWrappers,
+  ResolvePallasQuantifiers,
+}
 import vct.rewrite.veymont._
 import vct.rewrite.veymont.generation._
 import vct.rewrite.veymont.verification._
@@ -353,7 +358,10 @@ case class SilverTransformation(
         // Replace leftover SYCL types
         ReplaceSYCLTypes,
         CFloatIntCoercion,
-
+        // Inline pallas-specifications
+        InlinePallasWrappers,
+        InlinePallasPermLets,
+        ResolvePallasQuantifiers,
         // BIP transformations
         ComputeBipGlue,
         InstantiateBipSynchronizations,

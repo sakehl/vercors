@@ -75,7 +75,6 @@ class PallasFunctionContractDeclarerPass
     bool addClauseToContract(col::ApplicableContract &contract,
                              Metadata *clauseOperand,
                              FunctionAnalysisManager &fam, Function &parentFunc,
-                             col::LlvmFunctionDefinition &colParentFunc,
                              unsigned int clauseNum,
                              const MDNode &contractSrcLoc);
 
@@ -88,6 +87,14 @@ class PallasFunctionContractDeclarerPass
      * ctxFunc is used to build error messages.
      */
     Function *getWrapperFuncFromClause(MDNode &clause, Function &ctxFunc);
+
+    /**
+     * Takes a function and a DIVariable that describes an argument of
+     * the original source-function and attempts to map the DIVariable
+     * to the corresponding argument of the llvm-function.
+     * If the mapping isnot possible, a nullptr is returned.
+     */
+    Argument *mapDIVarToArg(Function &f, DIVariable &diVar);
 
     /**
      * Initializes the given predicate 'newPred' such that it represents a split
@@ -107,18 +114,6 @@ class PallasFunctionContractDeclarerPass
      * and true is returned. Otherwise, false is returned.
      */
     bool hasConflictingContract(Function &f);
-
-    /**
-     * Checks if the given function has a metadata-node that is labeled as a
-     * Pallas function contract.
-     */
-    bool hasPallasContract(const Function &f);
-
-    /**
-     * Checks if the given function has a metadata-node that is labeled as a
-     * VCLLVM contract.
-     */
-    bool hasVcllvmContract(const Function &f);
 
     /**
      * Checks if the given metadata-node is a wellformed encoding of a

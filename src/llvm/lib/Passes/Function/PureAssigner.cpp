@@ -3,6 +3,7 @@
 #include "Passes/Function/FunctionDeclarer.h"
 #include "Util/Constants.h"
 #include "Util/Exceptions.h"
+#include "Util/PallasMD.h"
 
 #include <llvm/IR/Constants.h>
 
@@ -54,7 +55,7 @@ PreservedAnalyses PureAssignerPass::run(Function &F,
     }
 
     // Check if the function is marked as a pallas wrapper-function
-    if (F.hasMetadata(pallas::constants::PALLAS_WRAPPER_FUNC)) {
+    if (utils::isPallasExprWrapper(F)) {
         pureAnnotationCount++;
         isPure = true;
     }
