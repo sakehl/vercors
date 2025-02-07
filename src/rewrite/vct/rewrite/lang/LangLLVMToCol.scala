@@ -432,15 +432,16 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     Local(rw.succ(local.ref.get.decl))
   }
 
+  /** Return the type of the given variable after applying type-substitutions
+    * and type-inference.
+    */
+  private def getLocalVarType(v: Variable[Pre]): Type[Pre] = {
+    typeSubstitutions.getOrElse(v, localVariableInferredType.getOrElse(v, v.t))
+  }
+
   def rewriteLocalVariable(v: Variable[Pre]): Unit = {
     implicit val o: Origin = v.o;
-    rw.variables.succeed(
-      v,
-      new Variable[Post](rw.dispatch(
-        typeSubstitutions
-          .getOrElse(v, localVariableInferredType.getOrElse(v, v.t))
-      )),
-    )
+    rw.variables.succeed(v, new Variable[Post](rw.dispatch(getLocalVarType(v))))
   }
 
   def rewriteFunctionDef(func: LLVMFunctionDefinition[Pre]): Unit = {
@@ -577,12 +578,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         case (a, i) =>
           val requiredType = localVariableInferredType
             .getOrElse(inv.ref.decl.args(i), inv.ref.decl.args(i).t)
-          val givenType =
-            a match {
-              // TODO: Make this more general
-              case Local(Ref(v)) => localVariableInferredType.getOrElse(v, v.t)
-              case _ => a.t
-            }
+          val givenType = getInferredType(a)
           if (
             givenType != requiredType && givenType.asPointer.isDefined &&
             requiredType.asPointer.isDefined
@@ -948,12 +944,19 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
   private def getInferredType(e: Expr[Pre]): Type[Pre] =
     e match {
-      case Local(Ref(v)) => localVariableInferredType.getOrElse(v, e.t)
+      case Local(Ref(v)) => getLocalVarType(v)
+      // localVariableInferredType.getOrElse(v, e.t)
       // Making assumption here that LLVMPointerValue only contains LLVMGlobalVariables whereas LLVMGlobalVariableImpl assumes it can also contain HeapVariables
       case LLVMPointerValue(Ref(v)) =>
         globalVariableInferredType
           .getOrElse(v.asInstanceOf[LLVMGlobalVariable[Pre]], e.t)
       case res: LLVMResult[Pre] => res.t
+      case DerefPointer(inner) =>
+        val innerT = getInferredType(inner)
+        innerT match {
+          case LLVMTPointer(Some(innerPtrT)) => innerPtrT
+          case _ => e.t
+        }
       case _ => e.t
     }
 
