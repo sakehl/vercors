@@ -404,6 +404,9 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             (isRatFloatOrInt(t) && isFloat(e.t)) =>
         // We can convert between rationals, integers and floats
         CastFloat[Post](rw.dispatch(c.expr), rw.dispatch(t))(c.o)
+
+      case cast @ CCast(expr, TOpenCLVector(size, inner)) =>
+        createOpenCLLiteralVector(cast)
       case CCast(
             inv @ CInvocation(CLocal("__vercors_malloc"), Seq(arg), Nil, Nil),
             CTPointer(t2),
@@ -1652,16 +1655,16 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     )(assign.o)
   }
 
-  def isCPointer(t: Type[_]) =
+  private def isCPointer(t: Type[_]) =
     getBaseType(t) match {
       case CTPointer(_) => true
       case _ => false
     }
 
-  def indexVectors(
+  private def indexVectors(
       e: Expr[Post],
       askedType: Type[Post],
-      inv: CInvocation[Pre],
+      cast: CCast[Pre],
   ): Seq[Expr[Post]] =
     e.t match {
       case t if t == askedType => Seq(e)
@@ -1673,16 +1676,16 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                 "Type Checked"
               ))(e.o),
               askedType,
-              inv,
+              cast,
             )
           )
-      case _ => throw WrongOpenCLLiteralVector(inv)
+      case _ => throw WrongOpenCLLiteralVector(cast)
     }
 
-  def unwrapVectorArg(
+  private def unwrapVectorArg(
       e: Expr[Post],
       askedType: Type[Post],
-      inv: CInvocation[Pre],
+      cast: CCast[Pre],
   ): (Seq[Statement[Post]], Seq[Expr[Post]]) =
     e.t match {
       case t if t == askedType => (Nil, Seq(e))
@@ -1699,42 +1702,39 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               )
               (befores, v.get)
           }
-        (befores, indexVectors(varE, askedType, inv))
-      case _ => throw WrongOpenCLLiteralVector(inv)
+        (befores, indexVectors(varE, askedType, cast))
+      case _ => throw WrongOpenCLLiteralVector(cast)
     }
 
-  def createOpenCLLiteralVector(
-      size: BigInt,
-      innerType: Type[Pre],
-      inv: CInvocation[Pre],
-  ): Expr[Post] = {
-    implicit val o: Origin = inv.o
-    val (befores: Seq[Statement[Post]], newArgs: Seq[Expr[Post]]) =
-      inv.args
-        .map(a => unwrapVectorArg(rw.dispatch(a), rw.dispatch(innerType), inv))
-        .foldLeft[(Seq[Statement[Post]], Seq[Expr[Post]])](Nil, Nil)(
-          (base, extra) => (base._1 ++ extra._1, base._2 ++ extra._2)
-        )
-    if (newArgs.length != size)
-      throw WrongOpenCLLiteralVector(inv)
-    val result = LiteralVector[Post](rw.dispatch(innerType), newArgs)
-    if (befores.nonEmpty)
-      With(Block(befores), result)
-    else
-      result
+  private def unwrapWith(e: Expr[Pre]): Seq[Expr[Pre]] =
+    e match {
+      // This will break if someone uses With inside a vector literal
+      case With(Eval(before), after) => unwrapWith(before) :+ after
+      case e => Seq(e)
+    }
+
+  private def createOpenCLLiteralVector(cast: CCast[Pre]): Expr[Post] = {
+    implicit val o: Origin = cast.o
+    cast match {
+      case CCast(expr, TOpenCLVector(size, innerType)) =>
+        val (befores: Seq[Statement[Post]], newArgs: Seq[Expr[Post]]) =
+          unwrapWith(expr).map(a =>
+            unwrapVectorArg(rw.dispatch(a), rw.dispatch(innerType), cast)
+          ).foldLeft[(Seq[Statement[Post]], Seq[Expr[Post]])](Nil, Nil)(
+            (base, extra) => (base._1 ++ extra._1, base._2 ++ extra._2)
+          )
+        if (newArgs.length != size)
+          throw WrongOpenCLLiteralVector(cast)
+        val result = LiteralVector[Post](rw.dispatch(innerType), newArgs)
+        if (befores.nonEmpty)
+          With(Block(befores), result)
+        else { result }
+      case other => ???
+    }
   }
 
   def invocation(inv: CInvocation[Pre]): Expr[Post] = {
     val CInvocation(applicable, args, givenMap, yields) = inv
-
-    inv.ref.get match {
-      case RefOpenCLVectorLiteralCInvocationTarget(size, t)
-          if givenMap.isEmpty && yields.isEmpty =>
-        return createOpenCLLiteralVector(size, t, inv)
-      case RefOpenCLVectorLiteralCInvocationTarget(size, t) =>
-        throw WrongOpenCLLiteralVector(inv)
-      case _ =>
-    }
 
     val newArgs = args.map(a => rw.dispatch(a))
 
