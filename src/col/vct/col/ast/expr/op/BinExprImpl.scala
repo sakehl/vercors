@@ -94,7 +94,7 @@ object BinOperatorTypes {
   }
 
   def getBits[G](t: Type[G]): Int =
-    t.byteSize match {
+    t.bits match {
       case TypeSize.Unknown() => 0
       case TypeSize.Exact(size) => size.intValue
       case TypeSize.Minimally(_) => 0

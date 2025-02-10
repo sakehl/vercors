@@ -7,7 +7,7 @@ import vct.col.typerules.TypeSize
 
 trait TBoolImpl[G] extends TBoolOps[G] {
   this: TBool[G] =>
-  override def byteSize: TypeSize = TypeSize.Exact(BigInt.int2bigInt(8))
+  override def bits: TypeSize = TypeSize.Exact(BigInt.int2bigInt(8))
   override def layout(implicit ctx: Ctx): Doc =
     ctx.syntax match {
       case Ctx.PVL => Text("boolean")

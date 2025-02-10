@@ -105,7 +105,7 @@ case object C {
       platformContext: PlatformContext,
       specs: Seq[CDeclarationSpecifier[_]],
   ): TypeSize = {
-    specs.collectFirst { case CSpecificationType(t) => t.byteSize } match {
+    specs.collectFirst { case CSpecificationType(t) => t.bits } match {
       case Some(size: TypeSize.Exact) => size
       case None =>
         INT_TYPE_TO_SIZE(platformContext).getOrElse(
@@ -280,7 +280,7 @@ case object C {
         case t if C.INTEGER_LIKE_TYPES.contains(t) =>
           if (platformContext.isEmpty) { throw UnresolvedCType(specs) }
           val cint = TCInt[G]()
-          cint.storedByteSize = getIntSize(platformContext.get, specs)
+          cint.storedBits = getIntSize(platformContext.get, specs)
           cint.signed = isSigned(specs)
           cint
         case Seq(CFloat()) => C_ieee754_32bit()

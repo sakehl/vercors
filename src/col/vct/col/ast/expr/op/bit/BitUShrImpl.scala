@@ -11,7 +11,7 @@ trait BitUShrImpl[G] extends BitUShrOps[G] {
   override def t: Type[G] =
     getNumericType match {
       case t: TCInt[G] if BinOperatorTypes.getBits(t) != 0 && bits != 0 =>
-        t.storedByteSize = TypeSize.Exact(bits)
+        t.storedBits = TypeSize.Exact(bits)
         t
       case t => t
     }

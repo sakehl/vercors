@@ -8,7 +8,7 @@ import vct.col.typerules.TypeSize
 trait TFloatImpl[G] extends TFloatOps[G] {
   this: TFloat[G] =>
   // TODO: Should this be Minimally?
-  override def byteSize: TypeSize =
+  override def bits: TypeSize =
     TypeSize.Exact(BigInt.int2bigInt(exponent + mantissa))
   override def is_ieee754_32bit: Boolean = this == TFloats.ieee754_32bit
 

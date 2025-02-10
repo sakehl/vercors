@@ -183,6 +183,15 @@ case class CopyClassFailedBeforeCall(
     s"Insufficient permission for call `$source`."
 }
 
+case class TypeSizeMayBeZero(node: CCast[_])
+    extends FrontendInvocationError with NodeVerificationFailure {
+  override def code: String = "typeSizeZero"
+  override def descInContext: String =
+    s"The size of '${node.castType}' may be zero"
+  override def inlineDescWithSource(source: String): String =
+    s"The size of '${node.castType}' may be zero for cast `$source`"
+}
+
 case class AssertFailed(failure: ContractFailure, node: Node[_])
     extends WithContractFailure {
   override def baseCode: String = "assertFailed"

@@ -10,6 +10,6 @@ trait CPrimitiveTypeImpl[G] extends CPrimitiveTypeOps[G] {
   this: CPrimitiveType[G] =>
   override def signed: Boolean = C.isSigned(specifiers)
 
-  override def byteSize: TypeSize = C.stripCPrimitiveType(this).byteSize
+  override def bits: TypeSize = C.stripCPrimitiveType(this).bits
   override def layout(implicit ctx: Ctx): Doc = Doc.spread(specifiers)
 }

@@ -204,27 +204,38 @@ class CSpec extends VercorsSpec {
     }
     """
 
-  vercors should error withCode "unsupportedMalloc" in "Unsupported malloc without sizeof" c
+  vercors should verify using silicon flag "--target" flag "x86_64-linux-unknown" in "Supported malloc without sizeof" c
     """
     #include <stdlib.h>
     int main(){
-      int *x = (int*) malloc(5*4);
+      int size = 5 * sizeof(int);
+      int *x = (int*) malloc(size);
+      //@ assert x == NULL || \pointer_block_length(x) == 5;
     }
     """
 
-  vercors should error withCode "unsupportedMalloc" in "Unsupported malloc with wrong cast" c
+  vercors should verify using silicon flag "--target" flag "x86_64-linux-unknown" in "Malloc with wrong cast" c
     """
     #include <stdlib.h>
     int main(){
-      float *x = (float* ) malloc(sizeof(int)*4);
+      float *x = (float*) malloc(sizeof(int)*4);
+      //@ assert x == NULL || \pointer_block_length(x) == 4;
     }
     """
 
-  vercors should error withCode "unsupportedSizeof" in "Unsupported use of sizeof" c
+  vercors should verify using silicon flag "--target" flag "x86_64-linux-unknown" in "Use of sizeof with a target" c
     """
-    #include <stdlib.h>
     int main(){
       int x = sizeof(int);
+      //@ assert x == 4;
+    }
+    """
+
+  vercors should fail withCode "assertFailed:false" using silicon in "Use of sizeof without a target" c
+    """
+    int main(){
+      int x = sizeof(int);
+      //@ assert x == 4;
     }
     """
 
@@ -575,7 +586,7 @@ class CSpec extends VercorsSpec {
     }
     """
 
-  vercors should verify using silicon in "OpenCL vector initializer correctly uses statefull function" c
+  vercors should verify using silicon in "OpenCL vector initializer correctly uses stateful function" c
     """
    // pass
     #include <opencl.h>

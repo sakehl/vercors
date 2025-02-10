@@ -108,20 +108,20 @@ case class LangTypesToCol[Pre <: Generation](platformContext: PlatformContext)
         )
       case p: TPointer[Pre] =>
         val pointer = super.dispatch(p)
-        pointer.storedByteSize = platformContext.pointerSize
+        pointer.storedBits = platformContext.pointerSize
         pointer
       case p: TNonNullPointer[Pre] =>
         val pointer = super.dispatch(p)
-        pointer.storedByteSize = platformContext.pointerSize
+        pointer.storedBits = platformContext.pointerSize
         pointer
       case t @ TCInt() =>
         val cint = TCInt[Post]()
-        cint.storedByteSize = t.storedByteSize
+        cint.storedBits = t.storedBits
         cint.signed = t.signed
         cint
       case other => {
         val newOther = super.dispatch(other)
-        newOther.storedByteSize = other.storedByteSize
+        newOther.storedBits = other.storedBits
         newOther
       }
     }

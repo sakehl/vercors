@@ -394,7 +394,7 @@ case class LangSpecificToCol[Pre <: Generation](
       case local: LocalThreadId[Pre] => c.cudaLocalThreadId(local)
       case global: GlobalThreadId[Pre] => c.cudaGlobalThreadId(global)
       case cast: CCast[Pre] => c.cast(cast)
-      case sizeof: SizeOf[Pre] => throw LangCToCol.UnsupportedSizeof(sizeof)
+      case sizeof: SizeOf[Pre] => c.sizeOf(sizeof.tname, sizeof.o)
 
       case local: CPPLocal[Pre] => cpp.local(local)
       case deref: CPPClassMethodOrFieldAccess[Pre] => cpp.deref(deref)
@@ -523,7 +523,7 @@ case class LangSpecificToCol[Pre <: Generation](
     }
 
   private def setSize(t: Type[Post], size: TypeSize): Type[Post] = {
-    t.storedByteSize = size
+    t.storedBits = size
     t
   }
 
@@ -559,7 +559,7 @@ case class LangSpecificToCol[Pre <: Generation](
         case t: CPPTArray[Pre] => cpp.arrayType(t)
         case other => super.dispatch(other)
       },
-      t.storedByteSize,
+      t.storedBits,
     )
   }
 

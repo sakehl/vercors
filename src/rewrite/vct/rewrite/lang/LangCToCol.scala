@@ -3,7 +3,6 @@ package vct.rewrite.lang
 import com.typesafe.scalalogging.LazyLogging
 import hre.util.ScopedStack
 import vct.col.ast._
-import vct.col.ast.`type`.typeclass.TFloats
 import vct.col.ast.lang.c.CTVector.WrongVectorType
 import vct.col.ast.util.ExpressionEqualityCheck.isConstantInt
 import vct.rewrite.lang.LangSpecificToCol.NotAValue
@@ -12,10 +11,8 @@ import vct.col.ref.{LazyRef, Ref}
 import vct.col.resolve.lang.C
 import vct.col.resolve.ctx._
 import vct.col.resolve.lang.C.nameFromDeclarator
-import vct.col.resolve.lang.Java.logger
 import vct.col.rewrite.{Generation, Rewritten}
-import vct.col.typerules.CoercionUtils
-import vct.col.typerules.CoercionUtils.getCoercion
+import vct.col.typerules.{CoercionUtils, TypeSize}
 import vct.col.util.SuccessionMap
 import vct.col.util.AstBuildHelpers._
 import vct.result.Message
@@ -25,13 +22,8 @@ import scala.collection.immutable.ListMap
 import scala.collection.mutable
 
 case object LangCToCol {
-  case class CGlobalStateNotSupported(example: CInit[_]) extends UserError {
-    override def code: String = "notSupported"
-    override def text: String =
-      example.o.messageInContext("Global variables in C are not supported.")
-  }
-
-  case class MultipleSharedMemoryDeclaration(decl: Node[_]) extends UserError {
+  private case class MultipleSharedMemoryDeclaration(decl: Node[_])
+      extends UserError {
     override def code: String = "multipleSharedMemoryDeclaration"
     override def text: String =
       decl.o.messageInContext(
@@ -39,7 +31,8 @@ case object LangCToCol {
       )
   }
 
-  case class WrongGPUKernelParameterType(param: CParam[_]) extends UserError {
+  private case class WrongGPUKernelParameterType(param: CParam[_])
+      extends UserError {
     override def code: String = "wrongParameterType"
     override def text: String =
       param.o.messageInContext(
@@ -47,7 +40,7 @@ case object LangCToCol {
       )
   }
 
-  case class WrongGPUType(param: CParam[_]) extends UserError {
+  private case class WrongGPUType(param: CParam[_]) extends UserError {
     override def code: String = "wrongGPUType"
     override def text: String =
       param.o.messageInContext(
@@ -55,35 +48,36 @@ case object LangCToCol {
       )
   }
 
-  case class WrongCType(decl: CLocalDeclaration[_]) extends UserError {
+  private case class WrongCType(decl: CLocalDeclaration[_]) extends UserError {
     override def code: String = "wrongCType"
     override def text: String =
       decl.o
         .messageInContext(s"This declaration has a type that is not supported.")
   }
 
-  case class WrongStructType(decl: Node[_]) extends UserError {
+  private case class WrongStructType(decl: Node[_]) extends UserError {
     override def code: String = "wrongStructType"
 
     override def text: String =
       decl.o.messageInContext(s"This has a struct type that is not supported.")
   }
 
-  case class WrongOpenCLLiteralVector(e: Node[_]) extends UserError {
+  private case class WrongOpenCLLiteralVector(e: Node[_]) extends UserError {
     override def code: String = "wrongOpenCLLiteralVector"
 
     override def text: String =
       e.o.messageInContext(s"This OpenCL literal vector is not supported.")
   }
 
-  case class TypeUsedAsValue(decl: Node[_]) extends UserError {
+  private case class TypeUsedAsValue(decl: Node[_]) extends UserError {
     override def code: String = "typeUsedAsValue"
 
     override def text: String =
       decl.o.messageInContext(s"This type name is incorrectly used a value.")
   }
 
-  case class WrongGPULocalType(local: CLocalDeclaration[_]) extends UserError {
+  private case class WrongGPULocalType(local: CLocalDeclaration[_])
+      extends UserError {
     override def code: String = "wrongGPULocalType"
     override def text: String =
       local.o.messageInContext(
@@ -91,7 +85,7 @@ case object LangCToCol {
       )
   }
 
-  case class NotDynamicSharedMem(e: Expr[_]) extends UserError {
+  private case class NotDynamicSharedMem(e: Expr[_]) extends UserError {
     override def code: String = "notDynamicSharedMem"
     override def text: String =
       e.o.messageInContext(
@@ -99,19 +93,21 @@ case object LangCToCol {
       )
   }
 
-  case class WrongBarrierSpecifier(b: GpgpuBarrier[_]) extends UserError {
+  private case class WrongBarrierSpecifier(b: GpgpuBarrier[_])
+      extends UserError {
     override def code: String = "wrongBarrierSpecifier"
     override def text: String =
       b.o.messageInContext(s"The barrier has incorrect specifiers.")
   }
 
-  case class UnsupportedBarrierPermission(e: Node[_]) extends UserError {
+  private case class UnsupportedBarrierPermission(e: Node[_])
+      extends UserError {
     override def code: String = "unsupportedBarrierPermission"
     override def text: String =
       e.o.messageInContext(s"This is unsupported for barrier for now.")
   }
 
-  case class RedistributingBarrier(
+  private case class RedistributingBarrier(
       v: CNameTarget[_],
       barrier: GpgpuBarrier[_],
       global: Boolean,
@@ -128,7 +124,7 @@ case object LangCToCol {
       )
   }
 
-  case class CDoubleContracted(
+  private case class CDoubleContracted(
       decl: CGlobalDeclaration[_],
       defn: CFunctionDefinition[_],
   ) extends UserError {
@@ -140,14 +136,14 @@ case object LangCToCol {
       )
   }
 
-  case class KernelNotInjective(kernel: CGpgpuKernelSpecifier[_])
+  private case class KernelNotInjective(kernel: CGpgpuKernelSpecifier[_])
       extends Blame[ReceiverNotInjective] {
     override def blame(error: ReceiverNotInjective): Unit =
       kernel.blame
         .blame(KernelPredicateNotInjective(Left(kernel), error.resource))
   }
 
-  case class KernelParFailure(kernel: CGpgpuKernelSpecifier[_])
+  private case class KernelParFailure(kernel: CGpgpuKernelSpecifier[_])
       extends Blame[ParBlockFailure] {
     override def blame(error: ParBlockFailure): Unit =
       error match {
@@ -167,7 +163,7 @@ case object LangCToCol {
       }
   }
 
-  case class KernelBarrierFailure(barrier: GpgpuBarrier[_])
+  private case class KernelBarrierFailure(barrier: GpgpuBarrier[_])
       extends Blame[ParBarrierFailure] {
     override def blame(error: ParBarrierFailure): Unit =
       error match {
@@ -184,7 +180,7 @@ case object LangCToCol {
       }
   }
 
-  case class ArrayMallocFailed(inv: CInvocation[_])
+  private case class ArrayMallocFailed(inv: CInvocation[_])
       extends Blame[ArraySizeError] {
     override def blame(error: ArraySizeError): Unit =
       error match {
@@ -193,7 +189,7 @@ case object LangCToCol {
       }
   }
 
-  case class VectorBoundFailed(subscript: AmbiguousSubscript[_])
+  private case class VectorBoundFailed(subscript: AmbiguousSubscript[_])
       extends Blame[InvocationFailure] {
     override def blame(error: InvocationFailure): Unit =
       error match {
@@ -209,13 +205,13 @@ case object LangCToCol {
       }
   }
 
-  case class UnsupportedCast(c: CCast[_]) extends UserError {
+  private case class UnsupportedCast(c: CCast[_]) extends UserError {
     override def code: String = "unsupportedCast"
     override def text: String =
       c.o.messageInContext("This cast is not supported")
   }
 
-  case class UnsupportedMalloc(c: Expr[_]) extends UserError {
+  private case class UnsupportedMalloc(c: Expr[_]) extends UserError {
     override def code: String = "unsupportedMalloc"
     override def text: String =
       c.o.messageInContext(
@@ -223,13 +219,12 @@ case object LangCToCol {
       )
   }
 
-  case class UnsupportedSizeof(c: Expr[_]) extends UserError {
-    override def code: String = "unsupportedSizeof"
-
-    override def text: String =
-      c.o.messageInContext(
-        "The use of 'sizeof' is only supported inside a malloc: '(t *) malloc(x*typeof(t)'."
-      )
+  private case class TypeSizeMayBeZeroBlame(
+      c: CCast[_],
+      blame: Blame[FrontendInvocationError],
+  ) extends Blame[DivByZero] {
+    override def blame(error: DivByZero): Unit =
+      blame.blame(TypeSizeMayBeZero(c))
   }
 
   case class UnsupportedStructPerm(o: Origin) extends UserError {
@@ -247,35 +242,37 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   type Post = Rewritten[Pre]
   implicit val implicitRewriter: AbstractRewriter[Pre, Post] = rw
 
-  val cFunctionSuccessor
+  private val cFunctionSuccessor
       : SuccessionMap[CFunctionDefinition[Pre], Procedure[Post]] =
     SuccessionMap()
-  val cFunctionDeclSuccessor
+  private val cFunctionDeclSuccessor
       : SuccessionMap[(CGlobalDeclaration[Pre], Int), Procedure[Post]] =
     SuccessionMap()
-  val cNameSuccessor: SuccessionMap[CNameTarget[Pre], Variable[Post]] =
+  private val cNameSuccessor: SuccessionMap[CNameTarget[Pre], Variable[Post]] =
     SuccessionMap()
-  val cLocalHeapNameSuccessor
+  private val cLocalHeapNameSuccessor
       : SuccessionMap[CNameTarget[Pre], LocalHeapVariable[Post]] =
     SuccessionMap()
-  val cGlobalNameSuccessor
+  private val cGlobalNameSuccessor
       : SuccessionMap[CNameTarget[Pre], HeapVariable[Post]] = SuccessionMap()
-  val cStructSuccessor: SuccessionMap[CGlobalDeclaration[Pre], Class[Post]] =
-    SuccessionMap()
-  val cStructFieldsSuccessor: SuccessionMap[
+  private val cStructSuccessor
+      : SuccessionMap[CGlobalDeclaration[Pre], Class[Post]] = SuccessionMap()
+  private val cStructFieldsSuccessor: SuccessionMap[
     (CGlobalDeclaration[Pre], CStructMemberDeclarator[Pre]),
     InstanceField[Post],
   ] = SuccessionMap()
-  val cCurrentDefinitionParamSubstitutions
+  private val cCurrentDefinitionParamSubstitutions
       : ScopedStack[Map[CParam[Pre], CParam[Pre]]] = ScopedStack()
+  private val sizeOfFunctions: SuccessionMap[Type[Pre], Function[Post]] =
+    SuccessionMap()
 
-  val cudaCurrentThreadIdx: ScopedStack[CudaVec] = ScopedStack()
-  val cudaCurrentBlockIdx: ScopedStack[CudaVec] = ScopedStack()
-  val cudaCurrentBlockDim: ScopedStack[CudaVec] = ScopedStack()
-  val cudaCurrentGridDim: ScopedStack[CudaVec] = ScopedStack()
+  private val cudaCurrentThreadIdx: ScopedStack[CudaVec] = ScopedStack()
+  private val cudaCurrentBlockIdx: ScopedStack[CudaVec] = ScopedStack()
+  private val cudaCurrentBlockDim: ScopedStack[CudaVec] = ScopedStack()
+  private val cudaCurrentGridDim: ScopedStack[CudaVec] = ScopedStack()
 
-  val cudaCurrentGrid: ScopedStack[ParBlockDecl[Post]] = ScopedStack()
-  val cudaCurrentBlock: ScopedStack[ParBlockDecl[Post]] = ScopedStack()
+  private val cudaCurrentGrid: ScopedStack[ParBlockDecl[Post]] = ScopedStack()
+  private val cudaCurrentBlock: ScopedStack[ParBlockDecl[Post]] = ScopedStack()
 
   private val dynamicSharedMemNames: mutable.Set[CNameTarget[Pre]] = mutable
     .Set()
@@ -360,7 +357,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     res.getOrElse(throw NotDynamicSharedMem(pointer))
   }
 
-  def isRatFloatOrInt(t: Type[Pre]): Boolean =
+  private def isRatFloatOrInt(t: Type[Pre]): Boolean =
     getBaseType(t) match {
       case _: FloatType[Pre] => true
       case _: TRational[Pre] => true
@@ -368,31 +365,59 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       case _ => false
     }
 
-  def isInt(t: Type[Pre]): Boolean =
+  private def isInt(t: Type[Pre]): Boolean =
     getBaseType(t) match {
       case _: IntType[Pre] => true
       case _ => false
     }
 
-  def isFloat(t: Type[Pre]): Boolean =
+  private def isFloat(t: Type[Pre]): Boolean =
     getBaseType(t) match {
       case _: FloatType[Pre] => true
       case _ => false
     }
 
-  def getBaseType[G](t: Type[G]): Type[G] =
+  private def getBaseType[G](t: Type[G]): Type[G] =
     t match {
       case CPrimitiveType(specs) => C.getPrimitiveType(specs)
       case _ => t
     }
 
-  def castIsId(exprType: Type[Pre], castType: Type[Pre]): Boolean =
+  private def castIsId(exprType: Type[Pre], castType: Type[Pre]): Boolean =
     (castType, getBaseType(exprType)) match {
       case (tc, te) if tc == te => true
       case (TCInt(), TBoundedInt(_, _)) => true
       case (TBoundedInt(_, _), TCInt()) => true
       case _ => false
     }
+
+  def sizeOf(t: Type[Pre], sizeOfOrigin: Origin): Expr[Post] = {
+    implicit val o: Origin = t.o
+    t.bits match {
+      case TypeSize.Exact(size) =>
+        CIntegerValue(size / 8, TCInt())(sizeOfOrigin)
+      case TypeSize.Unknown() | TypeSize.Minimally(_) =>
+        functionInvocation(
+          TrueSatisfiable,
+          sizeOfFunctions.getOrElseUpdate(
+            t, {
+              rw.globalDeclarations.declare(withResult((result: Result[Post]) =>
+                function[Post](
+                  AbstractApplicable,
+                  TrueSatisfiable,
+                  TCInt(),
+                  ensures = UnitAccountedPredicate(t.bits match {
+                    case TypeSize.Unknown() => tt
+                    case TypeSize.Minimally(size) =>
+                      result >= CIntegerValue(size / 8, TCInt())
+                  }),
+                )(o.where(name = s"sizeOf_$t"))
+              ))
+            },
+          ).ref[Function[Post]],
+        )(sizeOfOrigin)
+    }
+  }
 
   def cast(c: CCast[Pre]): Expr[Post] =
     c match {
@@ -418,7 +443,13 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               (t1, rw.dispatch(l))
             case AmbiguousMult(SizeOf(t1), r) if castIsId(t1, t2) =>
               (t1, rw.dispatch(r))
-            case _ => throw UnsupportedMalloc(c)
+            case _ =>
+              (
+                t2,
+                FloorDiv(rw.dispatch(arg), sizeOf(t2, c.o))(
+                  TypeSizeMayBeZeroBlame(c, inv.blame)
+                )(c.o),
+              )
           }
         NewPointerArray(rw.dispatch(t1), size)(ArrayMallocFailed(inv))(c.o)
       case CCast(CInvocation(CLocal("__vercors_malloc"), _, _, _), _) =>
