@@ -2,7 +2,6 @@ adt `block` {
   pure int block_length(`block` b);
   pure ref loc(`block` b, int i);
   pure int block_address(`block` b);
-  pure int block_stride(`block` b);
 
   pure `block` loc_inv_1(ref r);
   pure int loc_inv_2(ref r);
@@ -20,8 +19,6 @@ adt `block` {
 
   // every block is uniquely identified by an address
   axiom (∀ `block` b; addr_inv({:block_address(b):}) == b);
-
-  axiom (∀ `block` p; {:block_stride(p):} > 0);
 }
 
 adt `pointer` {
@@ -44,7 +41,7 @@ adt `pointer` {
 
   axiom (∀ `pointer` p; pointer_inv({:ptr_deref(p):}) == p);
 
-  axiom (∀ `pointer` p1, `pointer` p2; ({:ptr_address(p1):} == {:ptr_address(p2):} && {:pointer_block(p1):} == {:pointer_block(p2):}) ==> p1 == p2);
+  axiom (∀ `pointer` p1, `pointer` p2, int stride; stride > 0 && ({:ptr_address(p1, stride):} == {:ptr_address(p2, stride):} && {:pointer_block(p1):} == {:pointer_block(p2):}) ==> p1 == p2);
 
   axiom ptr_add_axiom();
 }
@@ -73,9 +70,10 @@ ensures (\forall `pointer` p1, int offset, int i;
 pure boolean ptr_add_axiom() = true;
 
 decreases;
-ensures \result > 0;
-pure int ptr_address(`pointer` p) = `block`.block_address(`pointer`.pointer_block(p)) + (`pointer`.pointer_offset(p) * `block`.block_stride(`pointer`.pointer_block(p)));
+ensures stride > 0 ==> \result > 0;
+pure int ptr_address(`pointer` p, int stride) = `block`.block_address(`pointer`.pointer_block(p)) + (`pointer`.pointer_offset(p) * stride);
 
 decreases;
-ensures ptr_address(\result) == address;
-pure `pointer` ptr_from_address(int address);
+requires stride > 0;
+ensures ptr_address(\result, stride) == address;
+pure `pointer` ptr_from_address(int address, int stride);

@@ -627,4 +627,17 @@ class CSpec extends VercorsSpec {
   vercors should verify using silicon example "concepts/c/mismatched_provenance.c"
   vercors should verify using silicon example "concepts/c/ptr_comparisons.c"
   vercors should verify using silicon flag "--target" flag "x86_64-linux-unknown" example "concepts/c/pointer_tag.c"
+  vercors should verify using silicon in "Pointer address correctly offset based on type size" c
+    """
+    #include <stdint.h>
+    #include <stdlib.h>
+
+    void main(){
+        int *array = (int *)malloc(sizeof(int) * 10);
+        if (array == NULL) return;
+        uintptr_t a0 = (uintptr_t)array;
+        uintptr_t a1 = (uintptr_t)&array[1];
+        //@ assert a0 + sizeof(int) == a1;
+    }
+    """
 }

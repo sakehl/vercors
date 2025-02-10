@@ -2140,6 +2140,12 @@ final case class InstanceOf[G](value: Expr[G], typeValue: Expr[G])(
 final case class Cast[G](value: Expr[G], typeValue: Expr[G])(
     implicit val o: Origin
 ) extends Expr[G] with CastImpl[G]
+final case class IntegerPointerCast[G](
+    value: Expr[G],
+    typeValue: Expr[G],
+    elementSize: Expr[G],
+)(implicit val o: Origin)
+    extends Expr[G] with IntegerPointerCastImpl[G]
 
 sealed trait TypeComparison[G] extends Comparison[G] with TypeComparisonImpl[G]
 final case class SubType[G](left: Expr[G], right: Expr[G])(

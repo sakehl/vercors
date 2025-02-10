@@ -1181,6 +1181,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case op @ BitXor(left, right, bits, signed) =>
         BitXor(int(left), int(right), bits, signed)(op.blame)
       case Cast(value, typeValue) => Cast(value, typeValue)
+      case IntegerPointerCast(value, typeValue, elementSize) =>
+        IntegerPointerCast(value, typeValue, elementSize)
       case CastFloat(e, t) =>
         firstOk(
           e,

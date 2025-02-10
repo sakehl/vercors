@@ -227,13 +227,6 @@ case object LangCToCol {
       blame.blame(TypeSizeMayBeZero(c))
   }
 
-  case class UnsupportedStructPerm(o: Origin) extends UserError {
-    override def code: String = "unsupportedStructPerm"
-    override def text: String =
-      o.messageInContext(
-        "Shorthand for Permissions for structs not possible, since the struct has a cyclic reference"
-      )
-  }
 }
 
 case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
@@ -394,8 +387,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   def sizeOf(t: Type[Pre], sizeOfOrigin: Origin): Expr[Post] = {
     implicit val o: Origin = t.o
     t.bits match {
-      case TypeSize.Exact(size) =>
-        CIntegerValue(size / 8, TCInt())(sizeOfOrigin)
+      case TypeSize.Exact(size) => c_const(size / 8)(sizeOfOrigin)
       case TypeSize.Unknown() | TypeSize.Minimally(_) =>
         functionInvocation(
           TrueSatisfiable,
@@ -408,8 +400,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                   TCInt(),
                   ensures = UnitAccountedPredicate(t.bits match {
                     case TypeSize.Unknown() => tt
-                    case TypeSize.Minimally(size) =>
-                      result >= CIntegerValue(size / 8, TCInt())
+                    case TypeSize.Minimally(size) => result >= c_const(size / 8)
                   }),
                 )(o.where(name = s"sizeOf_$t"))
               ))
@@ -430,7 +421,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         // We can convert between rationals, integers and floats
         CastFloat[Post](rw.dispatch(c.expr), rw.dispatch(t))(c.o)
 
-      case cast @ CCast(expr, TOpenCLVector(size, inner)) =>
+      case cast @ CCast(_, TOpenCLVector(_, _)) =>
         createOpenCLLiteralVector(cast)
       case CCast(
             inv @ CInvocation(CLocal("__vercors_malloc"), Seq(arg), Nil, Nil),
@@ -467,16 +458,28 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         ) { Cast(newE, TypeValue(newT)(t.o))(c.o) }
         else { throw UnsupportedCast(c) }
       case CCast(e, t @ TCInt()) if e.t.asPointer.isDefined =>
-        Cast(rw.dispatch(e), TypeValue(rw.dispatch(t))(t.o))(c.o)
+        IntegerPointerCast(
+          rw.dispatch(e),
+          TypeValue(rw.dispatch(t))(t.o),
+          getStride(e.t.asPointer.get.element, c.o),
+        )(c.o)
       case CCast(e, t @ CTPointer(innerType))
           if getBaseType(e.t).isInstanceOf[TCInt[Pre]] =>
-        Cast(rw.dispatch(e), TypeValue(TPointer(rw.dispatch(innerType)))(t.o))(
-          c.o
-        )
+        IntegerPointerCast(
+          rw.dispatch(e),
+          TypeValue(TPointer(rw.dispatch(innerType)))(t.o),
+          getStride(innerType, c.o),
+        )(c.o)
       case _ => throw UnsupportedCast(c)
     }
 
-  def rewriteGPUParam(
+  private def getStride(t: Type[Pre], o: Origin): Expr[Post] =
+    t match {
+      case TVoid() => c_const(1)(o)
+      case _ => sizeOf(t, o)
+    }
+
+  private def rewriteGPUParam(
       cParam: CParam[Pre],
       kernelSpecifier: CGpgpuKernelSpecifier[Pre],
   ): Unit = {
@@ -604,7 +607,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     foldStar(unfoldStar(e).map(allOneExpr(blame)(idx, dim, _)))(e.o)
   }
 
-  def allOneExpr(
+  private def allOneExpr(
       blame: Blame[ReceiverNotInjective]
   )(idx: CudaVec, dim: CudaVec, e: Expr[Post]): Expr[Post] = {
     implicit val o: Origin = e.o
@@ -1494,48 +1497,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     }
   }
 
-  // Allow a user to write `Perm(p, write)` instead of `Perm(p.x, write) ** Perm(p.y, write)` for `struct p {int x, y}`
-  def unwrapStructPerm(
-      struct: AmbiguousLocation[Post],
-      perm: Expr[Pre],
-      structType: CTStruct[Pre],
-      origin: Origin,
-      visited: Seq[CTStruct[Pre]] = Seq(),
-  ): Expr[Post] = {
-    if (visited.contains(structType))
-      throw UnsupportedStructPerm(
-        origin
-      ) // We do not allow this notation for recursive structs
-    implicit val o: Origin = origin
-    val blame = PanicBlame("Field permission is framed")
-    val Seq(CStructDeclaration(_, fields)) = structType.ref.decl.decl.specs
-    val newPerm = rw.dispatch(perm)
-    val AmbiguousLocation(newExpr) = struct
-    val newFieldPerms = fields.map(member => {
-      val loc =
-        AmbiguousLocation(
-          Deref[Post](
-            newExpr,
-            cStructFieldsSuccessor.ref((structType.ref.decl, member)),
-          )(blame)
-        )(struct.blame)
-      member.specs.collectFirst {
-        case CSpecificationType(newStruct: CTStruct[Pre]) =>
-          // We recurse, since a field is another struct
-          Perm(loc, newPerm) &* unwrapStructPerm(
-            loc,
-            perm,
-            newStruct,
-            origin,
-            structType +: visited,
-          )
-      }.getOrElse(Perm(loc, newPerm))
-    })
-
-    foldStar(newFieldPerms)
-  }
-
-  def createUpdateVectorFunction(size: Int): Function[Post] = {
+  private def createUpdateVectorFunction(size: Int): Function[Post] = {
     implicit val o: Origin = Origin(Seq(LabelContext("vector update method")))
     /* for instance for size 4:
     requires i >= 0 && i < 4;

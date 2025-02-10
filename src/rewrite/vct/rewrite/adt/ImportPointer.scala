@@ -380,7 +380,9 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
     }
   }
 
-  def rewriteTopLevelPointerSubscriptInTrigger(e: Expr[Pre]): Expr[Post] = {
+  private def rewriteTopLevelPointerSubscriptInTrigger(
+      e: Expr[Pre]
+  ): Expr[Post] = {
     implicit val o: Origin = e.o
     e match {
       case sub @ PointerSubscript(pointer, index) =>
@@ -554,7 +556,12 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
             OptSome(applyAsTypeFunction(innerType, value, newValue))
           case (TNonNullPointer(innerType), TNonNullPointer(_)) =>
             applyAsTypeFunction(innerType, value, newValue)
-          case (TInt(), TPointer(innerType)) =>
+        }
+      case IntegerPointerCast(value, typeValue, typeSize) =>
+        val targetType = typeValue.t.asInstanceOf[TType[Pre]].t
+        val newValue = dispatch(value)
+        (targetType, value.t) match {
+          case (TInt(), TPointer(_)) =>
             Select[Post](
               OptEmpty(newValue),
               const(0),
@@ -564,39 +571,39 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
                   OptGet(newValue)(PanicBlame(
                     "Can never be null since this is ensured in the conditional expression"
                   )),
-                  const(4),
-                ), // TODO: Find size of innerType
+                  dispatch(typeSize),
+                ),
                 typeArgs = Nil,
                 Nil,
                 Nil,
               )(PanicBlame("Stride > 0")),
             )
-          case (TInt(), TNonNullPointer(innerType)) =>
+          case (TInt(), TNonNullPointer(_)) =>
             FunctionInvocation[Post](
               ref = pointerAddress.ref,
-              args = Seq(newValue, const(4)),
+              args = Seq(newValue, dispatch(typeSize)),
               typeArgs = Nil,
               Nil,
               Nil,
             )(PanicBlame("Stride > 0"))
-          case (TPointer(innerType), TInt()) =>
+          case (TPointer(_), TInt()) =>
             Select[Post](
               newValue === const(0),
               OptNoneTyped(TAxiomatic(pointerAdt.ref, Nil)),
               OptSome(
                 FunctionInvocation[Post](
                   ref = pointerFromAddress.ref,
-                  args = Seq(newValue, const(4)),
+                  args = Seq(newValue, dispatch(typeSize)),
                   typeArgs = Nil,
                   Nil,
                   Nil,
                 )(PanicBlame("Stride > 0"))
               ),
             )
-          case (TNonNullPointer(innerType), TInt()) =>
+          case (TNonNullPointer(_), TInt()) =>
             FunctionInvocation[Post](
               ref = pointerFromAddress.ref,
-              args = Seq(newValue, const(4)),
+              args = Seq(newValue, dispatch(typeSize)),
               typeArgs = Nil,
               Nil,
               Nil,
