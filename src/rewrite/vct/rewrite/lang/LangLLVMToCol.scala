@@ -134,6 +134,11 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   private val allocaVars: ScopedStack[mutable.Set[Variable[Pre]]] =
     ScopedStack()
 
+  // When a loop is constructed, this keeps track of the variables that
+  // are assigned using store-instructions.
+  private val assignedInLoop: ScopedStack[mutable.Set[Variable[Pre]]] =
+    ScopedStack()
+
   def gatherPallasTypeSubst(program: Program[Pre]): Unit = {
     // Get all variables that are assigned a new type directly
     program.collect {
@@ -1210,11 +1215,18 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     else {
       val loop = block.loop.get
       loopBlocks.addAll(loop.blocks.get)
+      // Determine which variables are assigned using store-instructions
+      val assignedVars = mutable.Set[Variable[Pre]]()
+      loop.blocks.getOrElse(mutable.Set.empty).foreach { b =>
+        b.body.collect { case LLVMStore(_, Local(Ref(v)), _) =>
+          assignedVars.add(v)
+        }
+      }
       Loop(
         Block(Nil)(block.o),
         tt[Post],
         Block(Nil)(block.o),
-        rw.dispatch(loop.contract),
+        assignedInLoop.having(assignedVars) { rw.dispatch(loop.contract) },
         Block(blockToLabel(loop.headerBlock.get) +: loop.blocks.get.filterNot {
           b => b == loop.headerBlock.get || b == loop.latchBlock.get
         }.map(blockToLabel) :+ blockToLabel(loop.latchBlock.get))(block.o),
@@ -1228,14 +1240,18 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     implicit val o: Origin = llvmContract.o
     // Add Permission for alloca-variables
     var extendedInv = rw.dispatch(llvmContract.invariant)
-    // TODO: Improve origin of generated permissions
     allocaVars.topOption.getOrElse(mutable.Set.empty).foreach { v =>
+      // If the variable is assigned to, assert write-perm, otherwise read perm
+      val perm =
+        if (assignedInLoop.topOption.getOrElse(mutable.Set.empty).contains(v)) {
+          WritePerm[Post]()
+        } else { ReadPerm[Post]() }
       extendedInv =
         Perm(
           AmbiguousLocation[Post](Local(rw.succ(v)))(PanicBlame(
             "Generated locals always have permission"
           )),
-          IntegerValue(1),
+          perm,
         ) &* extendedInv
     }
     LoopInvariant[Post](extendedInv, None)(llvmContract.blame)
