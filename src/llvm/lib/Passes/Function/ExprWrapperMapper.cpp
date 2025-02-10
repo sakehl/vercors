@@ -42,6 +42,11 @@ ExprWrapperMapper::Result ExprWrapperMapper::run(Function &F,
     // For all functions in the current module, check if they reference this
     // wrapper-function in a specification.
     for (Function &parentF : llvmModule->functions()) {
+        // Skip wrapper-functions and intrinsics
+        if (utils::isPallasExprWrapper(parentF) || parentF.isIntrinsic()) {
+            continue;
+        }
+
         // If the function has a pallas-contract, check all clauses
         if (utils::hasPallasContract(parentF)) {
             auto *contract =
