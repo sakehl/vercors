@@ -13,6 +13,7 @@ import vct.col.rewrite.{
   Rewriter,
   RewriterBuilderArg,
   RewriterBuilderArg2,
+  Rewritten,
 }
 import vct.result.VerificationError.UserError
 import vct.rewrite.lang.LangSpecificToCol.NotAValue
@@ -432,4 +433,14 @@ case class LangSpecificToCol[Pre <: Generation](
       case t: CPPTArray[Pre] => cpp.arrayType(t)
       case other => rewriteDefault(other)
     }
+
+  override def dispatch(
+      node: LoopContract[Pre]
+  ): LoopContract[Rewritten[Pre]] = {
+    node match {
+      case llvmLoopContract: LLVMLoopContract[Pre] =>
+        llvm.rewriteLoopContract(llvmLoopContract)
+      case other => rewriteDefault(other)
+    }
+  }
 }

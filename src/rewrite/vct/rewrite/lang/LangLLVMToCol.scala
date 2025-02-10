@@ -130,6 +130,10 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   // Keeps track if the currently transformed function is a wrapper-function.
   private val inWrapperFunction: ScopedStack[Boolean] = ScopedStack()
 
+  // Local variables that were allocated using alloca in the current function.
+  private val allocaVars: ScopedStack[mutable.Set[Variable[Pre]]] =
+    ScopedStack()
+
   def gatherPallasTypeSubst(program: Program[Pre]): Unit = {
     // Get all variables that are assigned a new type directly
     program.collect {
@@ -447,62 +451,64 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   def rewriteFunctionDef(func: LLVMFunctionDefinition[Pre]): Unit = {
     implicit val o: Origin = func.o
     val procedure = rw.labelDecls.scope {
-      val newArgs = func.importedArguments.getOrElse(func.args).map { it =>
-        // Apply type-inference to function-arguments
-        new Variable(
-          rw.dispatch(localVariableInferredType.getOrElse(it, it.t))
-        )(it.o)
-      }
-      val argList =
-        rw.variables.collect {
-          func.args.zip(newArgs).foreach { case (a, b) =>
-            rw.variables.succeed(a, b)
-          }
-        }._1
-      // If func returns its result in an argument, this is a reference to that argument
-      val cRetArg =
-        func.returnInParam match {
-          case Some((idx, _)) => Some(argList(idx).ref)
-          case None => None
+      allocaVars.having(mutable.Set[Variable[Pre]]()) {
+        val newArgs = func.importedArguments.getOrElse(func.args).map { it =>
+          // Apply type-inference to function-arguments
+          new Variable(
+            rw.dispatch(localVariableInferredType.getOrElse(it, it.t))
+          )(it.o)
         }
-      val isWrapper = func.pallasExprWrapperFor.isDefined
-      rw.globalDeclarations.declare(
-        new Procedure[Post](
-          returnType =
-            if (isWrapper) { TResource() }
-            else {
-              rw.dispatch(func.importedReturnType.getOrElse(func.returnType))
-            },
-          args = argList,
-          outArgs = Nil,
-          typeArgs = Nil,
-          body =
-            inWrapperFunction.having(isWrapper) {
-              func.functionBody match {
-                case None => None
-                case Some(functionBody) =>
-                  if (func.pure)
-                    Some(GotoEliminator(functionBody match {
-                      case scope: Scope[Pre] => scope;
-                      case other => throw UnexpectedLLVMNode(other)
-                    }).eliminate())
-                  else
-                    Some(rw.dispatch(functionBody))
-              }
-            },
-          contract =
-            func.contract match {
-              case contract: VCLLVMFunctionContract[Pre] =>
-                rw.dispatch(contract.data.get)
-              case contract: PallasFunctionContract[Pre] =>
-                extendContractWithSretPerm(contract.content, cRetArg)
-            },
-          pure = func.pure,
-          pallasWrapper = isWrapper,
-          pallasFunction = true,
-        )(func.blame)
-      )
+        val argList =
+          rw.variables.collect {
+            func.args.zip(newArgs).foreach { case (a, b) =>
+              rw.variables.succeed(a, b)
+            }
+          }._1
+        // If func returns its result in an argument, this is a reference to that argument
+        val cRetArg =
+          func.returnInParam match {
+            case Some((idx, _)) => Some(argList(idx).ref)
+            case None => None
+          }
+        val isWrapper = func.pallasExprWrapperFor.isDefined
+        rw.globalDeclarations.declare(
+          new Procedure[Post](
+            returnType =
+              if (isWrapper) { TResource() }
+              else {
+                rw.dispatch(func.importedReturnType.getOrElse(func.returnType))
+              },
+            args = argList,
+            outArgs = Nil,
+            typeArgs = Nil,
+            body =
+              inWrapperFunction.having(isWrapper) {
+                func.functionBody match {
+                  case None => None
+                  case Some(functionBody) =>
+                    if (func.pure)
+                      Some(GotoEliminator(functionBody match {
+                        case scope: Scope[Pre] => scope;
+                        case other => throw UnexpectedLLVMNode(other)
+                      }).eliminate())
+                    else
+                      Some(rw.dispatch(functionBody))
+                }
+              },
+            contract =
+              func.contract match {
+                case contract: VCLLVMFunctionContract[Pre] =>
+                  rw.dispatch(contract.data.get)
+                case contract: PallasFunctionContract[Pre] =>
+                  extendContractWithSretPerm(contract.content, cRetArg)
+              },
+            pure = func.pure,
+            pallasWrapper = isWrapper,
+            pallasFunction = true,
+          )(func.blame)
+        )
 
+      }
     }
     llvmFunctionMap.update(func, procedure)
   }
@@ -1039,6 +1045,8 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       // Skip the initialization if we are in a wrapper function.
       return Block(Seq())
     }
+    allocaVars.top.add(alloc.variable.decl)
+
     val t =
       localVariableInferredType.getOrElse(
         alloc.variable.decl,
@@ -1212,6 +1220,25 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         }.map(blockToLabel) :+ blockToLabel(loop.latchBlock.get))(block.o),
       )(block.o)
     }
+  }
+
+  def rewriteLoopContract(
+      llvmContract: LLVMLoopContract[Pre]
+  ): LoopInvariant[Post] = {
+    implicit val o: Origin = llvmContract.o
+    // Add Permission for alloca-variables
+    var extendedInv = rw.dispatch(llvmContract.invariant)
+    // TODO: Improve origin of generated permissions
+    allocaVars.topOption.getOrElse(mutable.Set.empty).foreach { v =>
+      extendedInv =
+        Perm(
+          AmbiguousLocation[Post](Local(rw.succ(v)))(PanicBlame(
+            "Generated locals always have permission"
+          )),
+          IntegerValue(1),
+        ) &* extendedInv
+    }
+    LoopInvariant[Post](extendedInv, None)(llvmContract.blame)
   }
 
   def rewriteGoto(goto: Goto[Pre]): Statement[Post] = {

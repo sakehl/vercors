@@ -20,7 +20,7 @@ void transformLoopContract(llvm::Loop &llvmLoop, col::LoopContract &colContract,
 void initializeEmptyLoopContract(col::LoopContract &colContract);
 
 bool addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
-                            col::LoopInvariant &colContract,
+                            col::LlvmLoopContract &colContract,
                             llvm::MDNode &contractLoc,
                             pallas::FunctionCursor &functionCursor);
 

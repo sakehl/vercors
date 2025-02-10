@@ -37,7 +37,8 @@ void llvm2col::transformLoopContract(llvm::Loop &llvmLoop,
         return;
     }
 
-    col::LoopInvariant *colInvariant = colContract.mutable_loop_invariant();
+    col::LlvmLoopContract *colInvariant =
+        colContract.mutable_llvm_loop_contract();
     colInvariant->set_allocated_origin(
         generatePallasLoopContractOrigin(llvmLoop, *contractSrcLoc));
     colInvariant->mutable_blame();
@@ -74,7 +75,7 @@ void llvm2col::transformLoopContract(llvm::Loop &llvmLoop,
 }
 
 bool llvm2col::addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
-                                      col::LoopInvariant &colContract,
+                                      col::LlvmLoopContract &colContract,
                                       llvm::MDNode &contractLoc,
                                       pallas::FunctionCursor &functionCursor) {
     pallas::FunctionAnalysisManager &fam =
@@ -201,7 +202,7 @@ bool llvm2col::addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
 }
 
 void llvm2col::initializeEmptyLoopContract(col::LoopContract &colContract) {
-    col::LoopInvariant *invariant = colContract.mutable_loop_invariant();
+    col::LlvmLoopContract *invariant = colContract.mutable_llvm_loop_contract();
     col::BooleanValue *tt =
         invariant->mutable_invariant()->mutable_boolean_value();
     tt->set_value(true);

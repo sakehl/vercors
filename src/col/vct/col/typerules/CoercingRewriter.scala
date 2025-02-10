@@ -2635,6 +2635,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
         IterationContract(res(requires), res(ensures), res(context_everywhere))(
           ic.blame
         )
+      case lc @ LLVMLoopContract(invariant) =>
+        LLVMLoopContract(res(invariant))(lc.blame)
     }
   }
 
