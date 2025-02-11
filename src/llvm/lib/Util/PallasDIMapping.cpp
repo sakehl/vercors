@@ -39,7 +39,9 @@ llvm::Value *mapDIVarToValue(llvm::Function &f, llvm::DIVariable &diVar) {
     }
 
     // Check scope of DIVariable
-    if (locDiVar->getScope() != f.getSubprogram()) {
+    if ((!llvm::isa<llvm::DILocalScope>(locDiVar->getScope())) ||
+        (llvm::cast<llvm::DILocalScope>(locDiVar->getScope())
+             ->getSubprogram() != f.getSubprogram())) {
         pallas::ErrorReporter::addError(
             SOURCE_LOC, "Unable to map DIVariable (Incorrect scope)");
         return nullptr;
@@ -75,8 +77,7 @@ llvm::Value *mapDIVarToValue(llvm::Function &f, llvm::DIVariable &diVar) {
     }
 
     pallas::ErrorReporter::addError(
-        SOURCE_LOC,
-        "Unable to map DIVariable (Unsupported dbg-entry)");
+        SOURCE_LOC, "Unable to map DIVariable (Unsupported dbg-entry)");
     return nullptr;
 }
 

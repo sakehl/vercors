@@ -42,7 +42,10 @@ case object ExampleFiles {
     "examples/concepts/llvm/pallas/pallas_c_old.c",
     "examples/concepts/llvm/pallas/pallas_c_old_fail.c",
     "examples/concepts/llvm/pallas/pallas_c_quantifier.c",
-    "examples/concepts/llvm/pallas/pallas_c_quantifier_fail.c"
+    "examples/concepts/llvm/pallas/pallas_c_quantifier_fail.c",
+    "examples/concepts/llvm/pallas/pallas_c_multiply.c",
+    "examples/concepts/llvm/pallas/pallas_c_lower_bound.c",
+    "examples/concepts/llvm/pallas/pallas_c_square_fail.c"
   ).map(_.replaceAll("/", File.separator))
 
   val EXCLUSIONS: Seq[Path => Boolean] = Seq(

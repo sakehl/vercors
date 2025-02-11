@@ -39,4 +39,7 @@ class LLVMSpec extends VercorsSpec {
   vercors should fail withCode "postFailed:false" using silicon example "concepts/llvm/pallas/pallas_c_old_fail.ll"
   vercors should verify using silicon example "concepts/llvm/pallas/pallas_c_quantifier.ll"
   vercors should fail withCode "postFailed:false" using silicon example "concepts/llvm/pallas/pallas_c_quantifier_fail.ll"
+  vercors should verify using silicon example "concepts/llvm/pallas/pallas_c_multiply.ll"
+  vercors should verify using silicon example "concepts/llvm/pallas/pallas_c_lower_bound.ll"
+  vercors should fail withCode "notMaintained:false" using silicon example "concepts/llvm/pallas/pallas_c_square_fail.ll"
 }
