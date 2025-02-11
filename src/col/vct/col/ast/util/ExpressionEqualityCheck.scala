@@ -38,11 +38,10 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
   import ExpressionEqualityCheck._
 
   var replacerDepth = 0
-  var replacerDepthInt = 0
   val max_depth = 100
 
   def isConstantInt(e: Expr[G]): Option[BigInt] = {
-    replacerDepthInt = 0
+    replacerDepth = 0
     isConstantIntRecurse(e)
   }
 
@@ -77,25 +76,9 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
     e match {
       case e: Local[G] =>
         // Does it have a direct int value?
-        info.flatMap(_.variableValues.get(e)) match {
-          case Some(x) => Some(x)
-          case None =>
-            info.flatMap(_.variableEqualities.get(e)) match {
-              case None => None
-              case Some(equals) =>
-                for (eq <- equals) {
-                  // Make sure we do not loop indefinitely by keep replacing the same expressions somehow
-                  if (replacerDepthInt > max_depth)
-                    return None
-                  replacerDepthInt += 1
-                  val res = isConstantIntRecurse(eq)
-                  if (res.isDefined)
-                    return res
-                }
-                None
-            }
-        }
-
+        info.flatMap(_.variableValues.get(e)).foreach(x => return Some(x))
+        replaceVariable(e).foreach(_.foreach(e => isConstantIntRecurse(e).foreach(x => return Some(x))))
+        None
       case i: ConstantInt[G] => Some(i.value)
       case Exp(e1, e2) =>
         for {
@@ -206,7 +189,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
   private def lowerBoundRecurse(e: Expr[G]): Option[BigInt] = { getBound(e, isLower = true) }
 
   private def getBound(e: Expr[G], isLower: Boolean): Option[BigInt] = {
-    isConstantInt(e).foreach { i => return Some(i) }
+    isConstantIntRecurse(e).foreach { i => return Some(i) }
 
     val normalBound =
       if (isLower)
@@ -243,7 +226,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
           b2 <- reverseBound(e2)
         } yield b1 - b2
       case Mult(e1, e2) =>
-        isConstantInt(e1).foreach { i =>
+        isConstantIntRecurse(e1).foreach { i =>
           if (i > 0)
             normalBound(e2).foreach { b2 => return Some(i * b2) }
           if (i < 0)
@@ -252,7 +235,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
             return Some(0)
         }
 
-        isConstantInt(e2).foreach { i =>
+        isConstantIntRecurse(e2).foreach { i =>
           if (i > 0)
             normalBound(e1).foreach { b1 => return Some(i * b1) }
           if (i < 0)
@@ -268,7 +251,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
           }
         }
       case Mod(e1, e2) if isLower => return Some(0)
-      case Mod(e1, e2) => isConstantInt(e2)
+      case Mod(e1, e2) => isConstantIntRecurse(e2)
       // The other cases are to complicated, so we do not consider them
       case _ =>
     }
@@ -283,7 +266,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
 
   private def lessThenEqRecurse(lhs: Expr[G], rhs: Expr[G]): Option[Boolean] = {
     // Compare values directly
-    (isConstantInt(lhs), isConstantInt(rhs)) match {
+    (isConstantIntRecurse(lhs), isConstantIntRecurse(rhs)) match {
       case (Some(i1), Some(i2)) => return Some(i1 <= i2)
       case _ =>
     }
@@ -328,7 +311,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
         }
       case _ =>
     }
-    isConstantInt(e).map(i => i != 0) orElse
+    isConstantIntRecurse(e).map(i => i != 0) orElse
     upperBoundRecurse(e).flatMap(i => if(i<0) Some(true) else None) orElse
     lowerBoundRecurse(e).flatMap(i => if(i>0) Some(true) else None) orElse
     lessThenEq(const(1)(e.o), e) orElse
@@ -454,7 +437,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
   }
 
   private def equalExpressionsRecurse(lhs: Expr[G], rhs: Expr[G]): Boolean = {
-    (isConstantInt(lhs), isConstantInt(rhs)) match {
+    (isConstantIntRecurse(lhs), isConstantIntRecurse(rhs)) match {
       case (Some(i1), Some(i2)) => return i1 == i2
       case (None, None) => ()
       // If one is a constant expression, and the other is not, this cannot be the same
