@@ -841,12 +841,13 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
         for (v <- quantifierData.bindings) {
           if (!(// Must have an a_i
               linearExpressions.contains(v) &&
-            // must have lower bound
-            quantifierData.upperExclusiveBounds.contains(v) &&
+              // must have lower bound
+              quantifierData.upperExclusiveBounds.contains(v) &&
               quantifierData.upperExclusiveBounds(v).nonEmpty &&
               // the a_i must be non zero
-              equalityChecker.isNonZero(linearExpressions(v)).getOrElse(false)
-            )) { return None }
+              equalityChecker.isNonZero(linearExpressions(v)).getOrElse(false))) {
+            return None
+          }
         }
 
         def sortVar(v: Variable[Pre]): Option[BigInt] =

@@ -73,7 +73,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
       d
   }
 
-  def isConstantIntRecurse(e: Expr[G]): Option[BigInt] =
+  private def isConstantIntRecurse(e: Expr[G]): Option[BigInt] =
     e match {
       case e: Local[G] =>
         // Does it have a direct int value?
@@ -202,10 +202,10 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
 
   def upperBound(e: Expr[G]): Option[BigInt] = { replacerDepth = 0; upperBoundRecurse(e) }
   def lowerBound(e: Expr[G]): Option[BigInt] = { replacerDepth = 0; lowerBoundRecurse(e) }
-  def upperBoundRecurse(e: Expr[G]): Option[BigInt] = { getBound(e, isLower = false) }
-  def lowerBoundRecurse(e: Expr[G]): Option[BigInt] = { getBound(e, isLower = true) }
+  private def upperBoundRecurse(e: Expr[G]): Option[BigInt] = { getBound(e, isLower = false) }
+  private def lowerBoundRecurse(e: Expr[G]): Option[BigInt] = { getBound(e, isLower = true) }
 
-  def getBound(e: Expr[G], isLower: Boolean): Option[BigInt] = {
+  private def getBound(e: Expr[G], isLower: Boolean): Option[BigInt] = {
     isConstantInt(e).foreach { i => return Some(i) }
 
     val normalBound =
@@ -221,11 +221,11 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
 
     e match {
       case v: Local[G] =>
-        info.flatMap { i =>
+        info.foreach { i =>
           if (isLower)
-            return i.lowerBound.get(v)
+            i.lowerBound.get(v).foreach(b => return Some(b))
           else
-            return i.upperBound.get(v)
+            i.upperBound.get(v).foreach(b => return Some(b))
         }
         replaceVariable(v) match {
           case Some(es) =>
@@ -277,6 +277,11 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
   }
 
   def lessThenEq(lhs: Expr[G], rhs: Expr[G]): Option[Boolean] = {
+    replacerDepth = 0
+    lessThenEqRecurse(lhs, rhs)
+  }
+
+  private def lessThenEqRecurse(lhs: Expr[G], rhs: Expr[G]): Option[Boolean] = {
     // Compare values directly
     (isConstantInt(lhs), isConstantInt(rhs)) match {
       case (Some(i1), Some(i2)) => return Some(i1 <= i2)
@@ -308,7 +313,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
     isNonZeroRecurse(e)
   }
 
-  def isNonZeroRecurse(e: Expr[G]): Option[Boolean] = {
+  private def isNonZeroRecurse(e: Expr[G]): Option[Boolean] = {
     e match {
       case v: Local[G] if info.exists(_.variableNotZero.contains(v)) => return Some(true)
       case v: Local[G] =>
@@ -331,6 +336,11 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
   }
 
   def isSameSign(e1: Expr[G], e2: Expr[G]): Option[Boolean] = {
+    replacerDepth = 0;
+    isSameSignRecurse(e1, e2)
+  }
+
+  private def isSameSignRecurse(e1: Expr[G], e2: Expr[G]): Option[Boolean] = {
     // Try to gets signs
     (getSign(e1), getSign(e2)) match {
       case (Some(s1), Some(s2)) => return Some(s1 == s2)
@@ -399,7 +409,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
     (resLeft, resRight)
   }
 
-  def removeEqExprs(e1s: Seq[Expr[G]], e2s: Seq[Expr[G]]): (Seq[Expr[G]], Seq[Expr[G]]) = {
+  private def removeEqExprs(e1s: Seq[Expr[G]], e2s: Seq[Expr[G]]): (Seq[Expr[G]], Seq[Expr[G]]) = {
     var resultingE2: Seq[Expr[G]] = e2s
     var resultingE1: Seq[Expr[G]] = Seq()
 
@@ -417,7 +427,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
     (resultingE1, resultingE2)
   }
 
-  def commAssoc[B <: BinExpr[G]](e1: B, e2: B)(
+  private def commAssoc[B <: BinExpr[G]](e1: B, e2: B)(
     implicit tag: ClassTag[B]
   ): Boolean = {
     val e1s = unfoldComm[B](e1)
@@ -443,7 +453,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
     return e1restrest.isEmpty && e2restrest.isEmpty
   }
 
-  def equalExpressionsRecurse(lhs: Expr[G], rhs: Expr[G]): Boolean = {
+  private def equalExpressionsRecurse(lhs: Expr[G], rhs: Expr[G]): Boolean = {
     (isConstantInt(lhs), isConstantInt(rhs)) match {
       case (Some(i1), Some(i2)) => return i1 == i2
       case (None, None) => ()

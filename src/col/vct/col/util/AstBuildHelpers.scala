@@ -8,12 +8,6 @@ import vct.col.ref.{DirectRef, Ref}
 import vct.col.rewrite.Rewritten
 import vct.result.VerificationError.{Unreachable, UserError}
 
-import scala.language.implicitConversions
-
-object Conversions {
-
-}
-
 /** Collection of general AST building utilities. This is meant to organically
   * grow, so add helpers as you see fit.
   */
