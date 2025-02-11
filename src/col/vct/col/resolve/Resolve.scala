@@ -1130,7 +1130,7 @@ case object ResolveReferences extends LazyLogging {
         portName.data = Some((cls, getLit(name)))
 
       case func: LLVMFunctionDefinition[G] =>
-        val importedDecl = ctx.importedDeclarations.find {
+        val importedDecl = ctx.importedDeclarations.collectFirst {
           case procedure: Procedure[G] =>
             func.contract.name == procedure.o.get[SourceName].name
         }
