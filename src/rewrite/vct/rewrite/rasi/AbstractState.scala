@@ -511,24 +511,24 @@ case class AbstractState[G](
       case Implies(left, right) =>
         (!resolve_boolean_expression(left, is_old, is_contract)) ||
         resolve_boolean_expression(right, is_old, is_contract)
-      case AmbiguousEq(left, right, _) =>
+      case AmbiguousEq(left, right, _, _) =>
         handle_equality(left, right, is_old, is_contract, negate = false)
       case Eq(left, right) =>
         handle_equality(left, right, is_old, is_contract, negate = false)
-      case AmbiguousNeq(left, right, _) =>
+      case AmbiguousNeq(left, right, _, _) =>
         handle_equality(left, right, is_old, is_contract, negate = true)
       case Neq(left, right) =>
         handle_equality(left, right, is_old, is_contract, negate = true)
-      case AmbiguousGreater(left, right) =>
+      case AmbiguousGreater(left, right, _) =>
         resolve_integer_expression(left, is_old, is_contract) >
           resolve_integer_expression(right, is_old, is_contract)
-      case AmbiguousLess(left, right) =>
+      case AmbiguousLess(left, right, _) =>
         resolve_integer_expression(left, is_old, is_contract) <
           resolve_integer_expression(right, is_old, is_contract)
-      case AmbiguousGreaterEq(left, right) =>
+      case AmbiguousGreaterEq(left, right, _) =>
         resolve_integer_expression(left, is_old, is_contract) >=
           resolve_integer_expression(right, is_old, is_contract)
-      case AmbiguousLessEq(left, right) =>
+      case AmbiguousLessEq(left, right, _) =>
         resolve_integer_expression(left, is_old, is_contract) <=
           resolve_integer_expression(right, is_old, is_contract)
       case Greater(left, right) =>

@@ -227,6 +227,14 @@ case object LangCToCol {
       blame.blame(TypeSizeMayBeZero(c))
   }
 
+  private case class InvalidPointerComparison(cmp: Expr[_]) extends UserError {
+    override def code: String = "incompatiblePointerComparison"
+    override def text: String =
+      cmp.o.messageInContext(
+        "Comparison between pointers of different types is not supported"
+      )
+  }
+
 }
 
 case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
@@ -408,6 +416,44 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           ).ref[Function[Post]],
         )(sizeOfOrigin)
     }
+  }
+
+  def rewriteComparison(cmp: Expr[Pre]): Expr[Post] = {
+    val (l, r) =
+      cmp match {
+        case AmbiguousEq(left, right, _, None) => (left, right)
+        case AmbiguousNeq(left, right, _, None) => (left, right)
+        case AmbiguousGreater(left, right, None) => (left, right)
+        case AmbiguousLess(left, right, None) => (left, right)
+        case AmbiguousGreaterEq(left, right, None) => (left, right)
+        case AmbiguousLessEq(left, right, None) => (left, right)
+        case _ => return cmp.rewriteDefault()
+      }
+
+    val leftPtr = l.t.asPointer
+    val rightPtr = r.t.asPointer
+    if (leftPtr.isDefined && rightPtr.isDefined) {
+      if (
+        CoercionUtils.getAnyCoercion(leftPtr.get.element, rightPtr.get.element)
+          .isDefined
+      ) {
+        val elementSize = Some(sizeOf(leftPtr.get.element, cmp.o))
+        cmp match {
+          case e @ AmbiguousEq(_, _, _, _) =>
+            e.rewrite(elementSize = elementSize)
+          case e @ AmbiguousNeq(_, _, _, _) =>
+            e.rewrite(elementSize = elementSize)
+          case e @ AmbiguousGreater(_, _, _) =>
+            e.rewrite(elementSize = elementSize)
+          case e @ AmbiguousLess(_, _, _) =>
+            e.rewrite(elementSize = elementSize)
+          case e @ AmbiguousGreaterEq(_, _, _) =>
+            e.rewrite(elementSize = elementSize)
+          case e @ AmbiguousLessEq(_, _, _) =>
+            e.rewrite(elementSize = elementSize)
+        }
+      } else { throw InvalidPointerComparison(cmp) }
+    } else { cmp.rewriteDefault() }
   }
 
   def cast(c: CCast[Pre]): Expr[Post] =
@@ -1073,6 +1119,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     cStructSuccessor(decl) = newStruct
   }
 
+  // TODO: This seems to make a heap variable for every typedef which should not be needed
   def rewriteGlobalDecl(decl: CGlobalDeclaration[Pre]): Unit = {
     val isStruct =
       decl.decl.specs.collectFirst { case t: CStructDeclaration[Pre] => () }

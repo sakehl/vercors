@@ -1855,12 +1855,14 @@ final case class AmbiguousEq[G](
     left: Expr[G],
     right: Expr[G],
     vectorInnerType: Type[G],
+    elementSize: Option[Expr[G]],
 )(implicit val o: Origin)
     extends AmbiguousComparison[G] with AmbiguousEqImpl[G]
 final case class AmbiguousNeq[G](
     left: Expr[G],
     right: Expr[G],
     vectorInnerType: Type[G],
+    elementSize: Option[Expr[G]],
 )(implicit val o: Origin)
     extends AmbiguousComparison[G] with AmbiguousNeqImpl[G]
 
@@ -1871,18 +1873,30 @@ final case class Neq[G](left: Expr[G], right: Expr[G])(implicit val o: Origin)
 
 sealed trait OrderOp[G] extends Comparison[G] with OrderOpImpl[G]
 sealed trait AmbiguousOrderOp[G] extends OrderOp[G] with AmbiguousOrderOpImpl[G]
-final case class AmbiguousGreater[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends AmbiguousOrderOp[G] with AmbiguousGreaterImpl[G]
-final case class AmbiguousLess[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends AmbiguousOrderOp[G] with AmbiguousLessImpl[G]
-final case class AmbiguousGreaterEq[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends AmbiguousOrderOp[G] with AmbiguousGreaterEqImpl[G]
-final case class AmbiguousLessEq[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends AmbiguousOrderOp[G] with AmbiguousLessEqImpl[G]
+final case class AmbiguousGreater[G](
+    left: Expr[G],
+    right: Expr[G],
+    elementSize: Option[Expr[G]],
+)(implicit val o: Origin)
+    extends AmbiguousOrderOp[G] with AmbiguousGreaterImpl[G]
+final case class AmbiguousLess[G](
+    left: Expr[G],
+    right: Expr[G],
+    elementSize: Option[Expr[G]],
+)(implicit val o: Origin)
+    extends AmbiguousOrderOp[G] with AmbiguousLessImpl[G]
+final case class AmbiguousGreaterEq[G](
+    left: Expr[G],
+    right: Expr[G],
+    elementSize: Option[Expr[G]],
+)(implicit val o: Origin)
+    extends AmbiguousOrderOp[G] with AmbiguousGreaterEqImpl[G]
+final case class AmbiguousLessEq[G](
+    left: Expr[G],
+    right: Expr[G],
+    elementSize: Option[Expr[G]],
+)(implicit val o: Origin)
+    extends AmbiguousOrderOp[G] with AmbiguousLessEqImpl[G]
 
 final case class Greater[G](left: Expr[G], right: Expr[G])(
     implicit val o: Origin
@@ -1912,24 +1926,42 @@ final case class SubBagEq[G](left: Expr[G], right: Expr[G])(
 
 sealed trait PointerComparison[G]
     extends OrderOp[G] with PointerComparisonImpl[G]
-final case class PointerEq[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends PointerComparison[G] with PointerEqImpl[G]
-final case class PointerNeq[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends PointerComparison[G] with PointerNeqImpl[G]
-final case class PointerGreater[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends PointerComparison[G] with PointerGreaterImpl[G]
-final case class PointerLess[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends PointerComparison[G] with PointerLessImpl[G]
-final case class PointerGreaterEq[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends PointerComparison[G] with PointerGreaterEqImpl[G]
-final case class PointerLessEq[G](left: Expr[G], right: Expr[G])(
-    implicit val o: Origin
-) extends PointerComparison[G] with PointerLessEqImpl[G]
+final case class PointerEq[G](
+    left: Expr[G],
+    right: Expr[G],
+    elementSize: Expr[G],
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerEqImpl[G]
+final case class PointerNeq[G](
+    left: Expr[G],
+    right: Expr[G],
+    elementSize: Expr[G],
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerNeqImpl[G]
+final case class PointerGreater[G](
+    left: Expr[G],
+    right: Expr[G],
+    elementSize: Expr[G],
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerGreaterImpl[G]
+final case class PointerLess[G](
+    left: Expr[G],
+    right: Expr[G],
+    elementSize: Expr[G],
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerLessImpl[G]
+final case class PointerGreaterEq[G](
+    left: Expr[G],
+    right: Expr[G],
+    elementSize: Expr[G],
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerGreaterEqImpl[G]
+final case class PointerLessEq[G](
+    left: Expr[G],
+    right: Expr[G],
+    elementSize: Expr[G],
+)(implicit val o: Origin)
+    extends PointerComparison[G] with PointerLessEqImpl[G]
 
 final case class Select[G](
     condition: Expr[G],
@@ -1991,7 +2023,7 @@ final case class PointerBlock[G](pointer: Expr[G])(
     val blame: Blame[PointerNull]
 )(implicit val o: Origin)
     extends Expr[G] with PointerBlockImpl[G]
-final case class PointerAddress[G](pointer: Expr[G])(
+final case class PointerAddress[G](pointer: Expr[G], elementSize: Expr[G])(
     val blame: Blame[PointerNull]
 )(implicit val o: Origin)
     extends Expr[G] with PointerAddressImpl[G]

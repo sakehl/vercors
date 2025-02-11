@@ -615,10 +615,10 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
           ref = pointerBlock.ref,
           args = Seq(unwrapOption(p, blck.blame)),
         )
-      case addr @ PointerAddress(p) =>
+      case addr @ PointerAddress(p, elementSize) =>
         FunctionInvocation[Post](
           ref = pointerAddress.ref,
-          args = Seq(unwrapOption(p, addr.blame)),
+          args = Seq(unwrapOption(p, addr.blame), dispatch(elementSize)),
           typeArgs = Nil,
           Nil,
           Nil,

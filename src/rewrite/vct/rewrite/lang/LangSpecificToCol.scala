@@ -519,6 +519,9 @@ case class LangSpecificToCol[Pre <: Generation](
           determineBitVectorSignedness(e, arg, arg),
         )(b.blame)(e.o)
 
+      case cmp: AmbiguousComparison[Pre] => c.rewriteComparison(cmp)
+      case ord: AmbiguousOrderOp[Pre] => c.rewriteComparison(ord)
+
       case other => super.dispatch(other)
     }
 
