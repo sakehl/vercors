@@ -1162,7 +1162,7 @@ case object ResolveReferences extends LazyLogging {
         val llvmFunction =
           ctx.currentResult.get.asInstanceOf[RefLLVMFunctionDefinition[G]].decl
         val applicableContract = ctx.llvmSpecParser.parse(contract, contract.o)
-        val importedDecl = ctx.importedDeclarations.find {
+        val importedDecl = ctx.importedDeclarations.collectFirst {
           case procedure: Procedure[G] =>
             contract.name == procedure.o.get[SourceName].name
         }

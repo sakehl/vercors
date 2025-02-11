@@ -3,8 +3,8 @@
 #include "Passes/Function/FunctionBodyTransformer.h"
 #include "Passes/Function/FunctionContractDeclarer.h"
 #include "Passes/Function/FunctionDeclarer.h"
-#include "Passes/Function/PureAssigner.h"
 #include "Passes/Function/PallasFunctionContractDeclarerPass.h"
+#include "Passes/Function/PureAssigner.h"
 #include "Passes/Module/GlobalVariableDeclarer.h"
 #include "Passes/Module/ModuleSpecCollector.h"
 #include "Passes/Module/ProtobufPrinter.h"
@@ -60,12 +60,13 @@ llvm::PassPluginLibraryInfo getPallasPluginInfo() {
                             FPM.addPass(pallas::FunctionContractDeclarerPass());
                             return true;
                         } else if (Name == "pallas-declare-function-contract") {
-                            FPM.addPass(pallas::PallasFunctionContractDeclarerPass());
+                            FPM.addPass(
+                                pallas::PallasFunctionContractDeclarerPass());
                             return true;
                         } else if (Name == "pallas-transform-function-body") {
                             FPM.addPass(pallas::FunctionBodyTransformerPass());
                             return true;
-                        } 
+                        }
                         return false;
                     });
             }};

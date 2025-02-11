@@ -114,8 +114,7 @@ FDResult FunctionDeclarer::run(Function &F, FunctionAnalysisManager &FAM) {
 
     if (utils::isPallasExprWrapper(F)) {
         auto mapperResult = FAM.getResult<pallas::ExprWrapperMapper>(F);
-        auto *wrapperParent =
-            mapperResult.getParentFunc();
+        auto *wrapperParent = mapperResult.getParentFunc();
 
         auto colParent = FAM.getResult<FunctionDeclarer>(*wrapperParent);
         llvmFuncDef->mutable_pallas_expr_wrapper_for()->set_id(
@@ -127,13 +126,13 @@ FDResult FunctionDeclarer::run(Function &F, FunctionAnalysisManager &FAM) {
             auto retIdxT = llvmFuncDef->mutable_return_in_param();
             retIdxT->set_v1(0);
             llvm2col::transformAndSetPointerType(*F.getParamStructRetType(0),
-                                            *retIdxT->mutable_v2());
+                                                 *retIdxT->mutable_v2());
         } else if (F.getParamStructRetType(1) != nullptr) {
             auto retIdxT = llvmFuncDef->mutable_return_in_param();
             retIdxT->set_v1(1);
             llvm2col::transformAndSetPointerType(*F.getParamStructRetType(1),
-                                            *retIdxT->mutable_v2());
-        } 
+                                                 *retIdxT->mutable_v2());
+        }
     } catch (pallas::UnsupportedTypeException &e) {
         std::stringstream errorStream;
         errorStream << e.what() << " in sret argument ";

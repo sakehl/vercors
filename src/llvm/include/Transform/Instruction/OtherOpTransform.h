@@ -81,8 +81,8 @@ void transformPallasPtrBlockOffset(llvm::CallInst &callInstruction,
                                    pallas::FunctionCursor &funcCursor);
 
 void transformPallasPtrLength(llvm::CallInst &callInstruction,
-                                   col::Block &colBlock,
-                                   pallas::FunctionCursor &funcCursor);
+                              col::Block &colBlock,
+                              pallas::FunctionCursor &funcCursor);
 
 void transformPallasImply(llvm::CallInst &callInstruction, col::Block &colBlock,
                           pallas::FunctionCursor &funcCursor);
