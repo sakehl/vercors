@@ -1813,6 +1813,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case SmtlibBvUDiv(left, right) => bitvec2(left, right, SmtlibBvUDiv(_, _))
       case SmtlibBvULt(left, right) => bitvec2(left, right, SmtlibBvULt(_, _))
       case SmtlibBvURem(left, right) => bitvec2(left, right, SmtlibBvURem(_, _))
+      case SmtlibBv2Nat(expr) => SmtlibBv2Nat(bitvec(expr)._1)
+      case SmtlibInt2Bv(expr, size) => SmtlibInt2Bv(int(expr), size)
       case SmtlibConcat(left, right) => bitvec2(left, right, SmtlibConcat(_, _))
       case SmtlibExtract(inclusiveEndIndexFromRight, startIndexFromRight, bv) =>
         SmtlibExtract(
@@ -2113,6 +2115,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case Z3BvSShr(left, right) => bitvec2(left, right, Z3BvSShr(_, _))
       case Z3BvSub(left, right) => bitvec2(left, right, Z3BvSub(_, _))
       case Z3BvXnor(left, right) => bitvec2(left, right, Z3BvXnor(_, _))
+      case Z3BvXor(left, right) => bitvec2(left, right, Z3BvXor(_, _))
+      case Z3BvSLt(left, right) => bitvec2(left, right, Z3BvSLt(_, _))
       case Z3SeqAt(seq, offset) => Z3SeqAt(z3seq(seq)._1, int(offset))
       case Z3SeqConcat(left, right) =>
         Z3SeqConcat(z3seq(left)._1, z3seq(right)._1)

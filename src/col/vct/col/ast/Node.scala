@@ -2361,6 +2361,10 @@ case class SmtlibBvShr[G](left: Expr[G], right: Expr[G])(implicit val o: Origin)
     extends SmtlibExpr[G] with SmtlibBvShrImpl[G]
 case class SmtlibBvULt[G](left: Expr[G], right: Expr[G])(implicit val o: Origin)
     extends SmtlibExpr[G] with SmtlibBvULtImpl[G]
+case class SmtlibBv2Nat[G](expr: Expr[G])(implicit val o: Origin)
+    extends SmtlibExpr[G] with SmtlibBv2NatImpl[G]
+case class SmtlibInt2Bv[G](expr: Expr[G], size: Int)(implicit val o: Origin)
+    extends SmtlibExpr[G] with SmtlibInt2BvImpl[G]
 
 case class SmtlibRNE[G]()(implicit val o: Origin)
     extends SmtlibExpr[G] with SmtlibRNEImpl[G]
@@ -2593,6 +2597,10 @@ case class Z3BvNor[G](left: Expr[G], right: Expr[G])(implicit val o: Origin)
     extends SmtlibExpr[G] with Z3BvNorImpl[G]
 case class Z3BvXnor[G](left: Expr[G], right: Expr[G])(implicit val o: Origin)
     extends SmtlibExpr[G] with Z3BvXnorImpl[G]
+case class Z3BvXor[G](left: Expr[G], right: Expr[G])(implicit val o: Origin)
+    extends SmtlibExpr[G] with Z3BvXorImpl[G]
+case class Z3BvSLt[G](left: Expr[G], right: Expr[G])(implicit val o: Origin)
+    extends SmtlibExpr[G] with Z3BvSLtImpl[G]
 
 case class Z3ArrayConst[G](
     domain: Seq[Type[G]],
