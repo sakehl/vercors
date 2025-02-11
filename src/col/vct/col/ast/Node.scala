@@ -714,6 +714,8 @@ final class Procedure[G](
     val inline: Boolean = false,
     val pure: Boolean = false,
     val vesuv_entry: Boolean = false,
+    val pallasWrapper: Boolean = false,
+    val pallasFunction: Boolean = false,
 )(val blame: Blame[CallableFailure])(implicit val o: Origin)
     extends GlobalDeclaration[G] with AbstractMethod[G] with ProcedureImpl[G]
 @scopes[LabelDecl]
@@ -3611,15 +3613,22 @@ final case class BipTransitionSynchronization[G](
     extends GlobalDeclaration[G] with BipTransitionSynchronizationImpl[G]
 
 @family
-final class LLVMFunctionContract[G](
+sealed trait LLVMFunctionContract[G]
+    extends NodeFamily[G] with LLVMFunctionContractImpl[G]
+
+final class VCLLVMFunctionContract[G](
     val name: String,
     val value: String,
     val variableRefs: Seq[(String, Ref[G, Variable[G]])],
     val invokableRefs: Seq[(String, Ref[G, LLVMCallable[G]])],
 )(val blame: Blame[NontrivialUnsatisfiable])(implicit val o: Origin)
-    extends NodeFamily[G] with LLVMFunctionContractImpl[G] {
+    extends LLVMFunctionContract[G] with VCLLVMFunctionContractImpl[G] {
   var data: Option[ApplicableContract[G]] = None
 }
+final class PallasFunctionContract[G](val content: ApplicableContract[G])(
+    val blame: Blame[NontrivialUnsatisfiable]
+)(implicit val o: Origin)
+    extends LLVMFunctionContract[G] with PallasFunctionContractImpl[G] {}
 
 final case class LLVMGlobalVariable[G](
     variableType: Type[G],
@@ -3636,6 +3645,12 @@ final class LLVMFunctionDefinition[G](
     val functionBody: Option[Statement[G]],
     val contract: LLVMFunctionContract[G],
     val pure: Boolean = false,
+    // If the result is returned in an sret-argument, this contains the index
+    // and the type of the sret-argument.
+    val returnInParam: Option[(Int, Type[G])] = None,
+    // If this function is a wrapper function for an expression of a
+    // pallas specification of a function F, then this field references F.
+    val pallasExprWrapperFor: Option[Ref[G, LLVMFunctionDefinition[G]]],
 )(val blame: Blame[CallableFailure])(implicit val o: Origin)
     extends LLVMCallable[G]
     with Applicable[G]
@@ -3775,6 +3790,97 @@ final class LLVMGlobalSpecification[G](val value: String)(
 ) extends GlobalDeclaration[G] with LLVMGlobalSpecificationImpl[G] {
   var data: Option[Seq[GlobalDeclaration[G]]] = None
 }
+
+/*
+ Nodes that represents the \result-construct in a Pallas contract.
+ - Keep a reference to the function whose result they represent.
+ - The LLVMResult-Node is the node that is generated in the C++-part
+ of Pallas. In LangLLVMToCol, it is transformed into an
+ LLVMIntermediaryResult, which in turn is converted when the Pallas
+ expression-wrappers are inlined.
+ */
+final case class LLVMResult[G](func: Ref[G, LLVMFunctionDefinition[G]])(
+    implicit val o: Origin
+) extends LLVMExpr[G] with LLVMResultImpl[G]
+final case class LLVMIntermediaryResult[G](
+    applicable: Ref[G, Procedure[G]],
+    sretArg: Option[Ref[G, Variable[G]]],
+)(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMIntermediaryResultImpl[G]
+
+final case class LLVMOld[G](v: Ref[G, Variable[G]])(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMOldImpl[G]
+
+final case class LLVMFracOf[G](
+    sret: Ref[G, Variable[G]],
+    num: Expr[G],
+    denom: Expr[G],
+)(val blame: Blame[DivByZero])(implicit val o: Origin)
+    extends ExceptionalStatement[G] with LLVMFracOfImpl[G]
+
+final case class LLVMPerm[G](
+    loc: Ref[G, Variable[G]],
+    perm: Ref[G, Variable[G]],
+)(val blame: Blame[PointerLocationError])(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMPermImpl[G]
+
+final case class LLVMImplies[G](
+    left: Ref[G, Variable[G]],
+    right: Ref[G, Variable[G]],
+)(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMImpliesImpl[G]
+
+final case class LLVMAnd[G](
+    left: Ref[G, Variable[G]],
+    right: Ref[G, Variable[G]],
+)(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMAndImpl[G]
+
+final case class LLVMOr[G](
+    left: Ref[G, Variable[G]],
+    right: Ref[G, Variable[G]],
+)(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMOrImpl[G]
+
+final case class LLVMStar[G](
+    left: Ref[G, Variable[G]],
+    right: Ref[G, Variable[G]],
+)(implicit val o: Origin)
+    extends LLVMExpr[G] with LLVMStarImpl[G]
+
+final case class LLVMBoundVar[G](id: String, varType: Type[G])(
+    implicit val o: Origin
+) extends LLVMExpr[G] with LLVMBoundVarImpl[G]
+
+sealed trait LLVMQuantifier[G] extends LLVMExpr[G] with LLVMQuantifierImpl[G]
+
+final case class LLVMForall[G](bindingExpr: Expr[G], bodyExpr: Expr[G])(
+    implicit val o: Origin
+) extends LLVMQuantifier[G] with LLVMForallImpl[G]
+
+final case class LLVMSepForall[G](bindingExpr: Expr[G], bodyExpr: Expr[G])(
+    val blame: Blame[ReceiverNotInjective]
+)(implicit val o: Origin)
+    extends LLVMQuantifier[G] with LLVMSepForallImpl[G]
+
+final case class LLVMExists[G](bindingExpr: Expr[G], bodyExpr: Expr[G])(
+    implicit val o: Origin
+) extends LLVMQuantifier[G] with LLVMExistsImpl[G]
+
+final case class LLVMPtrBlockLength[G](ptr: Ref[G, Variable[G]])(
+    val blame: Blame[PointerNull]
+)(implicit val o: Origin)
+    extends Expr[G] with LLVMPtrBlockLengthImpl[G]
+
+final case class LLVMPtrBlockOffset[G](ptr: Ref[G, Variable[G]])(
+    val blame: Blame[PointerNull]
+)(implicit val o: Origin)
+    extends Expr[G] with LLVMPtrBlockOffsetImpl[G]
+
+final case class LLVMPtrLength[G](ptr: Ref[G, Variable[G]])(
+    val blame: Blame[PointerNull]
+)(implicit val o: Origin)
+    extends Expr[G] with LLVMPtrLengthImpl[G]
 
 @family
 sealed trait LLVMMemoryOrdering[G]

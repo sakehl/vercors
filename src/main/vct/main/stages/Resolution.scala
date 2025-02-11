@@ -7,7 +7,7 @@ import vct.col.ast.{
   ApplicableContract,
   Expr,
   GlobalDeclaration,
-  LLVMFunctionContract,
+  VCLLVMFunctionContract,
   LLVMGlobalSpecification,
   Program,
   Verification,
@@ -107,7 +107,7 @@ case class MyLocalLLVMSpecParser(
     debugOptions: DebugOptions,
 ) extends Resolve.SpecContractParser {
   override def parse[G](
-      input: LLVMFunctionContract[G],
+      input: VCLLVMFunctionContract[G],
       o: Origin,
   ): ApplicableContract[G] =
     ColLLVMContractParser(debugOptions, blameProvider)

@@ -1,9 +1,11 @@
 #include "Passes/Function/FunctionDeclarer.h"
+#include "Passes/Function/ExprWrapperMapper.h"
 
 #include "Origin/OriginProvider.h"
 #include "Passes/Module/RootContainer.h"
 #include "Transform/Transform.h"
 #include "Util/Exceptions.h"
+#include "Util/PallasMD.h"
 
 namespace pallas {
 const std::string SOURCE_LOC = "Passes::Function::FunctionDeclarer";
@@ -110,11 +112,39 @@ FDResult FunctionDeclarer::run(Function &F, FunctionAnalysisManager &FAM) {
         pallas::ErrorReporter::addError(SOURCE_LOC, errorStream.str(), F);
     }
 
+    if (utils::isPallasExprWrapper(F)) {
+        auto mapperResult = FAM.getResult<pallas::ExprWrapperMapper>(F);
+        auto *wrapperParent =
+            mapperResult.getParentFunc();
+
+        auto colParent = FAM.getResult<FunctionDeclarer>(*wrapperParent);
+        llvmFuncDef->mutable_pallas_expr_wrapper_for()->set_id(
+            colParent.getFunctionId());
+    }
+
+    try {
+        if (F.getParamStructRetType(0) != nullptr) {
+            auto retIdxT = llvmFuncDef->mutable_return_in_param();
+            retIdxT->set_v1(0);
+            llvm2col::transformAndSetPointerType(*F.getParamStructRetType(0),
+                                            *retIdxT->mutable_v2());
+        } else if (F.getParamStructRetType(1) != nullptr) {
+            auto retIdxT = llvmFuncDef->mutable_return_in_param();
+            retIdxT->set_v1(1);
+            llvm2col::transformAndSetPointerType(*F.getParamStructRetType(1),
+                                            *retIdxT->mutable_v2());
+        } 
+    } catch (pallas::UnsupportedTypeException &e) {
+        std::stringstream errorStream;
+        errorStream << e.what() << " in sret argument ";
+        pallas::ErrorReporter::addError(SOURCE_LOC, errorStream.str(), F);
+    }
+
     if (F.isDeclaration()) {
         // Defined outside of this module so we don't know if it's pure or what
         // its contract is
-        col::LlvmFunctionContract *colContract =
-            llvmFuncDef->mutable_contract();
+        col::VcllvmFunctionContract *colContract =
+            llvmFuncDef->mutable_contract()->mutable_vcllvm_function_contract();
         colContract->set_allocated_blame(new col::Blame());
         colContract->set_value("requires true;");
         colContract->set_name(F.getName());
@@ -130,6 +160,10 @@ FDResult FunctionDeclarer::run(Function &F, FunctionAnalysisManager &FAM) {
  */
 PreservedAnalyses FunctionDeclarerPass::run(Function &F,
                                             FunctionAnalysisManager &FAM) {
+
+    // TODO: Check if the function is part of the spec-lib library.
+    // If so, skip it.
+
     FDResult result = FAM.getResult<FunctionDeclarer>(F);
     // Just makes sure we analyse every function
     return PreservedAnalyses::all();

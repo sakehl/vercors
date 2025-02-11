@@ -1,7 +1,10 @@
+
+#include "Passes/Function/ExprWrapperMapper.h"
 #include "Passes/Function/FunctionBodyTransformer.h"
 #include "Passes/Function/FunctionContractDeclarer.h"
 #include "Passes/Function/FunctionDeclarer.h"
 #include "Passes/Function/PureAssigner.h"
+#include "Passes/Function/PallasFunctionContractDeclarerPass.h"
 #include "Passes/Module/GlobalVariableDeclarer.h"
 #include "Passes/Module/ModuleSpecCollector.h"
 #include "Passes/Module/ProtobufPrinter.h"
@@ -26,6 +29,8 @@ llvm::PassPluginLibraryInfo getPallasPluginInfo() {
                             [&] { return pallas::FunctionDeclarer(); });
                         FAM.registerPass(
                             [&] { return pallas::FunctionContractDeclarer(); });
+                        FAM.registerPass(
+                            [&] { return pallas::ExprWrapperMapper(); });
                     });
                 PB.registerPipelineParsingCallback(
                     [](StringRef Name, llvm::ModulePassManager &MPM,
@@ -51,13 +56,16 @@ llvm::PassPluginLibraryInfo getPallasPluginInfo() {
                         } else if (Name == "pallas-assign-pure") {
                             FPM.addPass(pallas::PureAssignerPass());
                             return true;
-                        } else if (Name == "pallas-declare-function-contract") {
+                        } else if (Name == "llvm-declare-function-contract") {
                             FPM.addPass(pallas::FunctionContractDeclarerPass());
+                            return true;
+                        } else if (Name == "pallas-declare-function-contract") {
+                            FPM.addPass(pallas::PallasFunctionContractDeclarerPass());
                             return true;
                         } else if (Name == "pallas-transform-function-body") {
                             FPM.addPass(pallas::FunctionBodyTransformerPass());
                             return true;
-                        }
+                        } 
                         return false;
                     });
             }};

@@ -368,6 +368,16 @@ case class ContextEverywhereFailedInPost(
   override def inlineDescWithSource(node: String, failure: String): String =
     s"Context of `$node` may not hold in the postcondition, since $failure."
 }
+case class ContextEverywhereFailedInRunPost(
+    failure: ContractFailure,
+    node: RunMethod[_],
+) extends ContractedFailure with WithContractFailure {
+  override def baseCode: String = "contextRunPostFailed"
+  override def descInContext: String =
+    "Context may not hold in postcondition, since"
+  override def inlineDescWithSource(node: String, failure: String): String =
+    s"Context of `$node` may not hold in the postcondition, since $failure."
+}
 case class AutoValueLeakCheckFailed(
     failure: ContractFailure,
     node: ContractApplicable[_],
@@ -1551,6 +1561,11 @@ object JavaArrayInitializerBlame
 
 object NonNullPointerNull
     extends PanicBlame("A non-null pointer can never be null")
+
+object LLVMSretPerm
+    extends PanicBlame(
+      "Contracts always contain write-permission for function-arguments with an LLVM sret-attribute."
+    )
 
 object UnsafeDontCare {
   case class Satisfiability(reason: String)

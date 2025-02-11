@@ -1,16 +1,9 @@
 package vct.rewrite.lang
 
 import com.typesafe.scalalogging.LazyLogging
-import vct.col.ast._
-import vct.col.origin.{
-  AssertFailed,
-  Blame,
-  DiagnosticOrigin,
-  Origin,
-  PanicBlame,
-  TypeName,
-  UnreachableReachedError,
-}
+import hre.util.ScopedStack
+import vct.col.ast.{Expr, _}
+import vct.col.origin._
 import vct.col.ref.{DirectRef, LazyRef, Ref}
 import vct.col.resolve.ctx.RefLLVMFunctionDefinition
 import vct.col.rewrite.{Generation, Rewritten}
@@ -37,6 +30,16 @@ case object LangLLVMToCol {
     override def text: String =
       origin.messageInContext(
         s"This struct indexing operation (getelementptr) uses a non-constant struct index which we do not support."
+      )
+  }
+
+  private final case class UnsupportedArrayIndex(origin: Origin)
+      extends UserError {
+    override def code: String = "unsupportedArrayIndex"
+
+    override def text: String =
+      origin.messageInContext(
+        s"This array-indexing operation (getelementptr) is currently not supported."
       )
   }
 
@@ -76,6 +79,14 @@ case object LangLLVMToCol {
     override def blame(error: AssertFailed): Unit =
       unreachable.blame.blame(UnreachableReachedError(unreachable))
   }
+
+  val pallasResArgPermOrigin: Origin = Origin(Seq(
+    PreferredName(Seq("resArg context")),
+    LabelContext("Generated context for resArg"),
+  ))
+
+  // TODO: This should be replaced with the correct blames!
+  object InvalidGEP extends PanicBlame("Invalid use of getelementpointer!")
 }
 
 case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
@@ -107,6 +118,46 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   private val loopBlocks: mutable.ArrayBuffer[LLVMBasicBlock[Pre]] = mutable
     .ArrayBuffer()
   private val elidedBackEdges: mutable.Set[LabelDecl[Pre]] = mutable.Set()
+
+  /** Encoding the pallas specification requires changing the types of some
+    * variables:
+    *   - bool --> resource
+    *   - ptr fracT --> TRational
+    */
+  private val typeSubstitutions: mutable.Map[Variable[Pre], Type[Pre]] = mutable
+    .Map()
+
+  // Keeps track if the currently transformed function is a wrapper-function.
+  private val inWrapperFunction: ScopedStack[Boolean] = ScopedStack()
+
+  def gatherPallasTypeSubst(program: Program[Pre]): Unit = {
+    // Get all variables that are assigned a new type directly
+    program.collect {
+      // Resource
+      case Assign(Local(Ref(v)), LLVMPerm(_, _)) =>
+        typeSubstitutions(v) = TResource()
+      case Assign(Local(Ref(v)), LLVMStar(Ref(left), Ref(right))) =>
+        typeSubstitutions(v) = TResource()
+        typeSubstitutions(left) = TResource()
+        typeSubstitutions(right) = TResource()
+      // Rational
+      case LLVMFracOf(Ref(v), _, _) => typeSubstitutions(v) = TRational()
+      case LLVMPerm(_, Ref(v)) => typeSubstitutions(v) = TRational()
+    }
+
+    // Propagate the new types across trivial assignments.
+    // TODO: Improve this. This does not cover all cases and is slow.
+    //  It would be nicer to do this in a separate pass before the type-inference.
+    var oldSize = -1
+    while (typeSubstitutions.size != oldSize) {
+      oldSize = typeSubstitutions.size
+      program.collect {
+        case Assign(Local(Ref(targetVar)), Local(Ref(sourceVar))) =>
+          typeSubstitutions.get(sourceVar)
+            .foreach(sT => typeSubstitutions(targetVar) = sT)
+      }
+    }
+  }
 
   def gatherBackEdges(program: Program[Pre]): Unit = {
     program.collect { case loop: LLVMLoop[Pre] =>
@@ -205,11 +256,11 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         val superType = findMostSpecific(guessBuffer)
         if (superType.isEmpty) {
           val newType = findAcceptable(guessBuffer)
-          val updated = currentType == newType
+          val updated = currentType != newType
           currentType = newType
           updated
         } else {
-          val updated = currentType == superType.get
+          val updated = currentType != superType.get
           currentType = superType.get
           updated
         }
@@ -277,6 +328,11 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             _ => func.importedArguments.map(_(i).t).getOrElse(a.t),
           )
         }
+        // If the function has an sret-argument, infer type from that.
+        func.returnInParam match {
+          case Some((idx, t)) => addTypeGuess(func.args(idx), Set.empty, _ => t)
+          case None =>
+        }
       case alloc: LLVMAllocA[Pre] =>
         addTypeGuess(
           alloc.variable.decl,
@@ -312,11 +368,41 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               ),
           )
         )
+        getVariable(store.value).foreach(v =>
+          getVariable(store.pointer).foreach(p =>
+            addTypeGuess(
+              v,
+              Set(p),
+              _ =>
+                typeGuesses.get(p).map(_.currentType) match {
+                  case Some(LLVMTPointer(Some(innerType))) => innerType
+                  case _ => store.value.t
+                },
+            )
+          )
+        )
       case inv: LLVMFunctionInvocation[Pre] =>
-        inv.ref.decl.importedArguments.getOrElse(inv.ref.decl.args).zipWithIndex
-          .foreach { case (a, i) =>
-            getVariable(inv.args(i))
-              .foreach(v => addTypeGuess(v, Set.empty, _ => a.t))
+        val calledFunc = inv.ref.decl
+        val isWrapperFunc = calledFunc.pallasExprWrapperFor.isDefined
+        calledFunc.importedArguments.getOrElse(calledFunc.args).zipWithIndex
+          .foreach { case (arg, idx) =>
+            // Infer type of variable that is used as arg in function call
+            // from function definition
+            getVariable(inv.args(idx))
+              .foreach(v => addTypeGuess(v, Set.empty, _ => arg.t))
+
+            // If the invoked function is a wrapper function, we infer the
+            // type of the pointer-typed argument from the call-site.
+            if (isWrapperFunc && arg.t.asPointer.isDefined) {
+              val dependencies = findDependencies(inv.args(idx))
+              // TODO: Check if this can be simplified I.e. the expression
+              //  should almost always be resolvable with getVariable
+              addTypeGuess(
+                arg,
+                dependencies,
+                _ => replaceWithGuesses(inv.args(idx), dependencies).t,
+              )
+            }
           }
     }
 
@@ -327,7 +413,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     val updateQueue = mutable.ArrayDeque.from(typeGuesses.keys)
 
     while (updateQueue.nonEmpty) {
-      val obj = updateQueue.removeLast()
+      val obj = updateQueue.removeHead()
       val guess = typeGuesses(obj)
       if (guess.update()) { updateQueue.appendAll(guess.dependents) }
     }
@@ -351,7 +437,8 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     rw.variables.succeed(
       v,
       new Variable[Post](rw.dispatch(
-        localVariableInferredType.getOrElse(v, v.t)
+        typeSubstitutions
+          .getOrElse(v, localVariableInferredType.getOrElse(v, v.t))
       )),
     )
   }
@@ -360,38 +447,88 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     implicit val o: Origin = func.o
     val procedure = rw.labelDecls.scope {
       val newArgs = func.importedArguments.getOrElse(func.args).map { it =>
-        it.rewriteDefault()
+        // Apply type-inference to function-arguments
+        new Variable(
+          rw.dispatch(localVariableInferredType.getOrElse(it, it.t))
+        )(it.o)
       }
+      val argList =
+        rw.variables.collect {
+          func.args.zip(newArgs).foreach { case (a, b) =>
+            rw.variables.succeed(a, b)
+          }
+        }._1
+      // If func returns its result in an argument, this is a reference to that argument
+      val cRetArg =
+        func.returnInParam match {
+          case Some((idx, _)) => Some(argList(idx).ref)
+          case None => None
+        }
+      val isWrapper = func.pallasExprWrapperFor.isDefined
       rw.globalDeclarations.declare(
         new Procedure[Post](
-          returnType = rw
-            .dispatch(func.importedReturnType.getOrElse(func.returnType)),
-          args =
-            rw.variables.collect {
-              func.args.zip(newArgs).foreach { case (a, b) =>
-                rw.variables.succeed(a, b)
-              }
-            }._1,
+          returnType =
+            if (isWrapper) { TResource() }
+            else {
+              rw.dispatch(func.importedReturnType.getOrElse(func.returnType))
+            },
+          args = argList,
           outArgs = Nil,
           typeArgs = Nil,
           body =
-            func.functionBody match {
-              case None => None
-              case Some(functionBody) =>
-                if (func.pure)
-                  Some(GotoEliminator(functionBody match {
-                    case scope: Scope[Pre] => scope;
-                    case other => throw UnexpectedLLVMNode(other)
-                  }).eliminate())
-                else
-                  Some(rw.dispatch(functionBody))
+            inWrapperFunction.having(isWrapper) {
+              func.functionBody match {
+                case None => None
+                case Some(functionBody) =>
+                  if (func.pure)
+                    Some(GotoEliminator(functionBody match {
+                      case scope: Scope[Pre] => scope;
+                      case other => throw UnexpectedLLVMNode(other)
+                    }).eliminate())
+                  else
+                    Some(rw.dispatch(functionBody))
+              }
             },
-          contract = rw.dispatch(func.contract.data.get),
+          contract =
+            func.contract match {
+              case contract: VCLLVMFunctionContract[Pre] =>
+                rw.dispatch(contract.data.get)
+              case contract: PallasFunctionContract[Pre] =>
+                extendContractWithSretPerm(contract.content, cRetArg)
+            },
           pure = func.pure,
+          pallasWrapper = isWrapper,
+          pallasFunction = true,
         )(func.blame)
       )
+
     }
     llvmFunctionMap.update(func, procedure)
+  }
+
+  /** If the function returns in an argument, extend the contract with
+    * context_everywhere \pointer(retArg, 1, write);
+    */
+  private def extendContractWithSretPerm(
+      c: ApplicableContract[Pre],
+      retArg: Option[Ref[Post, Variable[Post]]],
+  ): ApplicableContract[Post] = {
+    retArg match {
+      case Some(arg) =>
+        implicit val o: Origin = pallasResArgPermOrigin
+        c.rewrite(contextEverywhere =
+          (Local(arg) !== Null()) &* Perm(
+            AmbiguousLocation(Local(arg))(LLVMSretPerm),
+            WritePerm[Post](),
+          ) &* Perm(
+            AmbiguousLocation(DerefPointer(Local(arg))(LLVMSretPerm))(
+              LLVMSretPerm
+            ),
+            WritePerm[Post](),
+          ) &* rw.dispatch(c.contextEverywhere)
+        )
+      case None => rw.dispatch(c)
+    }
   }
 
   def rewriteAmbiguousFunctionInvocation(
@@ -432,6 +569,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       inv: LLVMFunctionInvocation[Pre]
   ): ProcedureInvocation[Post] = {
     implicit val o: Origin = inv.o
+
     new ProcedureInvocation[Post](
       ref = new LazyRef[Post, Procedure[Post]](llvmFunctionMap(inv.ref.decl)),
       args = inv.args.zipWithIndex.map {
@@ -439,8 +577,14 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         case (a, i) =>
           val requiredType = localVariableInferredType
             .getOrElse(inv.ref.decl.args(i), inv.ref.decl.args(i).t)
+          val givenType =
+            a match {
+              // TODO: Make this more general
+              case Local(Ref(v)) => localVariableInferredType.getOrElse(v, v.t)
+              case _ => a.t
+            }
           if (
-            a.t != requiredType && a.t.asPointer.isDefined &&
+            givenType != requiredType && givenType.asPointer.isDefined &&
             requiredType.asPointer.isDefined
           ) { Cast(a, TypeValue(requiredType)) }
           else { a }
@@ -573,7 +717,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               Deref[Post](
                 pointer,
                 structFieldMap.ref((struct, value.value.intValue)),
-              )(o),
+              )(InvalidGEP),
               struct.elements(value.value.intValue),
               indices.tail,
             )
@@ -582,7 +726,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               Deref[Post](
                 pointer,
                 structFieldMap.ref((struct, value.value.intValue)),
-              )(o),
+              )(InvalidGEP),
               struct.elements(value.value.intValue),
               indices.tail,
             )
@@ -687,10 +831,28 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     implicit val o: Origin = gep.o
     val t = gep.structureType
     t match {
+      case integer: LLVMTInt[Pre] =>
+        // Encode simple array-indexing
+        if (gep.indices.size != 1) { throw UnsupportedArrayIndex(o) }
+        // Check that the inferred type of the pointer matches the return=-type of gep
+        val ptrType = {
+          gep.pointer match {
+            case Local(Ref(v)) if localVariableInferredType.get(v).isDefined =>
+              localVariableInferredType.get(v).get
+            case _ => gep.pointer.t
+          }
+        }
+        ptrType match {
+          case LLVMTPointer(Some(t2)) if t == t2 => // All is fine
+          case _ => throw UnsupportedArrayIndex(o)
+        }
+        PointerAdd[Post](
+          rw.dispatch(gep.pointer),
+          rw.dispatch(gep.indices.head),
+        )(InvalidGEP)
       case struct: LLVMTStruct[Pre] => {
         // TODO: We don't support variables in GEP yet and this just assumes all the indices are integer constants
         // TODO: Use an actual Blame
-
         // Acquire the actual struct through a PointerAdd
         gep.pointer.t match {
           case LLVMTPointer(None) =>
@@ -699,8 +861,8 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                 PointerAdd(
                   rw.dispatch(gep.pointer),
                   rw.dispatch(gep.indices.head),
-                )(o)
-              )(o)
+                )(InvalidGEP)
+              )(InvalidGEP)
             AddrOf(rewritePointerChain(structPointer, struct, gep.indices.tail))
           case LLVMTPointer(Some(inner)) if inner == t =>
             val structPointer =
@@ -708,8 +870,8 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                 PointerAdd(
                   rw.dispatch(gep.pointer),
                   rw.dispatch(gep.indices.head),
-                )(o)
-              )(o)
+                )(InvalidGEP)
+              )(InvalidGEP)
             AddrOf(rewritePointerChain(structPointer, struct, gep.indices.tail))
           case LLVMTPointer(Some(_)) =>
             val pointerInferredType = getInferredType(gep.pointer)
@@ -722,8 +884,8 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             )
             val structPointer =
               DerefPointer(
-                PointerAdd(pointer, rw.dispatch(gep.indices.head))(o)
-              )(o)
+                PointerAdd(pointer, rw.dispatch(gep.indices.head))(InvalidGEP)
+              )(InvalidGEP)
             val ret = AddrOf(
               rewritePointerChain(structPointer, struct, gep.indices.tail)
             )
@@ -792,6 +954,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       case LLVMPointerValue(Ref(v)) =>
         globalVariableInferredType
           .getOrElse(v.asInstanceOf[LLVMGlobalVariable[Pre]], e.t)
+      case res: LLVMResult[Pre] => res.t
       case _ => e.t
     }
 
@@ -819,8 +982,13 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         ))(store.blame)
       }
     }
+    val strippedPtr =
+      pointer match {
+        case DerefPointer(AddrOf(e)) => e
+        case p => p
+      }
     // TODO: Fix assignfailed blame
-    Assign(pointer, rw.dispatch(store.value))(store.blame)
+    Assign(strippedPtr, rw.dispatch(store.value))(store.blame)
   }
 
   def rewriteLoad(load: LLVMLoad[Pre]): Statement[Post] = {
@@ -858,6 +1026,17 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
   def rewriteAllocA(alloc: LLVMAllocA[Pre]): Statement[Post] = {
     implicit val o: Origin = alloc.o
+    /*
+    Alloca-instructions should only occur in wrapper-functions when a
+    specification-function is called whose result is returned using a
+    sret-argument. In these cases the initialization of the alloca is
+    not needed and causes problems when converting the wrapper into
+    an expression
+     */
+    if (!inWrapperFunction.isEmpty && inWrapperFunction.top) {
+      // Skip the initialization if we are in a wrapper function.
+      return Block(Seq())
+    }
     val t =
       localVariableInferredType.getOrElse(
         alloc.variable.decl,
@@ -898,6 +1077,108 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         pointer.value.decl.asInstanceOf[LLVMGlobalVariable[Pre]]
       ))(pointer.o)
     )
+  }
+
+  def rewriteResult(res: LLVMResult[Pre]): LLVMIntermediaryResult[Post] = {
+    requireInWrapper(res)
+    implicit val o: Origin = res.o
+    LLVMIntermediaryResult(
+      applicable =
+        new LazyRef[Post, Procedure[Post]](llvmFunctionMap(res.func.decl)),
+      sretArg =
+        res.func.decl.returnInParam match {
+          case Some((idx, _)) =>
+            val oldArg = res.func.decl.args(idx)
+            Some(rw.succ(oldArg))
+          case None => None
+        },
+    )
+  }
+
+  def rewriteFracOf(fracOf: LLVMFracOf[Pre]): Statement[Post] = {
+    requireInWrapper(fracOf)
+    implicit val o: Origin = fracOf.o
+    // fracOf(v, num, denom) --> v = num / denom.
+    assignLocal(
+      Local(rw.succ(fracOf.sret.decl)),
+      new RatDiv[Post](rw.dispatch(fracOf.num), rw.dispatch(fracOf.denom))(
+        fracOf.blame
+      ),
+    )
+  }
+
+  def rewritePerm(llvmPerm: LLVMPerm[Pre]): Expr[Post] = {
+    requireInWrapper(llvmPerm)
+    implicit val o: Origin = llvmPerm.o
+    val locExpr = Local[Post](rw.succ(llvmPerm.loc.decl))
+    Perm[Post](
+      AmbiguousLocation[Post](locExpr)(llvmPerm.blame),
+      Local[Post](rw.succ(llvmPerm.perm.decl)),
+    )
+  }
+
+  def rewritePtrBlockLength(llvmPBL: LLVMPtrBlockLength[Pre]): Expr[Post] = {
+    requireInWrapper(llvmPBL)
+    implicit val o: Origin = llvmPBL.o
+    PointerBlockLength[Post](Local[Post](rw.succ(llvmPBL.ptr.decl)))(
+      llvmPBL.blame
+    )
+  }
+
+  def rewritePtrBlockOffset(llvmPBO: LLVMPtrBlockOffset[Pre]): Expr[Post] = {
+    requireInWrapper(llvmPBO)
+    implicit val o: Origin = llvmPBO.o
+    PointerBlockOffset[Post](Local[Post](rw.succ(llvmPBO.ptr.decl)))(
+      llvmPBO.blame
+    )
+  }
+
+  def rewritePtrLength(llvmPL: LLVMPtrLength[Pre]): Expr[Post] = {
+    requireInWrapper(llvmPL)
+    implicit val o: Origin = llvmPL.o
+    PointerLength[Post](Local[Post](rw.succ(llvmPL.ptr.decl)))(llvmPL.blame)
+  }
+
+  def rewriteImplies(llvmImply: LLVMImplies[Pre]): Expr[Post] = {
+    requireInWrapper(llvmImply)
+    implicit val o: Origin = llvmImply.o
+    Implies[Post](
+      Local[Post](rw.succ(llvmImply.left.decl)),
+      Local[Post](rw.succ(llvmImply.right.decl)),
+    )
+  }
+
+  def rewriteAnd(llvmAnd: LLVMAnd[Pre]): Expr[Post] = {
+    requireInWrapper(llvmAnd)
+    implicit val o: Origin = llvmAnd.o
+    And[Post](
+      Local[Post](rw.succ(llvmAnd.left.decl)),
+      Local[Post](rw.succ(llvmAnd.right.decl)),
+    )
+  }
+
+  def rewriteOr(llvmOr: LLVMOr[Pre]): Expr[Post] = {
+    requireInWrapper(llvmOr)
+    implicit val o: Origin = llvmOr.o
+    Or[Post](
+      Local[Post](rw.succ(llvmOr.left.decl)),
+      Local[Post](rw.succ(llvmOr.right.decl)),
+    )
+  }
+
+  def rewriteStar(llvmStar: LLVMStar[Pre]): Expr[Post] = {
+    requireInWrapper(llvmStar)
+    implicit val o: Origin = llvmStar.o
+    Star[Post](
+      Local[Post](rw.succ(llvmStar.left.decl)),
+      Local[Post](rw.succ(llvmStar.right.decl)),
+    )
+  }
+
+  def rewriteOld(llvmOld: LLVMOld[Pre]): Expr[Post] = {
+    requireInWrapper(llvmOld)
+    implicit val o: Origin = llvmOld.o
+    LLVMOld[Post](rw.succ(llvmOld.v.decl))
   }
 
   def result(ref: RefLLVMFunctionDefinition[Pre])(
@@ -1012,6 +1293,12 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           },
         )
       ))
+    }
+  }
+
+  private def requireInWrapper(node: Node[_]): Unit = {
+    if (inWrapperFunction.isEmpty || !inWrapperFunction.top) {
+      throw UnexpectedLLVMNode(node)
     }
   }
 

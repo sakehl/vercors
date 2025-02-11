@@ -215,6 +215,7 @@ case class LangSpecificToCol[Pre <: Generation](
   override def dispatch(program: Program[Pre]): Program[Post] = {
     llvm.gatherBackEdges(program)
     llvm.gatherTypeHints(program)
+    llvm.gatherPallasTypeSubst(program)
     super.dispatch(program)
   }
 
@@ -335,6 +336,7 @@ case class LangSpecificToCol[Pre <: Generation](
       case block: LLVMBasicBlock[Pre] => llvm.rewriteBasicBlock(block)
       case unreachable: LLVMBranchUnreachable[Pre] =>
         llvm.rewriteUnreachable(unreachable)
+      case fracOf: LLVMFracOf[Pre] => llvm.rewriteFracOf(fracOf)
       case other => other.rewriteDefault()
     }
 
@@ -452,7 +454,18 @@ case class LangSpecificToCol[Pre <: Generation](
       case zext: LLVMZeroExtend[Pre] => llvm.rewriteZeroExtend(zext)
       case trunc: LLVMTruncate[Pre] => llvm.rewriteTruncate(trunc)
       case fpext: LLVMFloatExtend[Pre] => llvm.rewriteFloatExtend(fpext)
-
+      case result: LLVMResult[Pre] => llvm.rewriteResult(result)
+      case llvmPerm: LLVMPerm[Pre] => llvm.rewritePerm(llvmPerm)
+      case llvmPBL: LLVMPtrBlockLength[Pre] =>
+        llvm.rewritePtrBlockLength(llvmPBL)
+      case llvmPBO: LLVMPtrBlockOffset[Pre] =>
+        llvm.rewritePtrBlockOffset(llvmPBO)
+      case llvmPL: LLVMPtrLength[Pre] => llvm.rewritePtrLength(llvmPL)
+      case llvmImply: LLVMImplies[Pre] => llvm.rewriteImplies(llvmImply)
+      case llvmAnd: LLVMAnd[Pre] => llvm.rewriteAnd(llvmAnd)
+      case llvmOr: LLVMOr[Pre] => llvm.rewriteOr(llvmOr)
+      case llvmStar: LLVMStar[Pre] => llvm.rewriteStar(llvmStar)
+      case llvmOld: LLVMOld[Pre] => llvm.rewriteOld(llvmOld)
       case b @ BitAnd(left, right, 0, true) =>
         BitAnd(
           dispatch(left),
