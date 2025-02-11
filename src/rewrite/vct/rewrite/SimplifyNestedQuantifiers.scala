@@ -982,10 +982,10 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
         //  x_i -> base_i / |a_i| + xmin_i
         for (x <- vars.reverse) {
           var newValue = base
-          val a = abs(linearExpressions(x), sign)
+          val a = linearExpressions(x)
           val xmin = xmins(x)
           if (!is_value(a, 1))
-            newValue = FloorDiv(newValue, newGen(a))(PanicBlame("a not zero"))
+            newValue = FloorDiv(newValue, newGen(abs(a, sign)))(PanicBlame("a not zero"))
           if (!is_value(xmin, 0))
             newValue = Plus(newValue, newGen(xmin))
           replaceMap(x) = newValue

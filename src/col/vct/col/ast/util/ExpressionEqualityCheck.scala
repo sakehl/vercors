@@ -200,9 +200,10 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
     equalExpressionsRecurse(lhs, rhs)
   }
 
-  def upperBound(e: Expr[G]): Option[BigInt] = { getBound(e, isLower = false) }
-
-  def lowerBound(e: Expr[G]): Option[BigInt] = { getBound(e, isLower = true) }
+  def upperBound(e: Expr[G]): Option[BigInt] = { replacerDepth = 0; upperBoundRecurse(e) }
+  def lowerBound(e: Expr[G]): Option[BigInt] = { replacerDepth = 0; lowerBoundRecurse(e) }
+  def upperBoundRecurse(e: Expr[G]): Option[BigInt] = { getBound(e, isLower = false) }
+  def lowerBoundRecurse(e: Expr[G]): Option[BigInt] = { getBound(e, isLower = true) }
 
   def getBound(e: Expr[G], isLower: Boolean): Option[BigInt] = {
     isConstantInt(e).foreach { i => return Some(i) }
@@ -220,11 +221,16 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
 
     e match {
       case v: Local[G] =>
-        info.foreach { i =>
-          return if (isLower)
-            i.lowerBound.get(v)
+        info.flatMap { i =>
+          if (isLower)
+            return i.lowerBound.get(v)
           else
-            i.upperBound.get(v)
+            return i.upperBound.get(v)
+        }
+        replaceVariable(v) match {
+          case Some(es) =>
+            es.foreach(e => getBound(e, isLower).foreach(r => return Some(r)))
+          case None =>
         }
       case Plus(e1, e2) =>
         return for {
@@ -289,7 +295,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
     }
 
     // Compare upper and lower bounds of two variables
-    (upperBound(lhs), lowerBound(rhs)) match {
+    (upperBoundRecurse(lhs), lowerBoundRecurse(rhs)) match {
       case (Some(x), Some(y)) if x <= y => return Some(true)
       case _ =>
     }
@@ -298,18 +304,28 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
   }
 
   def isNonZero(e: Expr[G]): Option[Boolean] = {
+    replacerDepth = 0
+    isNonZeroRecurse(e)
+  }
+
+  def isNonZeroRecurse(e: Expr[G]): Option[Boolean] = {
     e match {
       case v: Local[G] if info.exists(_.variableNotZero.contains(v)) => return Some(true)
+      case v: Local[G] =>
+        replaceVariable(v) match {
+          case Some(es) => es.foreach(e => isNonZeroRecurse(e).foreach(r => return Some(r)))
+          case None =>
+        }
       case Mult(l, r) =>
-        (isNonZero(l), isNonZero(r)) match {
+        (isNonZeroRecurse(l), isNonZeroRecurse(r)) match {
           case (Some(l), Some(r)) => return Some(l && r)
           case _ =>
         }
       case _ =>
     }
     isConstantInt(e).map(i => i != 0) orElse
-    upperBound(e).flatMap(i => if(i<0) Some(true) else None) orElse
-    lowerBound(e).flatMap(i => if(i>0) Some(true) else None) orElse
+    upperBoundRecurse(e).flatMap(i => if(i<0) Some(true) else None) orElse
+    lowerBoundRecurse(e).flatMap(i => if(i>0) Some(true) else None) orElse
     lessThenEq(const(1)(e.o), e) orElse
     lessThenEq(e, const(-1)(e.o))
   }
@@ -493,9 +509,14 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
           }
         } else
           false
-      case (name1: Local[G], e2) => replaceVariable(name1, e2)
-      case (e1, name2: Local[G]) => replaceVariable(name2, e1)
-
+      case (name1: Local[G], e2) => replaceVariable(name1) match {
+          case Some(es) => es.exists(e => equalExpressionsRecurse(e, e2))
+          case None => false
+        }
+      case (e1, name2: Local[G]) => replaceVariable(name2) match {
+        case Some(es) => es.exists(e => equalExpressionsRecurse(e1, e))
+        case None => false
+      }
       case (inv: MethodInvocation[G], _) if !inv.ref.decl.pure => false
       case (_, inv: MethodInvocation[G]) if !inv.ref.decl.pure => false
 
@@ -504,22 +525,11 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
     }
   }
 
-  def replaceVariable(name: Local[G], other_e: Expr[G]): Boolean = {
-    if (info.isDefined) {
-      info.get.variableEqualities.get(name) match {
-        case None => false
-        case Some(equals) =>
-          for (eq <- equals) {
-            // Make sure we do not loop indefinitely by keep replacing the same expressions somehow
-            if (replacerDepth > max_depth)
-              return false
-            replacerDepth += 1
-            if (equalExpressionsRecurse(eq, other_e))
-              return true
-          }
-          false
-      }
-    } else { false }
+  def replaceVariable(name: Local[G]): Option[List[Expr[G]]] = {
+    if(replacerDepth > max_depth){
+      return None
+    }
+    info.map(_.variableEqualities).flatMap(_.get(name).map(x => {replacerDepth += 1; x}))
   }
 }
 
