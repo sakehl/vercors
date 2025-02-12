@@ -455,7 +455,7 @@ case object CoercionUtils {
       case t: CPPTArray[G] =>
         Some((CoerceCPPArrayPointer(t.innerType), TPointer(t.innerType)))
       case LLVMTPointer(None) =>
-        Some((CoerceIdentity(source), TPointer[G](TVoid())))
+        Some((CoerceIdentity(source), TPointer[G](TAnyValue())))
       case LLVMTPointer(Some(innerType)) =>
         Some((CoerceIdentity(source), TPointer(innerType)))
       case LLVMTArray(numElements, innerType) if numElements > 0 =>

@@ -9,6 +9,7 @@ import vct.col.ast.{
   Expr,
   IntType,
   LLVMTInt,
+  TAnyValue,
   TBool,
   TCInt,
   TInt,
@@ -117,6 +118,12 @@ object BinOperatorTypes {
       Types.leastCommonSuperType(lt, rt).asInstanceOf[LLVMTInt[G]]
     else if (isIntOp(lt, rt))
       TInt[G]()
+    // TODO (AS): This TAnyValue check is because we do not yet have the correct types for pointer variables during
+    //            LangLLVMToCol therefore querying the type of a binary operator which has operands whose values derive
+    //            from the type of these pointers will yield the NumericBinError below. By making the dereference of
+    //            these pointers return TAnyValue() and checking for it here we delay this check until a later pass.
+    else if (lt == TAnyValue[G]() || rt == TAnyValue[G]())
+      TAnyValue[G]()
     else
       getFloatMax[G](lt, rt) getOrElse
         (if (isRationalOp(lt, rt))
