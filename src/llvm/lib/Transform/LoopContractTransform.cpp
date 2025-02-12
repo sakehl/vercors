@@ -150,16 +150,16 @@ bool llvm2col::addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
     for (auto *diVar : diVars) {
         // Match DIVariables to LLVM-Values
         llvm::Value *llvmVal =
-            pallas::utils::mapDIVarToValue(*llvmParentFunc, *diVar);
+            pallas::utils::mapDIVarToValue(*llvmParentFunc, *diVar, &llvmLoop);
         if (llvmVal == nullptr) {
             pallas::ErrorReporter::addError(
                 SOURCE_LOC, "Unable to map DIVariable to value.",
                 *llvmParentFunc);
             return false;
         }
+
         // Get variables from llvm-values and build argument-expressions
-        if (auto *alloca = llvm::dyn_cast<llvm::AllocaInst>(llvmVal)) {
-            // Deref ptr
+        if (llvm::isa<llvm::AllocaInst>(llvmVal)) {
             col::Variable *colVar =
                 &functionCursor.getVariableMapEntry(*llvmVal, false);
             auto *ptrDeref = wrapperCall->add_args()->mutable_deref_pointer();
@@ -171,6 +171,14 @@ bool llvm2col::addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
             local->set_allocated_origin(
                 llvm2col::generatePallasWrapperCallOrigin(*llvmWFunc, *srcLoc));
             local->mutable_ref()->set_id(colVar->id());
+        } else if (llvm::isa<llvm::PHINode>(llvmVal)) {
+            col::Variable *colVar = &functionCursor.getVariableMapEntry(
+                *llvmVal, true);
+            // Local to var of phi-node
+            auto *local = wrapperCall->add_args()->mutable_local();
+            local->set_allocated_origin(
+                llvm2col::generatePallasWrapperCallOrigin(*llvmWFunc, *srcLoc));
+            local->mutable_ref()->set_id(colVar->id());
         } else if (auto *arg = llvm::dyn_cast<llvm::Argument>(llvmVal)) {
             col::Variable *colVar = &colFResult.getFuncArgMapEntry(*arg);
             auto *argExpr = wrapperCall->add_args()->mutable_local();
@@ -179,7 +187,8 @@ bool llvm2col::addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
             argExpr->mutable_ref()->set_id(colVar->id());
         } else {
             pallas::ErrorReporter::addError(
-                SOURCE_LOC, "Unable to map DIVariable to col-variable.",
+                SOURCE_LOC,
+                "Unable to map DIVariable to col-variable (Unsupported value).",
                 *llvmParentFunc);
             return false;
         }
