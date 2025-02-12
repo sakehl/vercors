@@ -725,6 +725,25 @@ abstract class CoercingRewriter[Pre <: Generation]()
     }
   }
 
+  def nonAny(
+      e: Expr[Pre],
+      left: Expr[Pre],
+      right: Expr[Pre],
+      cons: (Expr[Pre], Expr[Pre]) => Expr[Pre],
+  ): Expr[Pre] =
+    (left.t, right.t) match {
+      case (TAnyValue(), _) | (_, TAnyValue()) =>
+        cons(coerce(left, TAnyValue()), coerce(right, TAnyValue()))
+      case (lt, rt) =>
+        val sharedType = Types.leastCommonSuperType(left.t, right.t)
+        if (sharedType == TAnyValue[Pre]()) {
+          throw IncoercibleExplanation(
+            e,
+            "Coercion of the two operands of this operator yielded the `any` type, this is likely unintended and therefore disallowed. To use this operator with two differently-typed operands make sure one of the operands is already of the `any` type.",
+          )
+        } else { cons(coerce(left, sharedType), coerce(right, sharedType)) }
+    }
+
   override def postCoerce(e: Expr[Pre]): Expr[Post] =
     e match {
       case ApplyCoercion(e, coercion) =>
@@ -799,13 +818,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
           vectorFloatOp2(div, (l, r) => AmbiguousDiv(l, r)(div.blame)),
         )
       case AmbiguousEq(left, right, vectorInnerType, elementSize) =>
-        val sharedType = Types.leastCommonSuperType(left.t, right.t)
-        AmbiguousEq(
-          coerce(left, sharedType),
-          coerce(right, sharedType),
-          vectorInnerType,
-          elementSize,
-        )
+        nonAny(e, left, right, AmbiguousEq(_, _, vectorInnerType, elementSize))
       case g @ AmbiguousGreater(left, right, elementSize) =>
         firstOk(
           e,
@@ -1022,13 +1035,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
           },
         )
       case AmbiguousNeq(left, right, vectorInnerType, elementSize) =>
-        val sharedType = Types.leastCommonSuperType(left.t, right.t)
-        AmbiguousNeq(
-          coerce(left, sharedType),
-          coerce(right, sharedType),
-          vectorInnerType,
-          elementSize,
-        )
+        nonAny(e, left, right, AmbiguousNeq(_, _, vectorInnerType, elementSize))
       case AmbiguousOr(left, right) =>
         firstOk(
           e,
@@ -1278,9 +1285,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case Empty(obj) => Empty(sized(obj)._1)
       case EmptyProcess() => EmptyProcess()
       case use @ EnumUse(enum, const) => use
-      case Eq(left, right) =>
-        val sharedType = Types.leastCommonSuperType(left.t, right.t)
-        Eq(coerce(left, sharedType), coerce(right, sharedType))
+      case Eq(left, right) => nonAny(e, left, right, Eq(_, _))
       case EitherLeft(e) => EitherLeft(e)
       case EitherRight(e) => EitherRight(e)
       case EndpointName(ref) => EndpointName(ref)
@@ -1575,9 +1580,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case NdLength(dimensions) => NdLength(dimensions.map(int))
       case NdPartialIndex(indices, linearIndex, dimensions) =>
         NdPartialIndex(indices.map(int), int(linearIndex), dimensions.map(int))
-      case Neq(left, right) =>
-        val sharedType = Types.leastCommonSuperType(left.t, right.t)
-        Neq(coerce(left, sharedType), coerce(right, sharedType))
+      case Neq(left, right) => nonAny(e, left, right, Neq(_, _))
       case na @ NewArray(element, dims, moreDims, initialize) =>
         NewArray(element, dims.map(int), moreDims, initialize)(na.blame)
       case na @ NewPointerArray(element, size) =>
