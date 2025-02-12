@@ -15,11 +15,6 @@ namespace pallas {
 using namespace llvm;
 namespace col = vct::col::ast;
 
-struct LabeledColBlock {
-    col::LlvmBasicBlock &bb;
-    col::Block &block;
-};
-
 /**
  * The FunctionCursor is a stateful utility class to transform a LLVM function
  * body to a COL function body.
@@ -44,11 +39,9 @@ class FunctionCursor {
     /// include function arguments in the lut.
     std::unordered_map<llvm::Value *, col::Variable *> variableMap;
 
-    /// All LLVM blocks mapped 1-to-1 to a COL block. This mapping is not direct
-    /// in the sense that it uses the intermediate LabeledColBlock struct which
-    /// contains both the COL label and COL block associated to the LLVM block
-    std::unordered_map<llvm::BasicBlock *, LabeledColBlock>
-        llvmBlock2LabeledColBlock;
+    /// All LLVM blocks mapped 1-to-1 to a COL block.
+    std::unordered_map<llvm::BasicBlock *, col::LlvmBasicBlock &>
+        llvmBlock2ColBlock;
 
     /// set of all COL blocks that have been completed. Completed meaning all
     /// instructions of the corresponding LLVM block have been transformed. This
@@ -135,28 +128,27 @@ class FunctionCursor {
      * get or set method which does the following" <ul> <li>If a mapping between
      * the given LLVM block and a COL block already exists, return the COL
      * block</li> <li>Else, initalise a new COL block in the buffer, add it to
-     * the llvmBlock2LabeledColBlock lut and return the newly created COL
+     * the llvmBlock2ColBlock lut and return the newly created COL
      * block</li>
      * </ul>
      *
      * @param llvmBlock
-     * @return A LabeledColBlock struct to which this llvmBlock is mapped to.
+     * @return Reference to col-block to which this llvmBlock is mapped to.
      */
-    LabeledColBlock &
-    getOrSetLLVMBlock2LabeledColBlockEntry(BasicBlock &llvmBlock);
+    col::LlvmBasicBlock &getOrSetLLVMBlock2ColBlockEntry(BasicBlock &llvmBlock);
 
     /**
-     * Adds a new, uninitialized LabeledColBlock to the body of the function
+     * Adds a new, uninitialized col-LlvmBasicBlock to the body of the function
      * and returns a reference to this block.
      * The function is intended to be used for intermediary blocks that are
      * not present in the original llvm-module but are added during the
      * transformation as targets for propagating phi-assignments.
      * The passes instruction is used to construct the origin.
      */
-    LabeledColBlock
-    generateIntermediaryLabeledColBlock(llvm::Instruction &originInstruction);
+    col::LlvmBasicBlock &
+    generateIntermediaryColBlock(llvm::Instruction &originInstruction);
 
-    LabeledColBlock &visitLLVMBlock(BasicBlock &llvmBlock);
+    col::LlvmBasicBlock &visitLLVMBlock(BasicBlock &llvmBlock);
 
     llvm::FunctionAnalysisManager &getFunctionAnalysisManager();
 

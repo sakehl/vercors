@@ -49,7 +49,7 @@ void llvm2col::transformPhi(llvm::PHINode &phiInstruction, col::Block &colBlock,
         // add assignment of the variable to the block of the conditional
         // branch
         col::Block &targetBlock =
-            funcCursor.getOrSetLLVMBlock2LabeledColBlockEntry(*B).block;
+            *funcCursor.getOrSetLLVMBlock2ColBlockEntry(*B).mutable_body()->mutable_block();
         // In some cases, the phi-assignments needs to be re-targeted to an
         // empty block.
         col::Block *newTargetBlock =

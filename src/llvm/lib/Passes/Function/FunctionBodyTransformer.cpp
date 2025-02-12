@@ -60,7 +60,9 @@ col::Variable &FunctionCursor::getVariableMapEntry(Value &llvmValue,
 
 bool FunctionCursor::isVisited(BasicBlock &llvmBlock) {
     return visitedColBlocks.contains(
-        &this->getOrSetLLVMBlock2LabeledColBlockEntry(llvmBlock).block);
+        this->getOrSetLLVMBlock2ColBlockEntry(llvmBlock)
+            .mutable_body()
+            ->mutable_block());
 }
 
 void FunctionCursor::complete(col::Block &colBlock) {
@@ -82,9 +84,9 @@ bool FunctionCursor::isComplete(col::Block &colBlock) {
     return completedColBlocks.contains(&colBlock);
 }
 
-LabeledColBlock &
-FunctionCursor::getOrSetLLVMBlock2LabeledColBlockEntry(BasicBlock &llvmBlock) {
-    if (!llvmBlock2LabeledColBlock.contains(&llvmBlock)) {
+col::LlvmBasicBlock &
+FunctionCursor::getOrSetLLVMBlock2ColBlockEntry(BasicBlock &llvmBlock) {
+    if (!llvmBlock2ColBlock.contains(&llvmBlock)) {
         // create basic block in buffer
         col::LlvmBasicBlock *bb =
             functionBody.add_statements()->mutable_llvm_basic_block();
@@ -101,14 +103,12 @@ FunctionCursor::getOrSetLLVMBlock2LabeledColBlockEntry(BasicBlock &llvmBlock) {
         col::Block *block = bb->mutable_body()->mutable_block();
         // set block origin
         block->set_allocated_origin(llvm2col::generateBlockOrigin(llvmBlock));
-        // add labeled block to the block2block lut
-        LabeledColBlock labeledColBlock = {*bb, *block};
-        llvmBlock2LabeledColBlock.insert({&llvmBlock, labeledColBlock});
+        llvmBlock2ColBlock.insert({&llvmBlock, *bb});
     }
-    return llvmBlock2LabeledColBlock.at(&llvmBlock);
+    return llvmBlock2ColBlock.at(&llvmBlock);
 }
 
-LabeledColBlock FunctionCursor::generateIntermediaryLabeledColBlock(
+col::LlvmBasicBlock &FunctionCursor::generateIntermediaryColBlock(
     llvm::Instruction &originInstruction) {
     // create basic block
     col::LlvmBasicBlock *bb =
@@ -124,13 +124,14 @@ LabeledColBlock FunctionCursor::generateIntermediaryLabeledColBlock(
     col::Block *block = bb->mutable_body()->mutable_block();
     block->set_allocated_origin(
         llvm2col::generateSingleStatementOrigin(originInstruction));
-    return {*bb, *block};
+    return *bb;
 }
 
-LabeledColBlock &FunctionCursor::visitLLVMBlock(BasicBlock &llvmBlock) {
-    LabeledColBlock &labeledBlock =
-        this->getOrSetLLVMBlock2LabeledColBlockEntry(llvmBlock);
-    visitedColBlocks.insert(&labeledBlock.block);
+col::LlvmBasicBlock &FunctionCursor::visitLLVMBlock(BasicBlock &llvmBlock) {
+    col::LlvmBasicBlock &labeledBlock =
+        this->getOrSetLLVMBlock2ColBlockEntry(llvmBlock);
+    col::Block *body = labeledBlock.mutable_body()->mutable_block();
+    visitedColBlocks.insert(body);
     return labeledBlock;
 }
 

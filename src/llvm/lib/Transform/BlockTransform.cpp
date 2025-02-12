@@ -18,8 +18,8 @@ void llvm2col::transformLLVMBlock(llvm::BasicBlock &llvmBlock,
     if (functionCursor.isVisited(llvmBlock)) {
         return;
     }
-    pallas::LabeledColBlock &labeled = functionCursor.visitLLVMBlock(llvmBlock);
-    col::Block &colBlock = labeled.block;
+    col::LlvmBasicBlock &labeled = functionCursor.visitLLVMBlock(llvmBlock);
+    col::Block &colBlock = *labeled.mutable_body()->mutable_block();
     /* for (auto *B : llvm::predecessors(&llvmBlock)) { */
     /*     if (!functionCursor.isVisited(*B)) */
     /*         return; */
@@ -27,20 +27,20 @@ void llvm2col::transformLLVMBlock(llvm::BasicBlock &llvmBlock,
     if (functionCursor.getLoopInfo().isLoopHeader(&llvmBlock)) {
         llvm::Loop *llvmLoop =
             functionCursor.getLoopInfo().getLoopFor(&llvmBlock);
-        col::LlvmLoop *loop = labeled.bb.mutable_loop();
+        col::LlvmLoop *loop = labeled.mutable_loop();
         loop->set_allocated_origin(generateLoopOrigin(*llvmLoop));
         transformLoopContract(*llvmLoop, *loop->mutable_contract(),
                               functionCursor);
 
-        loop->mutable_header()->set_id(labeled.bb.label().id());
-        pallas::LabeledColBlock labeled_latch =
-            functionCursor.getOrSetLLVMBlock2LabeledColBlockEntry(
+        loop->mutable_header()->set_id(labeled.label().id());
+        col::LlvmBasicBlock &labeled_latch =
+            functionCursor.getOrSetLLVMBlock2ColBlockEntry(
                 *llvmLoop->getLoopLatch());
-        loop->mutable_latch()->set_id(labeled_latch.bb.label().id());
+        loop->mutable_latch()->set_id(labeled_latch.label().id());
         for (auto &bb : llvmLoop->blocks()) {
-            pallas::LabeledColBlock labeled_bb =
-                functionCursor.getOrSetLLVMBlock2LabeledColBlockEntry(*bb);
-            loop->add_block_labels()->set_id(labeled_bb.bb.label().id());
+            col::LlvmBasicBlock &labeled_bb =
+                functionCursor.getOrSetLLVMBlock2ColBlockEntry(*bb);
+            loop->add_block_labels()->set_id(labeled_bb.label().id());
         }
     }
     for (auto &I : llvmBlock) {

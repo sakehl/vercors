@@ -8,7 +8,6 @@
 #include <llvm/Analysis/CFG.h>
 #include <llvm/Support/raw_ostream.h>
 
-
 const std::string SOURCE_LOC = "Transform::Instruction::TermOp";
 
 void llvm2col::transformTermOp(llvm::Instruction &llvmInstruction,
@@ -102,38 +101,40 @@ void llvm2col::transformConditionalBranch(llvm::BranchInst &llvmBrInstruction,
         isPotentiallyReachable(llvmFalseBlock, llvmTrueBlock);
     if (trueBranchEmpty) {
         // Build a new, empty Basic-block as a target for phi-assignments
-        pallas::LabeledColBlock emptyTrueBlock =
-            funcCursor.generateIntermediaryLabeledColBlock(llvmBrInstruction);
+        col::LlvmBasicBlock &emptyTrueBlock =
+            funcCursor.generateIntermediaryColBlock(llvmBrInstruction);
         // Build block that is targeted by the true-branch
-        pallas::LabeledColBlock originalTrueBlock =
-            funcCursor.getOrSetLLVMBlock2LabeledColBlockEntry(*llvmTrueBlock);
+        col::LlvmBasicBlock &originalTrueBlock =
+            funcCursor.getOrSetLLVMBlock2ColBlockEntry(*llvmTrueBlock);
 
         // Add the new block to the map of phi-targets
         funcCursor.addNewPhiAssignmentTargetBlock(
-            colBlock, originalTrueBlock.block, emptyTrueBlock.block);
+            colBlock, *originalTrueBlock.mutable_body()->mutable_block(),
+            *emptyTrueBlock.mutable_body()->mutable_block());
 
         // Add goto to the empty block
         col::Goto *gotoTrueEmpty = colTrueBranch->mutable_v2()->mutable_goto_();
-        gotoTrueEmpty->mutable_lbl()->set_id(emptyTrueBlock.bb.label().id());
+        gotoTrueEmpty->mutable_lbl()->set_id(emptyTrueBlock.label().id());
         gotoTrueEmpty->set_allocated_origin(
             generateSingleStatementOrigin(llvmBrInstruction));
 
         // Extend the empty bock with a goto to the original target block
-        col::Goto *gotoTrueOriginal =
-            emptyTrueBlock.block.add_statements()->mutable_goto_();
-        gotoTrueOriginal->mutable_lbl()->set_id(
-            originalTrueBlock.bb.label().id());
+        col::Goto *gotoTrueOriginal = emptyTrueBlock.mutable_body()
+                                          ->mutable_block()
+                                          ->add_statements()
+                                          ->mutable_goto_();
+        gotoTrueOriginal->mutable_lbl()->set_id(originalTrueBlock.label().id());
         gotoTrueOriginal->set_allocated_origin(
             generateSingleStatementOrigin(llvmBrInstruction));
         // Mark the 'empty' block as completed
-        funcCursor.complete(emptyTrueBlock.block);
+        funcCursor.complete(*emptyTrueBlock.mutable_body()->mutable_block());
     } else {
         // get or pre-generate target labeled block
-        pallas::LabeledColBlock labeledTrueColBlock =
-            funcCursor.getOrSetLLVMBlock2LabeledColBlockEntry(*llvmTrueBlock);
+        col::LlvmBasicBlock &labeledTrueColBlock =
+            funcCursor.getOrSetLLVMBlock2ColBlockEntry(*llvmTrueBlock);
         // goto statement to true block
         col::Goto *trueGoto = colTrueBranch->mutable_v2()->mutable_goto_();
-        trueGoto->mutable_lbl()->set_id(labeledTrueColBlock.bb.label().id());
+        trueGoto->mutable_lbl()->set_id(labeledTrueColBlock.label().id());
         // set origin for goto to true block
         trueGoto->set_allocated_origin(
             generateSingleStatementOrigin(llvmBrInstruction));
@@ -156,38 +157,41 @@ void llvm2col::transformConditionalBranch(llvm::BranchInst &llvmBrInstruction,
 
     if (falseBranchEmpty) {
         // Build a new, empty Basic-block as a target for phi-assignments
-        pallas::LabeledColBlock emptyFalseBlock =
-            funcCursor.generateIntermediaryLabeledColBlock(llvmBrInstruction);
+        col::LlvmBasicBlock &emptyFalseBlock =
+            funcCursor.generateIntermediaryColBlock(llvmBrInstruction);
         // Build block that is targeted by the false-branch
-        pallas::LabeledColBlock originalFalseBlock =
-            funcCursor.getOrSetLLVMBlock2LabeledColBlockEntry(*llvmFalseBlock);
+        col::LlvmBasicBlock &originalFalseBlock =
+            funcCursor.getOrSetLLVMBlock2ColBlockEntry(*llvmFalseBlock);
 
         // Add the new block to the map of phi-targets
         funcCursor.addNewPhiAssignmentTargetBlock(
-            colBlock, originalFalseBlock.block, emptyFalseBlock.block);
+            colBlock, *originalFalseBlock.mutable_body()->mutable_block(),
+            *emptyFalseBlock.mutable_body()->mutable_block());
 
         // Add goto to the empty block
         col::Goto *gotoFalseEmpty =
             colFalseBranch->mutable_v2()->mutable_goto_();
-        gotoFalseEmpty->mutable_lbl()->set_id(emptyFalseBlock.bb.label().id());
+        gotoFalseEmpty->mutable_lbl()->set_id(emptyFalseBlock.label().id());
         gotoFalseEmpty->set_allocated_origin(
             generateSingleStatementOrigin(llvmBrInstruction));
 
         // Extend the empty bock with a goto to the original target block
-        col::Goto *gotoFalseOriginal =
-            emptyFalseBlock.block.add_statements()->mutable_goto_();
+        col::Goto *gotoFalseOriginal = emptyFalseBlock.mutable_body()
+                                           ->mutable_block()
+                                           ->add_statements()
+                                           ->mutable_goto_();
         gotoFalseOriginal->mutable_lbl()->set_id(
-            originalFalseBlock.bb.label().id());
+            originalFalseBlock.label().id());
         gotoFalseOriginal->set_allocated_origin(
             generateSingleStatementOrigin(llvmBrInstruction));
         // Mark the 'empty' block as completed
-        funcCursor.complete(emptyFalseBlock.block);
+        funcCursor.complete(*emptyFalseBlock.mutable_body()->mutable_block());
     } else {
-        pallas::LabeledColBlock labeledFalseColBlock =
-            funcCursor.getOrSetLLVMBlock2LabeledColBlockEntry(*llvmFalseBlock);
+        col::LlvmBasicBlock &labeledFalseColBlock =
+            funcCursor.getOrSetLLVMBlock2ColBlockEntry(*llvmFalseBlock);
         // goto statement to false block
         col::Goto *falseGoto = colFalseBranch->mutable_v2()->mutable_goto_();
-        falseGoto->mutable_lbl()->set_id(labeledFalseColBlock.bb.label().id());
+        falseGoto->mutable_lbl()->set_id(labeledFalseColBlock.label().id());
         // set origin for goto to false block
         falseGoto->set_allocated_origin(
             llvm2col::generateSingleStatementOrigin(llvmBrInstruction));
@@ -207,11 +211,11 @@ void llvm2col::transformUnConditionalBranch(
     // transform llvm targetBlock
     transformLLVMBlock(*llvmTargetBlock, funcCursor);
     // get or pre generate target labeled block
-    pallas::LabeledColBlock labeledColBlock =
-        funcCursor.getOrSetLLVMBlock2LabeledColBlockEntry(*llvmTargetBlock);
+    col::LlvmBasicBlock &labeledColBlock =
+        funcCursor.getOrSetLLVMBlock2ColBlockEntry(*llvmTargetBlock);
     // create goto to target labeled block
     col::Goto *colGoto = colBlock.add_statements()->mutable_goto_();
-    colGoto->mutable_lbl()->set_id(labeledColBlock.bb.label().id());
+    colGoto->mutable_lbl()->set_id(labeledColBlock.label().id());
     // set origin of goto statement
     colGoto->set_allocated_origin(
         llvm2col::generateSingleStatementOrigin(llvmBrInstruction));
