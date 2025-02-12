@@ -6,6 +6,7 @@ import hre.stages.Stage
 import vct.col.ast.{
   ApplicableContract,
   Expr,
+  Function,
   GlobalDeclaration,
   VCLLVMFunctionContract,
   LLVMGlobalSpecification,
@@ -172,8 +173,13 @@ case class Resolution[G <: Generation](
       case Nil => // ok
       case some => throw InputResolutionError(some)
     }
+    // (TODO (AS): I know this is ugly, it'll be removed after the Pallas contracts are working
+    val mergedProgram =
+      Program[Rewritten[G]](typedProgram.declarations ++ typedImports.collect {
+        case f: Function[Rewritten[G]] => f
+      })(typedProgram.blame)(typedProgram.o)
     val resolvedProgram = LangSpecificToCol(generatePermissions)
-      .dispatch(typedProgram)
+      .dispatch(mergedProgram)
     resolvedProgram.check match {
       case Nil => // ok
       // PB: This explicitly allows LangSpecificToCol to generate invalid ASTs, and will blame the input for them. The
