@@ -34,8 +34,8 @@ bool hasPallasContract(const llvm::Function &f);
 bool hasVcllvmContract(const llvm::Function &f);
 
 /**
- * Checks if the given llvm function is marked as an expression wrapper of a 
- * pallas specification. 
+ * Checks if the given llvm function is marked as an expression wrapper of a
+ * pallas specification.
  */
 bool isPallasExprWrapper(const llvm::Function &f);
 

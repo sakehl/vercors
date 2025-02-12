@@ -3,7 +3,6 @@ package vct.rewrite.lang
 import com.typesafe.scalalogging.LazyLogging
 import hre.util.ScopedStack
 import vct.col.ast._
-import vct.col.ast.`type`.typeclass.TFloats
 import vct.col.ast.lang.c.CTVector.WrongVectorType
 import vct.col.ast.util.ExpressionEqualityCheck.isConstantInt
 import vct.rewrite.lang.LangSpecificToCol.NotAValue
@@ -12,10 +11,8 @@ import vct.col.ref.{LazyRef, Ref}
 import vct.col.resolve.lang.C
 import vct.col.resolve.ctx._
 import vct.col.resolve.lang.C.nameFromDeclarator
-import vct.col.resolve.lang.Java.logger
 import vct.col.rewrite.{Generation, Rewritten}
-import vct.col.typerules.CoercionUtils
-import vct.col.typerules.CoercionUtils.getCoercion
+import vct.col.typerules.{CoercionUtils, TypeSize}
 import vct.col.util.SuccessionMap
 import vct.col.util.AstBuildHelpers._
 import vct.result.Message
@@ -25,13 +22,8 @@ import scala.collection.immutable.ListMap
 import scala.collection.mutable
 
 case object LangCToCol {
-  case class CGlobalStateNotSupported(example: CInit[_]) extends UserError {
-    override def code: String = "notSupported"
-    override def text: String =
-      example.o.messageInContext("Global variables in C are not supported.")
-  }
-
-  case class MultipleSharedMemoryDeclaration(decl: Node[_]) extends UserError {
+  private case class MultipleSharedMemoryDeclaration(decl: Node[_])
+      extends UserError {
     override def code: String = "multipleSharedMemoryDeclaration"
     override def text: String =
       decl.o.messageInContext(
@@ -39,7 +31,8 @@ case object LangCToCol {
       )
   }
 
-  case class WrongGPUKernelParameterType(param: CParam[_]) extends UserError {
+  private case class WrongGPUKernelParameterType(param: CParam[_])
+      extends UserError {
     override def code: String = "wrongParameterType"
     override def text: String =
       param.o.messageInContext(
@@ -47,7 +40,7 @@ case object LangCToCol {
       )
   }
 
-  case class WrongGPUType(param: CParam[_]) extends UserError {
+  private case class WrongGPUType(param: CParam[_]) extends UserError {
     override def code: String = "wrongGPUType"
     override def text: String =
       param.o.messageInContext(
@@ -55,35 +48,36 @@ case object LangCToCol {
       )
   }
 
-  case class WrongCType(decl: CLocalDeclaration[_]) extends UserError {
+  private case class WrongCType(decl: CLocalDeclaration[_]) extends UserError {
     override def code: String = "wrongCType"
     override def text: String =
       decl.o
         .messageInContext(s"This declaration has a type that is not supported.")
   }
 
-  case class WrongStructType(decl: Node[_]) extends UserError {
+  private case class WrongStructType(decl: Node[_]) extends UserError {
     override def code: String = "wrongStructType"
 
     override def text: String =
       decl.o.messageInContext(s"This has a struct type that is not supported.")
   }
 
-  case class WrongOpenCLLiteralVector(e: Node[_]) extends UserError {
+  private case class WrongOpenCLLiteralVector(e: Node[_]) extends UserError {
     override def code: String = "wrongOpenCLLiteralVector"
 
     override def text: String =
       e.o.messageInContext(s"This OpenCL literal vector is not supported.")
   }
 
-  case class TypeUsedAsValue(decl: Node[_]) extends UserError {
+  private case class TypeUsedAsValue(decl: Node[_]) extends UserError {
     override def code: String = "typeUsedAsValue"
 
     override def text: String =
       decl.o.messageInContext(s"This type name is incorrectly used a value.")
   }
 
-  case class WrongGPULocalType(local: CLocalDeclaration[_]) extends UserError {
+  private case class WrongGPULocalType(local: CLocalDeclaration[_])
+      extends UserError {
     override def code: String = "wrongGPULocalType"
     override def text: String =
       local.o.messageInContext(
@@ -91,7 +85,7 @@ case object LangCToCol {
       )
   }
 
-  case class NotDynamicSharedMem(e: Expr[_]) extends UserError {
+  private case class NotDynamicSharedMem(e: Expr[_]) extends UserError {
     override def code: String = "notDynamicSharedMem"
     override def text: String =
       e.o.messageInContext(
@@ -99,19 +93,21 @@ case object LangCToCol {
       )
   }
 
-  case class WrongBarrierSpecifier(b: GpgpuBarrier[_]) extends UserError {
+  private case class WrongBarrierSpecifier(b: GpgpuBarrier[_])
+      extends UserError {
     override def code: String = "wrongBarrierSpecifier"
     override def text: String =
       b.o.messageInContext(s"The barrier has incorrect specifiers.")
   }
 
-  case class UnsupportedBarrierPermission(e: Node[_]) extends UserError {
+  private case class UnsupportedBarrierPermission(e: Node[_])
+      extends UserError {
     override def code: String = "unsupportedBarrierPermission"
     override def text: String =
       e.o.messageInContext(s"This is unsupported for barrier for now.")
   }
 
-  case class RedistributingBarrier(
+  private case class RedistributingBarrier(
       v: CNameTarget[_],
       barrier: GpgpuBarrier[_],
       global: Boolean,
@@ -128,7 +124,7 @@ case object LangCToCol {
       )
   }
 
-  case class CDoubleContracted(
+  private case class CDoubleContracted(
       decl: CGlobalDeclaration[_],
       defn: CFunctionDefinition[_],
   ) extends UserError {
@@ -140,14 +136,14 @@ case object LangCToCol {
       )
   }
 
-  case class KernelNotInjective(kernel: CGpgpuKernelSpecifier[_])
+  private case class KernelNotInjective(kernel: CGpgpuKernelSpecifier[_])
       extends Blame[ReceiverNotInjective] {
     override def blame(error: ReceiverNotInjective): Unit =
       kernel.blame
         .blame(KernelPredicateNotInjective(Left(kernel), error.resource))
   }
 
-  case class KernelParFailure(kernel: CGpgpuKernelSpecifier[_])
+  private case class KernelParFailure(kernel: CGpgpuKernelSpecifier[_])
       extends Blame[ParBlockFailure] {
     override def blame(error: ParBlockFailure): Unit =
       error match {
@@ -167,7 +163,7 @@ case object LangCToCol {
       }
   }
 
-  case class KernelBarrierFailure(barrier: GpgpuBarrier[_])
+  private case class KernelBarrierFailure(barrier: GpgpuBarrier[_])
       extends Blame[ParBarrierFailure] {
     override def blame(error: ParBarrierFailure): Unit =
       error match {
@@ -184,7 +180,7 @@ case object LangCToCol {
       }
   }
 
-  case class ArrayMallocFailed(inv: CInvocation[_])
+  private case class ArrayMallocFailed(inv: CInvocation[_])
       extends Blame[ArraySizeError] {
     override def blame(error: ArraySizeError): Unit =
       error match {
@@ -193,7 +189,7 @@ case object LangCToCol {
       }
   }
 
-  case class VectorBoundFailed(subscript: AmbiguousSubscript[_])
+  private case class VectorBoundFailed(subscript: AmbiguousSubscript[_])
       extends Blame[InvocationFailure] {
     override def blame(error: InvocationFailure): Unit =
       error match {
@@ -209,13 +205,13 @@ case object LangCToCol {
       }
   }
 
-  case class UnsupportedCast(c: CCast[_]) extends UserError {
+  private case class UnsupportedCast(c: CCast[_]) extends UserError {
     override def code: String = "unsupportedCast"
     override def text: String =
       c.o.messageInContext("This cast is not supported")
   }
 
-  case class UnsupportedMalloc(c: Expr[_]) extends UserError {
+  private case class UnsupportedMalloc(c: Expr[_]) extends UserError {
     override def code: String = "unsupportedMalloc"
     override def text: String =
       c.o.messageInContext(
@@ -223,22 +219,22 @@ case object LangCToCol {
       )
   }
 
-  case class UnsupportedSizeof(c: Expr[_]) extends UserError {
-    override def code: String = "unsupportedSizeof"
+  private case class TypeSizeMayBeZeroBlame(
+      c: CCast[_],
+      blame: Blame[FrontendInvocationError],
+  ) extends Blame[DivByZero] {
+    override def blame(error: DivByZero): Unit =
+      blame.blame(TypeSizeMayBeZero(c))
+  }
 
+  private case class InvalidPointerComparison(cmp: Expr[_]) extends UserError {
+    override def code: String = "incompatiblePointerComparison"
     override def text: String =
-      c.o.messageInContext(
-        "The use of 'sizeof' is only supported inside a malloc: '(t *) malloc(x*typeof(t)'."
+      cmp.o.messageInContext(
+        "Comparison between pointers of different types is not supported"
       )
   }
 
-  case class UnsupportedStructPerm(o: Origin) extends UserError {
-    override def code: String = "unsupportedStructPerm"
-    override def text: String =
-      o.messageInContext(
-        "Shorthand for Permissions for structs not possible, since the struct has a cyclic reference"
-      )
-  }
 }
 
 case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
@@ -247,35 +243,37 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   type Post = Rewritten[Pre]
   implicit val implicitRewriter: AbstractRewriter[Pre, Post] = rw
 
-  val cFunctionSuccessor
+  private val cFunctionSuccessor
       : SuccessionMap[CFunctionDefinition[Pre], Procedure[Post]] =
     SuccessionMap()
-  val cFunctionDeclSuccessor
+  private val cFunctionDeclSuccessor
       : SuccessionMap[(CGlobalDeclaration[Pre], Int), Procedure[Post]] =
     SuccessionMap()
-  val cNameSuccessor: SuccessionMap[CNameTarget[Pre], Variable[Post]] =
+  private val cNameSuccessor: SuccessionMap[CNameTarget[Pre], Variable[Post]] =
     SuccessionMap()
-  val cLocalHeapNameSuccessor
+  private val cLocalHeapNameSuccessor
       : SuccessionMap[CNameTarget[Pre], LocalHeapVariable[Post]] =
     SuccessionMap()
-  val cGlobalNameSuccessor
+  private val cGlobalNameSuccessor
       : SuccessionMap[CNameTarget[Pre], HeapVariable[Post]] = SuccessionMap()
-  val cStructSuccessor: SuccessionMap[CGlobalDeclaration[Pre], Class[Post]] =
-    SuccessionMap()
-  val cStructFieldsSuccessor: SuccessionMap[
+  private val cStructSuccessor
+      : SuccessionMap[CGlobalDeclaration[Pre], Class[Post]] = SuccessionMap()
+  private val cStructFieldsSuccessor: SuccessionMap[
     (CGlobalDeclaration[Pre], CStructMemberDeclarator[Pre]),
     InstanceField[Post],
   ] = SuccessionMap()
-  val cCurrentDefinitionParamSubstitutions
+  private val cCurrentDefinitionParamSubstitutions
       : ScopedStack[Map[CParam[Pre], CParam[Pre]]] = ScopedStack()
+  private val sizeOfFunctions: SuccessionMap[Type[Pre], Function[Post]] =
+    SuccessionMap()
 
-  val cudaCurrentThreadIdx: ScopedStack[CudaVec] = ScopedStack()
-  val cudaCurrentBlockIdx: ScopedStack[CudaVec] = ScopedStack()
-  val cudaCurrentBlockDim: ScopedStack[CudaVec] = ScopedStack()
-  val cudaCurrentGridDim: ScopedStack[CudaVec] = ScopedStack()
+  private val cudaCurrentThreadIdx: ScopedStack[CudaVec] = ScopedStack()
+  private val cudaCurrentBlockIdx: ScopedStack[CudaVec] = ScopedStack()
+  private val cudaCurrentBlockDim: ScopedStack[CudaVec] = ScopedStack()
+  private val cudaCurrentGridDim: ScopedStack[CudaVec] = ScopedStack()
 
-  val cudaCurrentGrid: ScopedStack[ParBlockDecl[Post]] = ScopedStack()
-  val cudaCurrentBlock: ScopedStack[ParBlockDecl[Post]] = ScopedStack()
+  private val cudaCurrentGrid: ScopedStack[ParBlockDecl[Post]] = ScopedStack()
+  private val cudaCurrentBlock: ScopedStack[ParBlockDecl[Post]] = ScopedStack()
 
   private val dynamicSharedMemNames: mutable.Set[CNameTarget[Pre]] = mutable
     .Set()
@@ -360,7 +358,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     res.getOrElse(throw NotDynamicSharedMem(pointer))
   }
 
-  def isRatFloatOrInt(t: Type[Pre]): Boolean =
+  private def isRatFloatOrInt(t: Type[Pre]): Boolean =
     getBaseType(t) match {
       case _: FloatType[Pre] => true
       case _: TRational[Pre] => true
@@ -368,19 +366,25 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       case _ => false
     }
 
-  def isFloat(t: Type[Pre]): Boolean =
+  private def isInt(t: Type[Pre]): Boolean =
+    getBaseType(t) match {
+      case _: IntType[Pre] => true
+      case _ => false
+    }
+
+  private def isFloat(t: Type[Pre]): Boolean =
     getBaseType(t) match {
       case _: FloatType[Pre] => true
       case _ => false
     }
 
-  def getBaseType[G](t: Type[G]): Type[G] =
+  private def getBaseType[G](t: Type[G]): Type[G] =
     t match {
       case CPrimitiveType(specs) => C.getPrimitiveType(specs)
       case _ => t
     }
 
-  def castIsId(exprType: Type[Pre], castType: Type[Pre]): Boolean =
+  private def castIsId(exprType: Type[Pre], castType: Type[Pre]): Boolean =
     (castType, getBaseType(exprType)) match {
       case (tc, te) if tc == te => true
       case (TCInt(), TBoundedInt(_, _)) => true
@@ -388,14 +392,83 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       case _ => false
     }
 
+  def sizeOf(t: Type[Pre], sizeOfOrigin: Origin): Expr[Post] = {
+    implicit val o: Origin = t.o
+    t.bits match {
+      case TypeSize.Exact(size) => c_const(size / 8)(sizeOfOrigin)
+      case TypeSize.Unknown() | TypeSize.Minimally(_) =>
+        functionInvocation(
+          TrueSatisfiable,
+          sizeOfFunctions.getOrElseUpdate(
+            t, {
+              rw.globalDeclarations.declare(withResult((result: Result[Post]) =>
+                function[Post](
+                  AbstractApplicable,
+                  TrueSatisfiable,
+                  TCInt(),
+                  ensures = UnitAccountedPredicate(t.bits match {
+                    case TypeSize.Unknown() => tt
+                    case TypeSize.Minimally(size) => result >= c_const(size / 8)
+                  }),
+                )(o.where(name = s"sizeOf_$t"))
+              ))
+            },
+          ).ref[Function[Post]],
+        )(sizeOfOrigin)
+    }
+  }
+
+  def rewriteComparison(cmp: Expr[Pre]): Expr[Post] = {
+    val (l, r) =
+      cmp match {
+        case AmbiguousEq(left, right, _, None) => (left, right)
+        case AmbiguousNeq(left, right, _, None) => (left, right)
+        case AmbiguousGreater(left, right, None) => (left, right)
+        case AmbiguousLess(left, right, None) => (left, right)
+        case AmbiguousGreaterEq(left, right, None) => (left, right)
+        case AmbiguousLessEq(left, right, None) => (left, right)
+        case _ => return cmp.rewriteDefault()
+      }
+
+    val leftPtr = l.t.asPointer
+    val rightPtr = r.t.asPointer
+    if (leftPtr.isDefined && rightPtr.isDefined) {
+      if (
+        CoercionUtils.getAnyCoercion(leftPtr.get.element, rightPtr.get.element)
+          .isDefined
+      ) {
+        val elementSize = Some(sizeOf(leftPtr.get.element, cmp.o))
+        cmp match {
+          case e @ AmbiguousEq(_, _, _, _) =>
+            e.rewrite(elementSize = elementSize)
+          case e @ AmbiguousNeq(_, _, _, _) =>
+            e.rewrite(elementSize = elementSize)
+          case e @ AmbiguousGreater(_, _, _) =>
+            e.rewrite(elementSize = elementSize)
+          case e @ AmbiguousLess(_, _, _) =>
+            e.rewrite(elementSize = elementSize)
+          case e @ AmbiguousGreaterEq(_, _, _) =>
+            e.rewrite(elementSize = elementSize)
+          case e @ AmbiguousLessEq(_, _, _) =>
+            e.rewrite(elementSize = elementSize)
+        }
+      } else { throw InvalidPointerComparison(cmp) }
+    } else { cmp.rewriteDefault() }
+  }
+
   def cast(c: CCast[Pre]): Expr[Post] =
     c match {
       case CCast(e, t) if castIsId(e.t, t) => rw.dispatch(c.expr)
+      case CCast(e, t @ TCInt()) if isInt(e.t) =>
+        Cast(rw.dispatch(e), TypeValue(rw.dispatch(t))(c.o))(c.o)
       case CCast(e, t)
           if (isFloat(t) && isRatFloatOrInt(e.t)) ||
             (isRatFloatOrInt(t) && isFloat(e.t)) =>
         // We can convert between rationals, integers and floats
         CastFloat[Post](rw.dispatch(c.expr), rw.dispatch(t))(c.o)
+
+      case cast @ CCast(_, TOpenCLVector(_, _)) =>
+        createOpenCLLiteralVector(cast)
       case CCast(
             inv @ CInvocation(CLocal("__vercors_malloc"), Seq(arg), Nil, Nil),
             CTPointer(t2),
@@ -407,7 +480,13 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               (t1, rw.dispatch(l))
             case AmbiguousMult(SizeOf(t1), r) if castIsId(t1, t2) =>
               (t1, rw.dispatch(r))
-            case _ => throw UnsupportedMalloc(c)
+            case _ =>
+              (
+                t2,
+                FloorDiv(rw.dispatch(arg), sizeOf(t2, c.o))(
+                  TypeSizeMayBeZeroBlame(c, inv.blame)
+                )(c.o),
+              )
           }
         NewPointerArray(rw.dispatch(t1), size)(ArrayMallocFailed(inv))(c.o)
       case CCast(CInvocation(CLocal("__vercors_malloc"), _, _, _), _) =>
@@ -424,10 +503,29 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           CoercionUtils.firstElementIsType(newTElement, newEElement)
         ) { Cast(newE, TypeValue(newT)(t.o))(c.o) }
         else { throw UnsupportedCast(c) }
+      case CCast(e, t @ TCInt()) if e.t.asPointer.isDefined =>
+        IntegerPointerCast(
+          rw.dispatch(e),
+          TypeValue(rw.dispatch(t))(t.o),
+          getStride(e.t.asPointer.get.element, c.o),
+        )(c.o)
+      case CCast(e, t @ CTPointer(innerType))
+          if getBaseType(e.t).isInstanceOf[TCInt[Pre]] =>
+        IntegerPointerCast(
+          rw.dispatch(e),
+          TypeValue(TPointer(rw.dispatch(innerType)))(t.o),
+          getStride(innerType, c.o),
+        )(c.o)
       case _ => throw UnsupportedCast(c)
     }
 
-  def rewriteGPUParam(
+  private def getStride(t: Type[Pre], o: Origin): Expr[Post] =
+    t match {
+      case TVoid() => c_const(1)(o)
+      case _ => sizeOf(t, o)
+    }
+
+  private def rewriteGPUParam(
       cParam: CParam[Pre],
       kernelSpecifier: CGpgpuKernelSpecifier[Pre],
   ): Unit = {
@@ -555,7 +653,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     foldStar(unfoldStar(e).map(allOneExpr(blame)(idx, dim, _)))(e.o)
   }
 
-  def allOneExpr(
+  private def allOneExpr(
       blame: Blame[ReceiverNotInjective]
   )(idx: CudaVec, dim: CudaVec, e: Expr[Post]): Expr[Post] = {
     implicit val o: Origin = e.o
@@ -659,7 +757,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           // Since we set the size and blame together, we can assume the blame is not None
           NewNonNullPointerArray[Post](
             getInnerType(cNameSuccessor(d).t),
-            CIntegerValue(size),
+            c_const(size),
           )(blame.get),
         )
         declarations ++= Seq(cNameSuccessor(d))
@@ -713,7 +811,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         val nonZeroThreads: Expr[Post] =
           foldStar(
             (blockDim.indices.values ++ gridDim.indices.values)
-              .map(v => Less(CIntegerValue(0)(o), v.get(o))(o)).toSeq
+              .map(v => Less(c_const(0)(o), v.get(o))(o)).toSeq
           )(o)
         val UnitAccountedPredicate(contractRequires: Expr[Pre]) =
           contract.requires
@@ -899,7 +997,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       sizeBlame: Option[Blame[ArraySizeError]],
   ): Unit =
     arraySize match {
-      case Some(CIntegerValue(size)) =>
+      case Some(CIntegerValue(size, _)) =>
         val v = new Variable[Post](TPointer[Post](rw.dispatch(t)))(o)
         staticSharedMemNames(cRef) = (size, sizeBlame)
         cNameSuccessor(cRef) = v
@@ -1014,12 +1112,14 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               .declare(cStructFieldsSuccessor((decl, fieldDecl)))
           }
         }._1,
+        false,
       )(CStructOrigin(sdecl))
 
     rw.globalDeclarations.declare(newStruct)
     cStructSuccessor(decl) = newStruct
   }
 
+  // TODO: This seems to make a heap variable for every typedef which should not be needed
   def rewriteGlobalDecl(decl: CGlobalDeclaration[Pre]): Unit = {
     val isStruct =
       decl.decl.specs.collectFirst { case t: CStructDeclaration[Pre] => () }
@@ -1444,48 +1544,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     }
   }
 
-  // Allow a user to write `Perm(p, write)` instead of `Perm(p.x, write) ** Perm(p.y, write)` for `struct p {int x, y}`
-  def unwrapStructPerm(
-      struct: AmbiguousLocation[Post],
-      perm: Expr[Pre],
-      structType: CTStruct[Pre],
-      origin: Origin,
-      visited: Seq[CTStruct[Pre]] = Seq(),
-  ): Expr[Post] = {
-    if (visited.contains(structType))
-      throw UnsupportedStructPerm(
-        origin
-      ) // We do not allow this notation for recursive structs
-    implicit val o: Origin = origin
-    val blame = PanicBlame("Field permission is framed")
-    val Seq(CStructDeclaration(_, fields)) = structType.ref.decl.decl.specs
-    val newPerm = rw.dispatch(perm)
-    val AmbiguousLocation(newExpr) = struct
-    val newFieldPerms = fields.map(member => {
-      val loc =
-        AmbiguousLocation(
-          Deref[Post](
-            newExpr,
-            cStructFieldsSuccessor.ref((structType.ref.decl, member)),
-          )(blame)
-        )(struct.blame)
-      member.specs.collectFirst {
-        case CSpecificationType(newStruct: CTStruct[Pre]) =>
-          // We recurse, since a field is another struct
-          Perm(loc, newPerm) &* unwrapStructPerm(
-            loc,
-            perm,
-            newStruct,
-            origin,
-            structType +: visited,
-          )
-      }.getOrElse(Perm(loc, newPerm))
-    })
-
-    foldStar(newFieldPerms)
-  }
-
-  def createUpdateVectorFunction(size: Int): Function[Post] = {
+  private def createUpdateVectorFunction(size: Int): Function[Post] = {
     implicit val o: Origin = Origin(Seq(LabelContext("vector update method")))
     /* for instance for size 4:
     requires i >= 0 && i < 4;
@@ -1636,16 +1695,16 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     )(assign.o)
   }
 
-  def isCPointer(t: Type[_]) =
+  private def isCPointer(t: Type[_]) =
     getBaseType(t) match {
       case CTPointer(_) => true
       case _ => false
     }
 
-  def indexVectors(
+  private def indexVectors(
       e: Expr[Post],
       askedType: Type[Post],
-      inv: CInvocation[Pre],
+      cast: CCast[Pre],
   ): Seq[Expr[Post]] =
     e.t match {
       case t if t == askedType => Seq(e)
@@ -1657,16 +1716,16 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                 "Type Checked"
               ))(e.o),
               askedType,
-              inv,
+              cast,
             )
           )
-      case _ => throw WrongOpenCLLiteralVector(inv)
+      case _ => throw WrongOpenCLLiteralVector(cast)
     }
 
-  def unwrapVectorArg(
+  private def unwrapVectorArg(
       e: Expr[Post],
       askedType: Type[Post],
-      inv: CInvocation[Pre],
+      cast: CCast[Pre],
   ): (Seq[Statement[Post]], Seq[Expr[Post]]) =
     e.t match {
       case t if t == askedType => (Nil, Seq(e))
@@ -1683,42 +1742,39 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
               )
               (befores, v.get)
           }
-        (befores, indexVectors(varE, askedType, inv))
-      case _ => throw WrongOpenCLLiteralVector(inv)
+        (befores, indexVectors(varE, askedType, cast))
+      case _ => throw WrongOpenCLLiteralVector(cast)
     }
 
-  def createOpenCLLiteralVector(
-      size: BigInt,
-      innerType: Type[Pre],
-      inv: CInvocation[Pre],
-  ): Expr[Post] = {
-    implicit val o: Origin = inv.o
-    val (befores: Seq[Statement[Post]], newArgs: Seq[Expr[Post]]) =
-      inv.args
-        .map(a => unwrapVectorArg(rw.dispatch(a), rw.dispatch(innerType), inv))
-        .foldLeft[(Seq[Statement[Post]], Seq[Expr[Post]])](Nil, Nil)(
-          (base, extra) => (base._1 ++ extra._1, base._2 ++ extra._2)
-        )
-    if (newArgs.length != size)
-      throw WrongOpenCLLiteralVector(inv)
-    val result = LiteralVector[Post](rw.dispatch(innerType), newArgs)
-    if (befores.nonEmpty)
-      With(Block(befores), result)
-    else
-      result
+  private def unwrapWith(e: Expr[Pre]): Seq[Expr[Pre]] =
+    e match {
+      // This will break if someone uses With inside a vector literal
+      case With(Eval(before), after) => unwrapWith(before) :+ after
+      case e => Seq(e)
+    }
+
+  private def createOpenCLLiteralVector(cast: CCast[Pre]): Expr[Post] = {
+    implicit val o: Origin = cast.o
+    cast match {
+      case CCast(expr, TOpenCLVector(size, innerType)) =>
+        val (befores: Seq[Statement[Post]], newArgs: Seq[Expr[Post]]) =
+          unwrapWith(expr).map(a =>
+            unwrapVectorArg(rw.dispatch(a), rw.dispatch(innerType), cast)
+          ).foldLeft[(Seq[Statement[Post]], Seq[Expr[Post]])](Nil, Nil)(
+            (base, extra) => (base._1 ++ extra._1, base._2 ++ extra._2)
+          )
+        if (newArgs.length != size)
+          throw WrongOpenCLLiteralVector(cast)
+        val result = LiteralVector[Post](rw.dispatch(innerType), newArgs)
+        if (befores.nonEmpty)
+          With(Block(befores), result)
+        else { result }
+      case other => ???
+    }
   }
 
   def invocation(inv: CInvocation[Pre]): Expr[Post] = {
     val CInvocation(applicable, args, givenMap, yields) = inv
-
-    inv.ref.get match {
-      case RefOpenCLVectorLiteralCInvocationTarget(size, t)
-          if givenMap.isEmpty && yields.isEmpty =>
-        return createOpenCLLiteralVector(size, t, inv)
-      case RefOpenCLVectorLiteralCInvocationTarget(size, t) =>
-        throw WrongOpenCLLiteralVector(inv)
-      case _ =>
-    }
 
     val newArgs = args.map(a => rw.dispatch(a))
 
@@ -1905,7 +1961,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     val arg =
       if (args.size == 1) {
         args.head match {
-          case CIntegerValue(i) if i >= 0 && i < 3 => Some(i.toInt)
+          case CIntegerValue(i, _) if i >= 0 && i < 3 => Some(i.toInt)
           case _ => None
         }
       } else

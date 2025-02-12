@@ -12,10 +12,7 @@
  */
 namespace pallas {
 
-enum PallasWrapperContext {
-    FuncContractPre,
-    FuncContractPost
-};
+enum PallasWrapperContext { FuncContractPre, FuncContractPost };
 
 class EWMResult {
   private:

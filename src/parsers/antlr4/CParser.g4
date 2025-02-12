@@ -1,7 +1,13 @@
 parser grammar CParser;
-options {tokenVocab = LangCLexer;}
+options {
+    superClass = CParserBase;
+    tokenVocab = LangCLexer;
+}
 import LangCParser, SpecParser;
 
+@header {
+    import vct.parsers.parser.CParserBase;
+}
 @parser::members {
     public int specLevel = 0;
 }

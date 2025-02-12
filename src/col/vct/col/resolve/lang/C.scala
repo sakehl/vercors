@@ -3,17 +3,19 @@ package vct.col.resolve.lang
 import hre.util.FuncTools
 import vct.col.ast._
 import vct.col.ast.`type`.typeclass.TFloats.{C_ieee754_32bit, C_ieee754_64bit}
-import vct.col.ast.util.ExpressionEqualityCheck.isConstantInt
 import vct.col.origin._
 import vct.col.resolve._
 import vct.col.resolve.ctx._
-import vct.col.typerules.Types
-import vct.result.VerificationError.UserError
+import vct.col.typerules.{PlatformContext, TypeSize}
+import vct.result.VerificationError.{SystemError, UserError}
+
+import scala.annotation.tailrec
 
 case object C {
   implicit private val o: Origin = DiagnosticOrigin
 
-  case class CTypeNotSupported(node: Option[Node[_]]) extends UserError {
+  private case class CTypeNotSupported(node: Option[Node[_]])
+      extends UserError {
     override def code: String = "cTypeNotSupported"
     override def text: String = {
       (node match {
@@ -23,6 +25,12 @@ case object C {
     }
   }
 
+  private case class UnresolvedCType(specifiers: Seq[CDeclarationSpecifier[_]])
+      extends SystemError {
+    override def text: String =
+      s"Attempt to determine C type '$specifiers' which needs the PlatformContext to be resolved"
+  }
+
   val NUMBER_LIKE_PREFIXES: Seq[Seq[CDeclarationSpecifier[_]]] = Seq(
     Nil,
     Seq(CUnsigned()),
@@ -30,35 +38,126 @@ case object C {
   )
 
   val INTEGER_LIKE_TYPES: Seq[Seq[CDeclarationSpecifier[_]]] = Seq(
+    Seq(CChar()),
+    Seq(CSigned(), CChar()),
+    Seq(CUnsigned(), CChar()),
     Seq(CShort()),
+    Seq(CSigned(), CShort()),
+    Seq(CUnsigned(), CShort()),
     Seq(CShort(), CInt()),
+    Seq(CSigned(), CShort(), CInt()),
+    Seq(CUnsigned(), CShort(), CInt()),
     Seq(CInt()),
+    Seq(CSigned()),
+    Seq(CUnsigned()),
+    Seq(CSigned(), CInt()),
+    Seq(CUnsigned(), CInt()),
     Seq(CLong()),
+    Seq(CSigned(), CLong()),
+    Seq(CUnsigned(), CLong()),
     Seq(CLong(), CInt()),
+    Seq(CSigned(), CLong(), CInt()),
+    Seq(CUnsigned(), CLong(), CInt()),
     Seq(CLong(), CLong()),
+    Seq(CSigned(), CLong(), CLong()),
+    Seq(CUnsigned(), CLong(), CLong()),
     Seq(CLong(), CLong(), CInt()),
+    Seq(CSigned(), CLong(), CLong(), CInt()),
+    Seq(CUnsigned(), CLong(), CLong(), CInt()),
   )
 
-  // See here for more discussion https://github.com/utwente-fmt/vercors/discussions/1018#discussioncomment-5966388
-  sealed trait DataModel
-  case object ILP32 extends DataModel
-  case object LP64 extends DataModel
-  case object LLP64 extends DataModel
-
-  def INT_TYPE_TO_SIZE(dm: DataModel): Map[Seq[CDeclarationSpecifier[_]], Int] =
+  def INT_TYPE_TO_SIZE(
+      platformContext: PlatformContext
+  ): Map[Seq[CDeclarationSpecifier[_]], TypeSize] = {
     Map(
-      (Seq(CShort()) -> 16),
-      (Seq(CShort(), CInt()) -> 16),
-      (Seq(CInt()) -> 32),
-      (Seq(CLong()) -> 64),
-      (Seq(CLong(), CInt()) ->
-        (if (dm == LP64)
-           64
-         else
-           32)),
-      (Seq(CLong(), CLong()) -> 64),
-      (Seq(CLong(), CLong(), CInt()) -> 64),
+      (Seq(CChar()) -> platformContext.charSize),
+      (Seq(CSigned(), CChar()) -> platformContext.charSize),
+      (Seq(CUnsigned(), CChar()) -> platformContext.charSize),
+      (Seq(CShort()) -> platformContext.shortSize),
+      (Seq(CSigned(), CShort()) -> platformContext.shortSize),
+      (Seq(CUnsigned(), CShort()) -> platformContext.shortSize),
+      (Seq(CShort(), CInt()) -> platformContext.shortSize),
+      (Seq(CSigned(), CShort(), CInt()) -> platformContext.shortSize),
+      (Seq(CUnsigned(), CShort(), CInt()) -> platformContext.shortSize),
+      (Seq(CInt()) -> platformContext.intSize),
+      (Seq(CSigned()) -> platformContext.intSize),
+      (Seq(CUnsigned()) -> platformContext.intSize),
+      (Seq(CSigned(), CInt()) -> platformContext.intSize),
+      (Seq(CUnsigned(), CInt()) -> platformContext.intSize),
+      (Seq(CLong()) -> platformContext.longSize),
+      (Seq(CSigned(), CLong()) -> platformContext.longSize),
+      (Seq(CUnsigned(), CLong()) -> platformContext.longSize),
+      (Seq(CLong(), CInt()) -> platformContext.longSize),
+      (Seq(CSigned(), CLong(), CInt()) -> platformContext.longSize),
+      (Seq(CUnsigned(), CLong(), CInt()) -> platformContext.longSize),
+      (Seq(CLong(), CLong()) -> platformContext.longLongSize),
+      (Seq(CSigned(), CLong(), CLong()) -> platformContext.longLongSize),
+      (Seq(CUnsigned(), CLong(), CLong()) -> platformContext.longLongSize),
+      (Seq(CLong(), CLong(), CInt()) -> platformContext.longLongSize),
+      (Seq(CSigned(), CLong(), CLong(), CInt()) ->
+        platformContext.longLongSize),
+      (Seq(CUnsigned(), CLong(), CLong(), CInt()) ->
+        platformContext.longLongSize),
     )
+  }
+
+  private def getIntSize(
+      platformContext: PlatformContext,
+      specs: Seq[CDeclarationSpecifier[_]],
+  ): TypeSize = {
+    specs.collectFirst { case CSpecificationType(t) => t.bits } match {
+      case Some(size: TypeSize.Exact) => size
+      case None =>
+        INT_TYPE_TO_SIZE(platformContext).getOrElse(
+          specs.flatMap(_ match {
+            // Inline/Pure
+            case _: CSpecificationModifier[_] => Nil
+            // Extern/static/typedef/...
+            case _: CStorageClassSpecifier[_] => Nil
+            // Actual types
+            case specifier: CTypeSpecifier[_] =>
+              specifier match {
+                case CVoid() | CChar() | CShort() | CInt() | CLong() |
+                    CFloat() | CDouble() | CSigned() | CUnsigned() | CBool() |
+                    CTypedefName(_) | CFunctionTypeExtensionModifier(_) |
+                    CStructDeclaration(_, _) | CStructSpecifier(_) =>
+                  Seq(specifier)
+              }
+            // Const/restrict/volatile/...
+            case CTypeQualifierDeclarationSpecifier(_) => Nil
+            case _: CFunctionSpecifier[_] => Nil
+            case _: CAlignmentSpecifier[_] => Nil
+            case _: CGpgpuKernelSpecifier[_] => Nil
+          }),
+          TypeSize.Unknown(),
+        )
+    }
+  }
+
+  // XXX: We assume that everything's signed unless specified otherwise, this is not actually defined in the spec though
+  def isSigned(specs: Seq[CDeclarationSpecifier[_]]): Boolean = {
+    specs.collectFirst { case CSpecificationType(t: BitwiseType[_]) =>
+      t.signed
+    }.getOrElse(
+      specs.map {
+        case _: CSpecificationModifier[_] => true
+        case _: CStorageClassSpecifier[_] => true
+        case specifier: CTypeSpecifier[_] =>
+          specifier match {
+            case CUnsigned() => false
+            case CSpecificationType(_) | CVoid() | CChar() |
+                CShort() | CInt() | CLong() | CFloat() | CDouble() | CSigned() |
+                CBool() | CTypedefName(_) | CFunctionTypeExtensionModifier(_) |
+                CStructDeclaration(_, _) | CStructSpecifier(_) =>
+              true
+          }
+        case CTypeQualifierDeclarationSpecifier(_) => true
+        case _: CFunctionSpecifier[_] => true
+        case _: CAlignmentSpecifier[_] => true
+        case _: CGpgpuKernelSpecifier[_] => true
+      }.reduce(_ && _)
+    )
+  }
 
   case class DeclaratorInfo[G](
       params: Option[Seq[CParam[G]]],
@@ -125,7 +224,8 @@ case object C {
         DeclaratorInfo(params = None, typeOrReturnType = (t => t), name)
     }
 
-  def getSpecs[G](
+  @tailrec
+  private def getSpecs[G](
       decl: CDeclarator[G],
       acc: Seq[CDeclarationSpecifier[G]] = Nil,
   ): Seq[CDeclarationSpecifier[G]] =
@@ -135,8 +235,9 @@ case object C {
       case _ => acc
     }
 
-  def getTypeFromTypeDef[G](
+  private def getTypeFromTypeDef[G](
       decl: CDeclaration[G],
+      platformContext: Option[PlatformContext],
       context: Option[Node[G]] = None,
   ): Type[G] = {
     val specs: Seq[CDeclarationSpecifier[G]] =
@@ -146,11 +247,16 @@ case object C {
       }
 
     // Need to get specifications from the init (can only have one init as typedef), since it can contain GCC Type extensions
-    getPrimitiveType(getSpecs(decl.inits.head.decl) ++ specs, context)
+    getPrimitiveType(
+      getSpecs(decl.inits.head.decl) ++ specs,
+      platformContext,
+      context,
+    )
   }
 
   def getPrimitiveType[G](
       specs: Seq[CDeclarationSpecifier[G]],
+      platformContext: Option[PlatformContext] = None,
       context: Option[Node[G]] = None,
   ): Type[G] = {
     val vectorSize: Option[Expr[G]] =
@@ -171,17 +277,20 @@ case object C {
     val t: Type[G] =
       filteredSpecs match {
         case Seq(CVoid()) => TVoid()
-        case Seq(CChar()) => TChar()
-        case CUnsigned() +: t if INTEGER_LIKE_TYPES.contains(t) => TCInt()
-        case CSigned() +: t if INTEGER_LIKE_TYPES.contains(t) => TCInt()
-        case t if C.INTEGER_LIKE_TYPES.contains(t) => TCInt()
+        case t if C.INTEGER_LIKE_TYPES.contains(t) =>
+          if (platformContext.isEmpty) { throw UnresolvedCType(specs) }
+          val cint = TCInt[G]()
+          cint.storedBits = getIntSize(platformContext.get, specs)
+          cint.signed = isSigned(specs)
+          cint
         case Seq(CFloat()) => C_ieee754_32bit()
         case Seq(CDouble()) => C_ieee754_64bit()
         case Seq(CLong(), CDouble()) => C_ieee754_64bit()
         case Seq(CBool()) => TBool()
         case Seq(defn @ CTypedefName(_)) =>
           defn.ref.get match {
-            case RefTypeDef(decl) => getTypeFromTypeDef(decl.decl)
+            case RefTypeDef(decl) =>
+              getTypeFromTypeDef(decl.decl, platformContext)
             case _ => ???
           }
         case Seq(CSpecificationType(typ)) => typ
@@ -257,9 +366,12 @@ case object C {
         target
     }
 
-  def stripCPrimitiveType[G](t: Type[G]): Type[G] =
+  def stripCPrimitiveType[G](
+      t: Type[G],
+      platformContext: Option[PlatformContext] = None,
+  ): Type[G] =
     t match {
-      case CPrimitiveType(specs) => getPrimitiveType(specs)
+      case CPrimitiveType(specs) => getPrimitiveType(specs, platformContext)
       case _ => t
     }
 
@@ -268,7 +380,7 @@ case object C {
       name: String,
       ctx: ReferenceResolutionContext[G],
       blame: Blame[BuiltinError],
-  ): Option[CDerefTarget[G]] =
+  ): Option[CDerefTarget[G]] = {
     stripCPrimitiveType(obj.t) match {
       case CTPointer(innerType: TNotAValue[G]) =>
         innerType.decl.get match {
@@ -286,8 +398,9 @@ case object C {
         getCStructDeref(struct.ref.decl, name)
       case _ => None
     }
+  }
 
-  def getCStructDeref[G](
+  private def getCStructDeref[G](
       decl: CGlobalDeclaration[G],
       name: String,
   ): Option[CDerefTarget[G]] =
@@ -348,7 +461,7 @@ case object C {
       name: String,
       ctx: ReferenceResolutionContext[G],
       blame: Blame[BuiltinError],
-  ): Option[CDerefTarget[G]] =
+  ): Option[CDerefTarget[G]] = {
     (stripCPrimitiveType(obj.t) match {
       case t: TNotAValue[G] =>
         t.decl.get match {
@@ -374,6 +487,7 @@ case object C {
         openCLVectorAccessString(name, v.size).map(RefOpenCLVectorMembers[G])
       case _ => None
     }).orElse(Spec.builtinField(obj, name, blame))
+  }
 
   def resolveInvocation[G](
       obj: Expr[G],

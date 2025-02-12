@@ -4,6 +4,7 @@ import vct.col.ast.`type`.typeclass.TFloats
 import vct.col.ast.{
   BinExpr,
   CIntegerValue,
+  Cast,
   CastFloat,
   CoerceCFloatCInt,
   CoerceCIntCFloat,
@@ -16,6 +17,7 @@ import vct.col.ast.{
   TFloat,
   TInt,
   Type,
+  TypeValue,
 }
 import vct.col.origin.Origin
 import vct.col.rewrite.{Generation, RewriterBuilder}
@@ -47,12 +49,15 @@ case class CFloatIntCoercion[Pre <: Generation]()
       // to an arbitrary big float.
       case TCFloat(e, m) => TFloats.ieee754_32bit
       case TFloat(e, m) => TFloats.ieee754_32bit
-      case other => rewriteDefault(other)
+      case other => super.postCoerce(other)
     }
 
   override def postCoerce(e: Expr[Pre]): Expr[Post] =
     e match {
-      case CIntegerValue(v) => IntegerValue(v)(e.o)
-      case other => rewriteDefault(other)
+      // TODO: Do truncation/sign extension
+      case Cast(e, TypeValue(TCInt())) if e.t.isInstanceOf[TCInt[Pre]] =>
+        dispatch(e)
+      case CIntegerValue(v, _) => IntegerValue(v)(e.o)
+      case other => super.postCoerce(other)
     }
 }

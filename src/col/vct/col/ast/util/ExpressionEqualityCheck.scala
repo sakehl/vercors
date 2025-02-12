@@ -126,7 +126,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
         } yield i1 % i2
       case UMinus(e1) => for { i1 <- isConstantIntRecurse(e1) } yield -i1
 
-      case BitAnd(e1, e2) =>
+      case BitAnd(e1, e2, _, _) =>
         for {
           i1 <- isConstantIntRecurse(e1); i2 <- isConstantIntRecurse(e2)
         } yield i1 & i2
@@ -138,7 +138,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
         for {
           i1 <- isConstantIntRecurse(e1); i2 <- isConstantIntRecurse(e2)
         } yield i1 & i2
-      case BitOr(e1, e2) =>
+      case BitOr(e1, e2, _, _) =>
         for {
           i1 <- isConstantIntRecurse(e1); i2 <- isConstantIntRecurse(e2)
         } yield i1 | i2
@@ -150,7 +150,7 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
         for {
           i1 <- isConstantIntRecurse(e1); i2 <- isConstantIntRecurse(e2)
         } yield i1 | i2
-      case BitXor(e1, e2) =>
+      case BitXor(e1, e2, _, _) =>
         for {
           i1 <- isConstantIntRecurse(e1); i2 <- isConstantIntRecurse(e2)
         } yield i1 ^ i2
@@ -162,15 +162,15 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
         for {
           i1 <- isConstantIntRecurse(e1); i2 <- isConstantIntRecurse(e2)
         } yield i1 ^ i2
-      case BitShl(e1, e2) =>
+      case BitShl(e1, e2, _, _) =>
         for {
           i1 <- isConstantIntRecurse(e1); i2 <- isConstantIntRecurse(e2)
         } yield i1 << i2.toInt
-      case BitShr(e1, e2) =>
+      case BitShr(e1, e2, _) =>
         for {
           i1 <- isConstantIntRecurse(e1); i2 <- isConstantIntRecurse(e2)
         } yield i1 >> i2.toInt
-      case BitUShr(e1, e2) =>
+      case BitUShr(e1, e2, _, _) =>
         for {
           i1 <- isConstantIntRecurse(e1); i2 <- isConstantIntRecurse(e2)
         } yield i1.toInt >>> i2.toInt
@@ -461,11 +461,11 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
       // Commutative operators
       case (lhs @ Plus(_, _), rhs @ Plus(_, _)) => commAssoc[Plus[G]](lhs, rhs)
       case (lhs @ Mult(_, _), rhs @ Mult(_, _)) => commAssoc[Mult[G]](lhs, rhs)
-      case (BitAnd(lhs1, lhs2), BitAnd(rhs1, rhs2)) =>
+      case (BitAnd(lhs1, lhs2, _, _), BitAnd(rhs1, rhs2, _, _)) =>
         comm(lhs1, lhs2, rhs1, rhs2)
-      case (BitOr(lhs1, lhs2), BitOr(rhs1, rhs2)) =>
+      case (BitOr(lhs1, lhs2, _, _), BitOr(rhs1, rhs2, _, _)) =>
         comm(lhs1, lhs2, rhs1, rhs2)
-      case (BitXor(lhs1, lhs2), BitXor(rhs1, rhs2)) =>
+      case (BitXor(lhs1, lhs2, _, _), BitXor(rhs1, rhs2, _, _)) =>
         comm(lhs1, lhs2, rhs1, rhs2)
       case (And(lhs1, lhs2), And(rhs1, rhs2)) => comm(lhs1, lhs2, rhs1, rhs2)
       case (Or(lhs1, lhs2), Or(rhs1, rhs2)) => comm(lhs1, lhs2, rhs1, rhs2)

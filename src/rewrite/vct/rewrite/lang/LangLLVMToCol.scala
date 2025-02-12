@@ -651,6 +651,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             rw.classDeclarations.declare(structFieldMap((t, idx)))
           }
         }._1,
+        t.packed,
       )(t.o.withContent(TypeName("struct")))
 
     rw.globalDeclarations.declare(newStruct)

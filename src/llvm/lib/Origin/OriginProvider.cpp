@@ -4,8 +4,8 @@
 #include <utility>
 
 #include <llvm/IR/DebugInfoMetadata.h>
-#include <llvm/IR/Instruction.h>
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/Instruction.h>
 #include <llvm/IR/Module.h>
 
 #include "Origin/ContextDeriver.h"
@@ -215,7 +215,8 @@ std::pair<unsigned int, unsigned int> getEndPosFromMD(const llvm::Function &f) {
     if (sProg != nullptr)
         maxLine = sProg->getLine();
 
-    for (auto it = llvm::inst_begin(f), end = llvm::inst_end(f); it != end; ++it) {
+    for (auto it = llvm::inst_begin(f), end = llvm::inst_end(f); it != end;
+         ++it) {
         const llvm::Instruction *inst = &*it;
         auto &loc = inst->getDebugLoc();
         if (!loc)
@@ -223,13 +224,13 @@ std::pair<unsigned int, unsigned int> getEndPosFromMD(const llvm::Function &f) {
         unsigned int line = loc.getLine();
         unsigned int col = loc.getCol();
         if (line > maxLine) {
-            maxLine = line; 
+            maxLine = line;
             maxCol = col;
         } else if (line == maxLine && col > maxCol) {
             maxCol = col;
-        }   
+        }
     }
-    return { maxLine, maxCol };
+    return {maxLine, maxCol};
 }
 } // namespace
 
@@ -245,9 +246,10 @@ col::Origin *llvm2col::generateFuncDefOrigin(llvm::Function &llvmFunction) {
     if (sProg != nullptr) {
         auto endPos = getEndPosFromMD(llvmFunction);
         auto endLine = std::make_optional(endPos.first);
-        auto endCol = std::make_optional(endPos.second);;
-        generateSourceRangeOrigin(origin, *sProg, sProg->getLine(), 0,
-                                  endLine, endCol);
+        auto endCol = std::make_optional(endPos.second);
+        ;
+        generateSourceRangeOrigin(origin, *sProg, sProg->getLine(), 0, endLine,
+                                  endCol);
         return origin;
     }
 

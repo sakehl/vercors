@@ -5,10 +5,7 @@ import vct.col.ast.{Expr, _}
 import vct.col.origin._
 import vct.col.resolve.ctx.Referrable
 import vct.col.resolve.lang.Java
-import vct.rewrite.lang.LangCToCol.UnsupportedStructPerm
-import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder}
 import vct.col.typerules.CoercionUtils
-import vct.col.util.AstBuildHelpers
 import vct.col.util.AstBuildHelpers._
 import vct.result.VerificationError.{Unreachable, UserError}
 
@@ -94,6 +91,14 @@ case object EncodeArrayValues extends RewriterBuilder {
           blame_searcher(pathTail, errorsTail)
         case _ => throw Unreachable(s"Invalid invocation failure for free")
       }
+  }
+
+  case class UnsupportedStructPerm(o: Origin) extends UserError {
+    override def code: String = "unsupportedStructPerm"
+    override def text: String =
+      o.messageInContext(
+        "Shorthand for Permissions for structs not possible, since the struct has a cyclic reference"
+      )
   }
 }
 

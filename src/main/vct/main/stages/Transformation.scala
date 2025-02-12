@@ -27,11 +27,13 @@ import vct.options.types.{Backend, PathOrStd}
 import vct.parsers.debug.DebugOptions
 import vct.resources.Resources
 import vct.result.VerificationError.SystemError
-import vct.rewrite.adt.ImportSetCompat
+import vct.rewrite.adt.{EncodeBitVectors, ImportSetCompat}
 import vct.rewrite.{
   DisambiguatePredicateExpression,
+  EncodeAssuming,
   EncodeAutoValue,
   EncodeByValueClassUsage,
+  EncodePointerComparison,
   EncodeRange,
   EncodeResourceValues,
   ExplicitResourceValues,
@@ -121,9 +123,9 @@ object Transformation extends LazyLogging {
     Of course, this all while still retaining the functionality of making it possible to pass more simplification rules
     using command line flags.
      */
-    Progress.hiddenStage(
-      s"Loading PVL library file ${readable.underlyingPath.getOrElse("<unknown>")}"
-    ) { Util.loadPVLLibraryFile(readable, debugOptions) }
+    Progress.hiddenStage(s"Loading PVL library file ${readable.fileName}") {
+      Util.loadPVLLibraryFile(readable, debugOptions)
+    }
   }
 
   def simplifierFor(path: PathOrStd, options: Options): RewriterBuilder =
@@ -355,9 +357,9 @@ case class SilverTransformation(
 ) extends Transformation(
       onPassEvent,
       Seq(
+        CFloatIntCoercion,
         // Replace leftover SYCL types
         ReplaceSYCLTypes,
-        CFloatIntCoercion,
         // Inline pallas-specifications
         InlinePallasWrappers,
         InlinePallasPermLets,
@@ -421,6 +423,8 @@ case class SilverTransformation(
         RefuteToInvertedAssert,
         ExplicitResourceValues,
         EncodeResourceValues,
+        EncodeAssuming,
+        EncodePointerComparison, // Assumes no context_everywhere
 
         // Encode parallel blocks
         EncodeSendRecv,
@@ -464,6 +468,7 @@ case class SilverTransformation(
         DesugarCollectionOperators,
         EncodeNdIndex,
         ExtractInlineQuantifierPatterns,
+        EncodeBitVectors,
         // Translate internal types to domains
         FloatToRat,
         SmtlibToProverTypes,

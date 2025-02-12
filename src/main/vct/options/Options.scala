@@ -313,6 +313,14 @@ case object Options {
       opt[PathOrStd]("contract-import-file").valueName("<path>")
         .action((path, c) => c.copy(contractImportFile = Some(path)))
         .text("Load function contracts from the specified file"),
+      opt[String]("target").valueName("<target string>|unset")
+        .action((target, c) =>
+          if (target.trim().equalsIgnoreCase("unset"))
+            c.copy(targetString = None)
+          else { c.copy(targetString = Some(target)) }
+        ).text(
+          "Set the target string used for determining type sizes, or 'unset' to make no assumptions about sizes"
+        ),
       note(""),
       note("VeyMont Mode"),
       opt[Unit]("veymont").action((_, c) => c.copy(mode = Mode.VeyMont)).text(
@@ -487,6 +495,7 @@ case class Options(
     bipReportFile: Option[PathOrStd] = None,
     inferHeapContextIntoFrame: Boolean = true,
     generatePermissions: Boolean = false,
+    targetString: Option[String] = None,
 
     // Verify options - hidden
     devParserReportAmbiguities: Boolean = false,

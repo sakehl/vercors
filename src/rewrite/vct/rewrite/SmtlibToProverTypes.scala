@@ -76,11 +76,13 @@ case class SmtlibToProverTypes[Pre <: Generation]() extends Rewriter[Pre] {
     ProverFunctionInvocation(
       declaredFunc.getOrElseUpdate(
         (f, args.map(_.t)), {
-          globalDeclarations.declare(new ProverFunction[Post](
-            Seq(SmtLib[Post]() -> f),
-            args.map(arg => new Variable(dispatch(arg.t))),
-            dispatch(e.t),
-          ))
+          globalDeclarations.declare(
+            new ProverFunction[Post](
+              Seq(SmtLib[Post]() -> f),
+              args.map(arg => new Variable(dispatch(arg.t))),
+              dispatch(e.t),
+            )(o.where(name = f))
+          )
         },
       ).ref,
       args.map(dispatch),
@@ -121,8 +123,10 @@ case class SmtlibToProverTypes[Pre <: Generation]() extends Rewriter[Pre] {
           case SmtlibBvUDiv(left, right) => getExpr(e, "bvudiv", left, right)
           case SmtlibBvURem(left, right) => getExpr(e, "bvurem", left, right)
           case SmtlibBvShl(left, right) => getExpr(e, "bvshl", left, right)
-          case SmtlibBvShr(left, right) => getExpr(e, "bvshr", left, right)
+          case SmtlibBvShr(left, right) => getExpr(e, "bvlshr", left, right)
           case SmtlibBvULt(left, right) => getExpr(e, "bvult", left, right)
+          case SmtlibBv2Nat(expr) => getExpr(e, "bv2nat", expr)
+          case SmtlibInt2Bv(expr, size) => getExpr(e, s"(_ int2bv $size)", expr)
           case SmtlibRNE() => getExpr(e, "RNE")
           case SmtlibRNA() => getExpr(e, "RNA")
           case SmtlibRTP() => getExpr(e, "RTP")
@@ -240,6 +244,8 @@ case class SmtlibToProverTypes[Pre <: Generation]() extends Rewriter[Pre] {
           case Z3BvNand(left, right) => getExpr(e, "bvnand", left, right)
           case Z3BvNor(left, right) => getExpr(e, "bvnor", left, right)
           case Z3BvXnor(left, right) => getExpr(e, "bvxnor", left, right)
+          case Z3BvXor(left, right) => getExpr(e, "bvxor", left, right)
+          case Z3BvSLt(left, right) => getExpr(e, "bvslt", left, right)
           case Z3ArrayConst(domain, codomain, value) =>
             getExpr(
               e,

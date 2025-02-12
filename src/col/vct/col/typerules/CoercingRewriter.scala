@@ -302,7 +302,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case CoerceDecreasePrecision(_, _) => e
       case CoerceCFloatCInt(_) => e
       case CoerceCIntCFloat(_) => e
-      case CoerceCIntInt() => e
+      case CoerceCIntInt(_) => e
       case CoerceCFloatFloat(_, _) => e
 
       case CoerceLLVMIntInt() => e
@@ -798,21 +798,22 @@ abstract class CoercingRewriter[Pre <: Generation]()
           vectorIntOp2(div, (l, r) => AmbiguousDiv(l, r)(div.blame)),
           vectorFloatOp2(div, (l, r) => AmbiguousDiv(l, r)(div.blame)),
         )
-      case AmbiguousEq(left, right, vectorInnerType) =>
+      case AmbiguousEq(left, right, vectorInnerType, elementSize) =>
         val sharedType = Types.leastCommonSuperType(left.t, right.t)
         AmbiguousEq(
           coerce(left, sharedType),
           coerce(right, sharedType),
           vectorInnerType,
+          elementSize,
         )
-      case g @ AmbiguousGreater(left, right) =>
+      case g @ AmbiguousGreater(left, right, elementSize) =>
         firstOk(
           e,
-          s"Expected both operands to be numeric, a set, or a bag, but got ${left
+          s"Expected both operands to be numeric, a set, a bag, or a pointer but got ${left
               .t} and ${right.t}.",
-          AmbiguousGreater(int(left), int(right)),
-          floatOp2(g, (l, r) => AmbiguousGreater(l, r)),
-          AmbiguousGreater(rat(left), rat(right)), {
+          AmbiguousGreater(int(left), int(right), elementSize),
+          floatOp2(g, (l, r) => AmbiguousGreater(l, r, elementSize)),
+          AmbiguousGreater(rat(left), rat(right), elementSize), {
             val (coercedLeft, leftSet) = set(left)
             val (coercedRight, rightSet) = set(right)
             val sharedType = Types
@@ -820,6 +821,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousGreater(
               coerce(coercedLeft, TSet(sharedType)),
               coerce(coercedRight, TSet(sharedType)),
+              elementSize,
             )
           }, {
             val (coercedLeft, leftBag) = bag(left)
@@ -829,17 +831,19 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousGreater(
               coerce(coercedLeft, TBag(sharedType)),
               coerce(coercedRight, TBag(sharedType)),
+              elementSize,
             )
           },
+          AmbiguousGreater(pointer(left)._1, pointer(right)._1, elementSize),
         )
-      case g @ AmbiguousGreaterEq(left, right) =>
+      case g @ AmbiguousGreaterEq(left, right, elementSize) =>
         firstOk(
           e,
-          s"Expected both operands to be numeric, a set, or a bag, but got ${left
+          s"Expected both operands to be numeric, a set, a bag, or a pointer but got ${left
               .t} and ${right.t}.",
-          AmbiguousGreaterEq(int(left), int(right)),
-          floatOp2(g, (l, r) => AmbiguousGreaterEq(l, r)),
-          AmbiguousGreaterEq(rat(left), rat(right)), {
+          AmbiguousGreaterEq(int(left), int(right), elementSize),
+          floatOp2(g, (l, r) => AmbiguousGreaterEq(l, r, elementSize)),
+          AmbiguousGreaterEq(rat(left), rat(right), elementSize), {
             val (coercedLeft, leftSet) = set(left)
             val (coercedRight, rightSet) = set(right)
             val sharedType = Types
@@ -847,6 +851,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousGreaterEq(
               coerce(coercedLeft, TSet(sharedType)),
               coerce(coercedRight, TSet(sharedType)),
+              elementSize,
             )
           }, {
             val (coercedLeft, leftBag) = bag(left)
@@ -856,17 +861,19 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousGreaterEq(
               coerce(coercedLeft, TBag(sharedType)),
               coerce(coercedRight, TBag(sharedType)),
+              elementSize,
             )
           },
+          AmbiguousGreaterEq(pointer(left)._1, pointer(right)._1, elementSize),
         )
-      case l @ AmbiguousLess(left, right) =>
+      case less @ AmbiguousLess(left, right, elementSize) =>
         firstOk(
           e,
-          s"Expected both operands to be numeric, a set, or a bag, but got ${left
+          s"Expected both operands to be numeric, a set, a bag, or a pointer but got ${left
               .t} and ${right.t}.",
-          AmbiguousLess(int(left), int(right)),
-          floatOp2(l, (l, r) => AmbiguousLess(l, r)),
-          AmbiguousLess(rat(left), rat(right)), {
+          AmbiguousLess(int(left), int(right), elementSize),
+          floatOp2(less, (l, r) => AmbiguousLess(l, r, elementSize)),
+          AmbiguousLess(rat(left), rat(right), elementSize), {
             val (coercedLeft, leftSet) = set(left)
             val (coercedRight, rightSet) = set(right)
             val sharedType = Types
@@ -874,6 +881,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousLess(
               coerce(coercedLeft, TSet(sharedType)),
               coerce(coercedRight, TSet(sharedType)),
+              elementSize,
             )
           }, {
             val (coercedLeft, leftBag) = bag(left)
@@ -883,17 +891,19 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousLess(
               coerce(coercedLeft, TBag(sharedType)),
               coerce(coercedRight, TBag(sharedType)),
+              elementSize,
             )
           },
+          AmbiguousLess(pointer(left)._1, pointer(right)._1, elementSize),
         )
-      case l @ AmbiguousLessEq(left, right) =>
+      case less @ AmbiguousLessEq(left, right, elementSize) =>
         firstOk(
           e,
-          s"Expected both operands to be numeric, a set, or a bag, but got ${left
+          s"Expected both operands to be numeric, a set, a bag, or a pointer but got ${left
               .t} and ${right.t}.",
-          AmbiguousLessEq(int(left), int(right)),
-          floatOp2(l, (l, r) => AmbiguousLessEq(l, r)),
-          AmbiguousLessEq(rat(left), rat(right)), {
+          AmbiguousLessEq(int(left), int(right), elementSize),
+          floatOp2(less, (l, r) => AmbiguousLessEq(l, r, elementSize)),
+          AmbiguousLessEq(rat(left), rat(right), elementSize), {
             val (coercedLeft, leftSet) = set(left)
             val (coercedRight, rightSet) = set(right)
             val sharedType = Types
@@ -901,6 +911,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousLessEq(
               coerce(coercedLeft, TSet(sharedType)),
               coerce(coercedRight, TSet(sharedType)),
+              elementSize,
             )
           }, {
             val (coercedLeft, leftBag) = bag(left)
@@ -910,8 +921,10 @@ abstract class CoercingRewriter[Pre <: Generation]()
             AmbiguousLessEq(
               coerce(coercedLeft, TBag(sharedType)),
               coerce(coercedRight, TBag(sharedType)),
+              elementSize,
             )
           },
+          AmbiguousLessEq(pointer(left)._1, pointer(right)._1, elementSize),
         )
       case minus @ AmbiguousMinus(left, right) =>
         firstOk(
@@ -1008,12 +1021,13 @@ abstract class CoercingRewriter[Pre <: Generation]()
             )
           },
         )
-      case AmbiguousNeq(left, right, vectorInnerType) =>
+      case AmbiguousNeq(left, right, vectorInnerType, elementSize) =>
         val sharedType = Types.leastCommonSuperType(left.t, right.t)
         AmbiguousNeq(
           coerce(left, sharedType),
           coerce(right, sharedType),
           vectorInnerType,
+          elementSize,
         )
       case AmbiguousOr(left, right) =>
         firstOk(
@@ -1160,14 +1174,25 @@ abstract class CoercingRewriter[Pre <: Generation]()
         )
       case bgi @ BipGuardInvocation(obj, ref) =>
         BipGuardInvocation(cls(obj), ref)
-      case BitAnd(left, right) => BitAnd(int(left), int(right))
-      case BitNot(arg) => BitNot(int(arg))
-      case BitOr(left, right) => BitOr(int(left), int(right))
-      case BitShl(left, right) => BitShl(int(left), int(right))
-      case BitShr(left, right) => BitShr(int(left), int(right))
-      case BitUShr(left, right) => BitUShr(int(left), int(right))
-      case BitXor(left, right) => BitXor(int(left), int(right))
+      case op @ BitAnd(left, right, bits, signed) =>
+        BitAnd(int(left), int(right), bits, signed)(op.blame)
+      case op @ BitNot(arg, bits, signed) =>
+        BitNot(int(arg), bits, signed)(op.blame)
+      case op @ BitOr(left, right, bits, signed) =>
+        BitOr(int(left), int(right), bits, signed)(op.blame)
+      case op @ BitShl(left, right, bits, signed) =>
+        BitShl(int(left), int(right), bits, signed)(op.blame)
+      case op @ AmbiguousBitShr(left, right) =>
+        AmbiguousBitShr(int(left), int(right))(op.blame)
+      case op @ BitShr(left, right, bits) =>
+        BitShr(int(left), int(right), bits)(op.blame)
+      case op @ BitUShr(left, right, bits, signed) =>
+        BitUShr(int(left), int(right), bits, signed)(op.blame)
+      case op @ BitXor(left, right, bits, signed) =>
+        BitXor(int(left), int(right), bits, signed)(op.blame)
       case Cast(value, typeValue) => Cast(value, typeValue)
+      case IntegerPointerCast(value, typeValue, elementSize) =>
+        IntegerPointerCast(value, typeValue, elementSize)
       case CastFloat(e, t) =>
         firstOk(
           e,
@@ -1602,6 +1627,9 @@ abstract class CoercingRewriter[Pre <: Generation]()
         )
       case add @ PointerAdd(p, offset) =>
         PointerAdd(pointer(p)._1, int(offset))(add.blame)
+      case blck @ PointerBlock(p) => PointerBlock(pointer(p)._1)(blck.blame)
+      case addr @ PointerAddress(p, elementSize) =>
+        PointerAddress(pointer(p)._1, elementSize)(addr.blame)
       case len @ PointerBlockLength(p) =>
         PointerBlockLength(pointer(p)._1)(len.blame)
       case off @ PointerBlockOffset(p) =>
@@ -1609,6 +1637,18 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case len @ PointerLength(p) => PointerLength(pointer(p)._1)(len.blame)
       case get @ PointerSubscript(p, index) =>
         PointerSubscript(pointer(p)._1, int(index))(get.blame)
+      case PointerEq(l, r, elementSize) =>
+        PointerEq(pointer(l)._1, pointer(r)._1, elementSize)
+      case PointerNeq(l, r, elementSize) =>
+        PointerNeq(pointer(l)._1, pointer(r)._1, elementSize)
+      case PointerGreater(l, r, elementSize) =>
+        PointerGreater(pointer(l)._1, pointer(r)._1, elementSize)
+      case PointerLess(l, r, elementSize) =>
+        PointerLess(pointer(l)._1, pointer(r)._1, elementSize)
+      case PointerGreaterEq(l, r, elementSize) =>
+        PointerGreaterEq(pointer(l)._1, pointer(r)._1, elementSize)
+      case PointerLessEq(l, r, elementSize) =>
+        PointerLessEq(pointer(l)._1, pointer(r)._1, elementSize)
       case PointsTo(loc, perm, value) =>
         PointsTo(loc, rat(perm), coerce(value, loc.t))
       case PolarityDependent(onInhale, onExhale) =>
@@ -1773,6 +1813,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case SmtlibBvUDiv(left, right) => bitvec2(left, right, SmtlibBvUDiv(_, _))
       case SmtlibBvULt(left, right) => bitvec2(left, right, SmtlibBvULt(_, _))
       case SmtlibBvURem(left, right) => bitvec2(left, right, SmtlibBvURem(_, _))
+      case SmtlibBv2Nat(expr) => SmtlibBv2Nat(bitvec(expr)._1)
+      case SmtlibInt2Bv(expr, size) => SmtlibInt2Bv(int(expr), size)
       case SmtlibConcat(left, right) => bitvec2(left, right, SmtlibConcat(_, _))
       case SmtlibExtract(inclusiveEndIndexFromRight, startIndexFromRight, bv) =>
         SmtlibExtract(
@@ -1976,6 +2018,9 @@ abstract class CoercingRewriter[Pre <: Generation]()
           UMinus(rat(arg)),
         )
       case u @ Unfolding(pred, body) => Unfolding(pred, body)(u.blame)
+      case a @ Asserting(condition, body) =>
+        Asserting(res(condition), body)(a.blame)
+      case Assuming(assn, inner) => Assuming(bool(assn), inner)
       case UntypedLiteralBag(values) =>
         val sharedType = Types.leastCommonSuperType(values.map(_.t))
         UntypedLiteralBag(values.map(coerce(_, sharedType)))
@@ -2070,6 +2115,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case Z3BvSShr(left, right) => bitvec2(left, right, Z3BvSShr(_, _))
       case Z3BvSub(left, right) => bitvec2(left, right, Z3BvSub(_, _))
       case Z3BvXnor(left, right) => bitvec2(left, right, Z3BvXnor(_, _))
+      case Z3BvXor(left, right) => bitvec2(left, right, Z3BvXor(_, _))
+      case Z3BvSLt(left, right) => bitvec2(left, right, Z3BvSLt(_, _))
       case Z3SeqAt(seq, offset) => Z3SeqAt(z3seq(seq)._1, int(offset))
       case Z3SeqConcat(left, right) =>
         Z3SeqConcat(z3seq(left)._1, z3seq(right)._1)

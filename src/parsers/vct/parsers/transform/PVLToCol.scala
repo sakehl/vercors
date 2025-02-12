@@ -344,22 +344,22 @@ case class PVLToCol[G](
   def convert(implicit expr: EqExprContext): Expr[G] =
     expr match {
       case EqExpr0(left, _, right) =>
-        AmbiguousEq(convert(left), convert(right), TInt())
+        AmbiguousEq(convert(left), convert(right), TInt(), None)
       case EqExpr1(left, _, right) =>
-        AmbiguousNeq(convert(left), convert(right), TInt())
+        AmbiguousNeq(convert(left), convert(right), TInt(), None)
       case EqExpr2(inner) => convert(inner)
     }
 
   def convert(implicit expr: RelExprContext): Expr[G] =
     expr match {
       case RelExpr0(left, _, right) =>
-        AmbiguousLess(convert(left), convert(right))
+        AmbiguousLess(convert(left), convert(right), None)
       case RelExpr1(left, _, right) =>
-        AmbiguousLessEq(convert(left), convert(right))
+        AmbiguousLessEq(convert(left), convert(right), None)
       case RelExpr2(left, _, right) =>
-        AmbiguousGreaterEq(convert(left), convert(right))
+        AmbiguousGreaterEq(convert(left), convert(right), None)
       case RelExpr3(left, _, right) =>
-        AmbiguousGreater(convert(left), convert(right))
+        AmbiguousGreater(convert(left), convert(right), None)
       case RelExpr4(left, specOp, right) =>
         convert(expr, specOp, convert(left), convert(right))
       case RelExpr5(inner) => convert(inner)
@@ -479,6 +479,13 @@ case class PVLToCol[G](
       case PvlLongChorExpr(_, _, inner, _) => ChorExpr(convert(inner))
       case PvlShortChorExpr(_, _, _, _, inner, _) => ChorExpr(convert(inner))
       case PvlCastExpr(_, t, _, e) => Cast(convert(e), TypeValue(convert(t)))
+      case PvlBoolAsserting(_, _, assn, _) =>
+        Asserting(convert(assn), tt)(blame(expr))
+      case PvlAsserting(_, _, assn, _, inner, _) =>
+        Asserting(convert(assn), convert(inner))(blame(expr))
+      case PvlBoolAssuming(_, _, assn, _) => Assuming(convert(assn), tt)
+      case PvlAssuming(_, _, assn, _, inner, _) =>
+        Assuming(convert(assn), convert(inner))
       case PvlSender(_) => PVLSender()
       case PvlReceiver(_) => PVLReceiver()
       case PvlMessage(_) => PVLMessage()
@@ -1783,6 +1790,7 @@ case class PVLToCol[G](
         PermPointer(convert(ptr), convert(n), convert(perm))
       case ValPointerIndex(_, _, ptr, _, idx, _, perm, _) =>
         PermPointerIndex(convert(ptr), convert(idx), convert(perm))
+      case ValPointerBlock(_, _, ptr, _) => PointerBlock(convert(ptr))(blame(e))
       case ValPointerBlockLength(_, _, ptr, _) =>
         PointerBlockLength(convert(ptr))(blame(e))
       case ValPointerBlockOffset(_, _, ptr, _) =>
@@ -1945,6 +1953,13 @@ case class PVLToCol[G](
       case ValNdLength(_, _, dims, _) => NdLength(convert(dims))
       case ValChoose(_, _, xs, _) => Choose(convert(xs))(blame(e))
       case ValChooseFresh(_, _, xs, _) => ChooseFresh(convert(xs))(blame(e))
+      case ValBoolAssuming(_, _, assn, _) => Assuming(convert(assn), tt)
+      case ValAssuming(_, _, assn, _, inner, _) =>
+        Assuming(convert(assn), convert(inner))
+      case ValBoolAsserting(_, _, assn, _) =>
+        Asserting(convert(assn), tt)(blame(e))
+      case ValAsserting(_, _, assn, _, inner, _) =>
+        Asserting(convert(assn), convert(inner))(blame(e))
     }
 
   def convert(implicit e: ValExprPairContext): (Expr[G], Expr[G]) =

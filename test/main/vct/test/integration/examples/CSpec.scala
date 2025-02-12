@@ -13,7 +13,7 @@ class CSpec extends VercorsSpec {
   vercors should verify using silicon example "concepts/c/vector_type.c"
   vercors should verify using silicon example "concepts/c/pointer_casts.c"
   vercors should verify using silicon example "concepts/c/pointer_tests.c"
-  vercors should verify using silicon flags("--backend-option", "--exhaleMode=2") example "concepts/c/tagged_pointer.c"
+  vercors should verify using silicon flags("--backend-option", "--exhaleMode=2") example "concepts/c/tagged_struct.c"
   vercors should verify using silicon example "concepts/c/void.c"
 
   vercors should error withCode "resolutionError:type" in "float should not be demoted" c
@@ -204,27 +204,38 @@ class CSpec extends VercorsSpec {
     }
     """
 
-  vercors should error withCode "unsupportedMalloc" in "Unsupported malloc without sizeof" c
+  vercors should verify using silicon flag "--target" flag "x86_64-linux-unknown" in "Supported malloc without sizeof" c
     """
     #include <stdlib.h>
     int main(){
-      int *x = (int*) malloc(5*4);
+      int size = 5 * sizeof(int);
+      int *x = (int*) malloc(size);
+      //@ assert x == NULL || \pointer_block_length(x) == 5;
     }
     """
 
-  vercors should error withCode "unsupportedMalloc" in "Unsupported malloc with wrong cast" c
+  vercors should verify using silicon flag "--target" flag "x86_64-linux-unknown" in "Malloc with wrong cast" c
     """
     #include <stdlib.h>
     int main(){
-      float *x = (float* ) malloc(sizeof(int)*4);
+      float *x = (float*) malloc(sizeof(int)*4);
+      //@ assert x == NULL || \pointer_block_length(x) == 4;
     }
     """
 
-  vercors should error withCode "unsupportedSizeof" in "Unsupported use of sizeof" c
+  vercors should verify using silicon flag "--target" flag "x86_64-linux-unknown" in "Use of sizeof with a target" c
     """
-    #include <stdlib.h>
     int main(){
       int x = sizeof(int);
+      //@ assert x == 4;
+    }
+    """
+
+  vercors should fail withCode "assertFailed:false" using silicon in "Use of sizeof without a target" c
+    """
+    int main(){
+      int x = sizeof(int);
+      //@ assert x == 4;
     }
     """
 
@@ -575,7 +586,7 @@ class CSpec extends VercorsSpec {
     }
     """
 
-  vercors should verify using silicon in "OpenCL vector initializer correctly uses statefull function" c
+  vercors should verify using silicon in "OpenCL vector initializer correctly uses stateful function" c
     """
    // pass
     #include <opencl.h>
@@ -611,6 +622,22 @@ class CSpec extends VercorsSpec {
         struct B struct_b;
         struct_b.struct_a.boolean = true == true; // We currently don't support boolean literals
         bool *pointer_to_boolean = (bool *)&struct_b;
+    }
+    """
+  vercors should verify using silicon example "concepts/c/mismatched_provenance.c"
+  vercors should verify using silicon example "concepts/c/ptr_comparisons.c"
+  vercors should verify using silicon flag "--target" flag "x86_64-linux-unknown" example "concepts/c/pointer_tag.c"
+  vercors should verify using silicon in "Pointer address correctly offset based on type size" c
+    """
+    #include <stdint.h>
+    #include <stdlib.h>
+
+    void main(){
+        int *array = (int *)malloc(sizeof(int) * 10);
+        if (array == NULL) return;
+        uintptr_t a0 = (uintptr_t)array;
+        uintptr_t a1 = (uintptr_t)&array[1];
+        //@ assert a0 + sizeof(int) == a1;
     }
     """
 }

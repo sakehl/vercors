@@ -8,7 +8,6 @@
 #include <llvm/Analysis/CFG.h>
 #include <llvm/Support/raw_ostream.h>
 
-
 const std::string SOURCE_LOC = "Transform::Instruction::TermOp";
 
 void llvm2col::transformTermOp(llvm::Instruction &llvmInstruction,
