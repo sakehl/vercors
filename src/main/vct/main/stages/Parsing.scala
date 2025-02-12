@@ -122,7 +122,7 @@ case class Parsing[G <: Generation](
                 blameProvider,
                 ccpp,
                 cppSystemInclude,
-                readable.underlyingPath.map(_.getParent).toSeq ++
+                readable.underlyingPath.map(_.toAbsolutePath.getParent).toSeq ++
                   cppOtherIncludes,
                 cppDefines,
               )
