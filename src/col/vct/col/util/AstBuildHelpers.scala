@@ -49,6 +49,8 @@ object AstBuildHelpers {
     def +(right: Expr[G])(implicit origin: Origin): Plus[G] = Plus(left, right)
     def -(right: Expr[G])(implicit origin: Origin): Minus[G] =
       Minus(left, right)
+    def unary_-(implicit origin: Origin): UMinus[G] =
+      UMinus(left)
     def *(right: Expr[G])(implicit origin: Origin): Mult[G] = Mult(left, right)
     def /(
         right: Expr[G]
