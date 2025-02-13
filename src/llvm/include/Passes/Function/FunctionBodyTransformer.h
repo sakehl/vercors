@@ -55,20 +55,6 @@ class FunctionCursor {
     /// completed.
     std::unordered_multimap<col::Block *, col::Assign *> phiAssignBuffer;
 
-    /// Map that is used to determine to which block a phi-assignment should be
-    /// added to. Usually, this is the block that is referenced in the phi-node.
-    /// However, in some cases we insert empty blocks to ensure that the
-    /// phi-assignments are propagated correctly.
-    /// In these cases, the phi-assignment should be added to the newly added
-    /// block.
-    /// The key of the map has the shape (from, toPhi) and
-    /// maps to the new block to which the phi-assignment should be propagated
-    /// (here [from] is the block from which the jump to the phi-instruction
-    /// occurs, and [toPhi] is the block of the phi-instruction). Assumes that
-    /// every key is ony inserted once.
-    std::map<std::pair<col::Block *, col::Block *>, col::Block *>
-        phiAssignmentTargetMap;
-
     /// Almost always when adding a variable to the variableMap, some extra
     /// processing is required which is why this method is private as to not
     /// accidentally use it outside the functionCursor
@@ -196,23 +182,6 @@ class FunctionCursor {
      */
     FDResult &getFDResult(llvm::Function &otherLLVMFunction);
 
-    /**
-     * Add a new target block for a phi-assignment to the map of phi-taget
-     * blocks.
-     * @param from The block from which the edge to the phi-instruction starts.
-     * @param toPhi The block of the phi-instruction.
-     * @param newBlock The new block that was inserted on the edge.
-     */
-    void addNewPhiAssignmentTargetBlock(col::Block &from, col::Block &toPhi,
-                                        col::Block &newBlock);
-
-    /**
-     * Get the target-block for propagating a phi-assignment that is caused
-     * by an edge between blocks [from] --> [to].
-     * If a new block was inserted on this edge, the new block is returned.
-     * Otherwise, [from] is returned.
-     */
-    col::Block *getTargetForPhiAssignment(col::Block &from, col::Block &to);
 };
 
 class FunctionBodyTransformerPass

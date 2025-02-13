@@ -246,23 +246,6 @@ col::Assign &FunctionCursor::createPhiAssignment(Instruction &llvmInstruction,
     return *assignment;
 }
 
-void FunctionCursor::addNewPhiAssignmentTargetBlock(col::Block &from,
-                                                    col::Block &toPhi,
-                                                    col::Block &newBlock) {
-    phiAssignmentTargetMap.insert({{&from, &toPhi}, &newBlock});
-}
-
-col::Block *FunctionCursor::getTargetForPhiAssignment(col::Block &from,
-                                                      col::Block &to) {
-    auto res = phiAssignmentTargetMap.find({&from, &to});
-    if (res == phiAssignmentTargetMap.end()) {
-        // If the map does not contain an entry, no intermediary block has been
-        // added.
-        return &from;
-    }
-    return res->second;
-}
-
 llvm::FunctionAnalysisManager &FunctionCursor::getFunctionAnalysisManager() {
     return FAM;
 }
