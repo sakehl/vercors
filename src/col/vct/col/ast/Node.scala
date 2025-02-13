@@ -3570,6 +3570,8 @@ final class LLVMBasicBlock[G](
     val label: LabelDecl[G],
     val loop: Option[LLVMLoop[G]],
     val body: Statement[G],
+    val phiAssignments: Seq[Statement[G]],
+    val terminator: Statement[G],
 )(implicit val o: Origin)
     extends LLVMStatement[G] with LLVMBasicBlockImpl[G]
 

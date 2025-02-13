@@ -39,7 +39,7 @@ void transformLLVMBlock(llvm::BasicBlock &llvmBlock,
  */
 void transformInstruction(pallas::FunctionCursor &funcCursor,
                           llvm::Instruction &llvmInstruction,
-                          col::Block &colBodyBlock);
+                          col::LlvmBasicBlock &colBodyBlock);
 
 void reportUnsupportedOperatorError(const std::string &source,
                                     llvm::Instruction &llvmInstruction);

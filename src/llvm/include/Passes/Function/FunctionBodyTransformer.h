@@ -46,14 +46,15 @@ class FunctionCursor {
     /// set of all COL blocks that have been completed. Completed meaning all
     /// instructions of the corresponding LLVM block have been transformed. This
     /// excludes possible future phi node back transformations.
-    std::set<col::Block *> completedColBlocks;
+    std::set<col::LlvmBasicBlock *> completedColBlocks;
 
     /// set of all COL blocks that we have started transforming.
-    std::set<col::Block *> visitedColBlocks;
+    std::set<col::LlvmBasicBlock *> visitedColBlocks;
 
     /// map of assignments which should be added to the basic block when it is
     /// completed.
-    std::unordered_multimap<col::Block *, col::Assign *> phiAssignBuffer;
+    std::unordered_multimap<col::LlvmBasicBlock *, col::Assign *>
+        phiAssignBuffer;
 
     /// Almost always when adding a variable to the variableMap, some extra
     /// processing is required which is why this method is private as to not
@@ -87,7 +88,7 @@ class FunctionCursor {
      */
     col::Assign &
     createAssignmentAndDeclaration(Instruction &llvmInstruction,
-                                   col::Block &colBlock,
+                                   col::LlvmBasicBlock &colBlock,
                                    Type *llvmPointerType = nullptr);
 
     /**
@@ -100,10 +101,11 @@ class FunctionCursor {
      * @return the created col assignment
      */
     col::Assign &createAssignment(Instruction &llvmInstruction,
-                                  col::Block &colBlock, col::Variable &varDecl);
+                                  col::LlvmBasicBlock &colBlock,
+                                  col::Variable &varDecl);
 
     col::Assign &createPhiAssignment(Instruction &llvmInstruction,
-                                     col::Block &colBlock,
+                                     col::LlvmBasicBlock &colBlock,
                                      col::Variable &varDecl);
 
     col::Variable &getVariableMapEntry(llvm::Value &llvmValue, bool inPhiNode);
@@ -123,17 +125,6 @@ class FunctionCursor {
      */
     col::LlvmBasicBlock &getOrSetLLVMBlock2ColBlockEntry(BasicBlock &llvmBlock);
 
-    /**
-     * Adds a new, uninitialized col-LlvmBasicBlock to the body of the function
-     * and returns a reference to this block.
-     * The function is intended to be used for intermediary blocks that are
-     * not present in the original llvm-module but are added during the
-     * transformation as targets for propagating phi-assignments.
-     * The passes instruction is used to construct the origin.
-     */
-    col::LlvmBasicBlock &
-    generateIntermediaryColBlock(llvm::Instruction &originInstruction);
-
     col::LlvmBasicBlock &visitLLVMBlock(BasicBlock &llvmBlock);
 
     llvm::FunctionAnalysisManager &getFunctionAnalysisManager();
@@ -152,7 +143,7 @@ class FunctionCursor {
      * Mark COL Block as complete by adding it to the completedColBlocks set.
      * @param llvmBlock
      */
-    void complete(col::Block &colBlock);
+    void complete(col::LlvmBasicBlock &colBlock);
 
     /**
      * Indicates whether an llvmBlock has been fully transformed (excluding
@@ -160,7 +151,7 @@ class FunctionCursor {
      * visited.
      * @return true if block is in the completedColBlocks set, false otherwise.
      */
-    bool isComplete(col::Block &colBlock);
+    bool isComplete(col::LlvmBasicBlock &colBlock);
 
     LoopInfo &getLoopInfo();
 
@@ -181,7 +172,6 @@ class FunctionCursor {
      * @return
      */
     FDResult &getFDResult(llvm::Function &otherLLVMFunction);
-
 };
 
 class FunctionBodyTransformerPass

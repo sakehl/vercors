@@ -19,11 +19,6 @@ void llvm2col::transformLLVMBlock(llvm::BasicBlock &llvmBlock,
         return;
     }
     col::LlvmBasicBlock &labeled = functionCursor.visitLLVMBlock(llvmBlock);
-    col::Block &colBlock = *labeled.mutable_body()->mutable_block();
-    /* for (auto *B : llvm::predecessors(&llvmBlock)) { */
-    /*     if (!functionCursor.isVisited(*B)) */
-    /*         return; */
-    /* } */
     if (functionCursor.getLoopInfo().isLoopHeader(&llvmBlock)) {
         llvm::Loop *llvmLoop =
             functionCursor.getLoopInfo().getLoopFor(&llvmBlock);
@@ -44,19 +39,19 @@ void llvm2col::transformLLVMBlock(llvm::BasicBlock &llvmBlock,
         }
     }
     for (auto &I : llvmBlock) {
-        transformInstruction(functionCursor, I, colBlock);
+        transformInstruction(functionCursor, I, labeled);
     }
 
     // When the last instuction is a branch, the block already gets completed
     // in the call to transformInstruction.
-    if (!functionCursor.isComplete(colBlock)) {
-        functionCursor.complete(colBlock);
+    if (!functionCursor.isComplete(labeled)) {
+        functionCursor.complete(labeled);
     }
 }
 
 void llvm2col::transformInstruction(pallas::FunctionCursor &funcCursor,
                                     llvm::Instruction &llvmInstruction,
-                                    col::Block &colBodyBlock) {
+                                    col::LlvmBasicBlock &colBodyBlock) {
     u_int32_t opCode = llvmInstruction.getOpcode();
     if (llvm::Instruction::TermOpsBegin <= opCode &&
         opCode < llvm::Instruction::TermOpsEnd) {

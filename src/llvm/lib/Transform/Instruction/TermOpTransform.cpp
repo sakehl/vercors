@@ -3,6 +3,7 @@
 #include "Origin/OriginProvider.h"
 #include "Transform/BlockTransform.h"
 #include "Transform/Transform.h"
+#include "Util/BlockUtils.h"
 #include "Util/Exceptions.h"
 
 #include <llvm/Analysis/CFG.h>
@@ -11,7 +12,7 @@
 const std::string SOURCE_LOC = "Transform::Instruction::TermOp";
 
 void llvm2col::transformTermOp(llvm::Instruction &llvmInstruction,
-                               col::Block &colBlock,
+                               col::LlvmBasicBlock &colBlock,
                                pallas::FunctionCursor &funcCursor) {
     switch (llvm::Instruction::TermOps(llvmInstruction.getOpcode())) {
     case llvm::Instruction::Ret:
@@ -38,9 +39,10 @@ void llvm2col::transformTermOp(llvm::Instruction &llvmInstruction,
 }
 
 void llvm2col::transformRet(llvm::ReturnInst &llvmRetInstruction,
-                            col::Block &colBlock,
+                            col::LlvmBasicBlock &colBlock,
                             pallas::FunctionCursor &funcCursor) {
-    col::Return *returnStatement = colBlock.add_statements()->mutable_return_();
+    col::Return *returnStatement =
+        colBlock.mutable_terminator()->mutable_return_();
     returnStatement->set_allocated_origin(
         generateSingleStatementOrigin(llvmRetInstruction));
 
@@ -56,9 +58,9 @@ void llvm2col::transformRet(llvm::ReturnInst &llvmRetInstruction,
 }
 
 void llvm2col::transformConditionalBranch(llvm::BranchInst &llvmBrInstruction,
-                                          col::Block &colBlock,
+                                          col::LlvmBasicBlock &colBlock,
                                           pallas::FunctionCursor &funcCursor) {
-    col::Branch *colBranch = colBlock.add_statements()->mutable_branch();
+    col::Branch *colBranch = colBlock.mutable_terminator()->mutable_branch();
     colBranch->set_allocated_origin(
         generateSingleStatementOrigin(llvmBrInstruction));
     // pre-declare completion because the final branch statement is already
@@ -129,7 +131,7 @@ void llvm2col::transformConditionalBranch(llvm::BranchInst &llvmBrInstruction,
 }
 
 void llvm2col::transformUnConditionalBranch(
-    llvm::BranchInst &llvmBrInstruction, col::Block &colBlock,
+    llvm::BranchInst &llvmBrInstruction, col::LlvmBasicBlock &colBlock,
     pallas::FunctionCursor &funcCursor) {
     // get llvm target block
     auto *llvmTargetBlock =
@@ -140,7 +142,7 @@ void llvm2col::transformUnConditionalBranch(
     col::LlvmBasicBlock &labeledColBlock =
         funcCursor.getOrSetLLVMBlock2ColBlockEntry(*llvmTargetBlock);
     // create goto to target labeled block
-    col::Goto *colGoto = colBlock.add_statements()->mutable_goto_();
+    col::Goto *colGoto = colBlock.mutable_terminator()->mutable_goto_();
     colGoto->mutable_lbl()->set_id(labeledColBlock.label().id());
     // set origin of goto statement
     colGoto->set_allocated_origin(
@@ -150,10 +152,10 @@ void llvm2col::transformUnConditionalBranch(
 }
 
 void llvm2col::transformUnreachable(
-    llvm::UnreachableInst &llvmUnreachableInstruction, col::Block &colBlock,
-    pallas::FunctionCursor &funcCursor) {
+    llvm::UnreachableInst &llvmUnreachableInstruction,
+    col::LlvmBasicBlock &colBlock, pallas::FunctionCursor &funcCursor) {
     col::LlvmBranchUnreachable *unreachableStatement =
-        colBlock.add_statements()->mutable_llvm_branch_unreachable();
+        colBlock.mutable_terminator()->mutable_llvm_branch_unreachable();
     unreachableStatement->set_allocated_origin(
         generateSingleStatementOrigin(llvmUnreachableInstruction));
     unreachableStatement->set_allocated_blame(new col::Blame());

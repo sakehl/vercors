@@ -6,7 +6,8 @@
 namespace llvm2col {
 namespace col = vct::col::ast;
 
-void transformBinaryOp(llvm::Instruction &llvmInstruction, col::Block &colBlock,
+void transformBinaryOp(llvm::Instruction &llvmInstruction,
+                       col::LlvmBasicBlock &colBlock,
                        pallas::FunctionCursor &funcCursor);
 
 } // namespace llvm2col

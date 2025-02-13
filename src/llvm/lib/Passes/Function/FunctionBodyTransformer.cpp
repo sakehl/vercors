@@ -5,6 +5,7 @@
 #include "Passes/Function/FunctionDeclarer.h"
 #include "Transform/BlockTransform.h"
 #include "Transform/Transform.h"
+#include "Util/BlockUtils.h"
 #include "Util/Exceptions.h"
 #include <llvm/Support/raw_ostream.h>
 
@@ -60,27 +61,19 @@ col::Variable &FunctionCursor::getVariableMapEntry(Value &llvmValue,
 
 bool FunctionCursor::isVisited(BasicBlock &llvmBlock) {
     return visitedColBlocks.contains(
-        this->getOrSetLLVMBlock2ColBlockEntry(llvmBlock)
-            .mutable_body()
-            ->mutable_block());
+        &this->getOrSetLLVMBlock2ColBlockEntry(llvmBlock));
 }
 
-void FunctionCursor::complete(col::Block &colBlock) {
-    int lastIndex = colBlock.statements_size() - 1;
-    bool found = false;
+void FunctionCursor::complete(col::LlvmBasicBlock &colBlock) {
     auto range = phiAssignBuffer.equal_range(&colBlock);
     for (auto it = range.first; it != range.second; ++it) {
-        found = true;
-        colBlock.add_statements()->set_allocated_assign(it->second);
-    }
-    if (found) {
-        colBlock.mutable_statements()->SwapElements(
-            colBlock.statements_size() - 1, lastIndex);
+        pallas::bodyAsBlock(colBlock).add_statements()->set_allocated_assign(
+            it->second);
     }
     completedColBlocks.insert(&colBlock);
 }
 
-bool FunctionCursor::isComplete(col::Block &colBlock) {
+bool FunctionCursor::isComplete(col::LlvmBasicBlock &colBlock) {
     return completedColBlocks.contains(&colBlock);
 }
 
@@ -108,30 +101,10 @@ FunctionCursor::getOrSetLLVMBlock2ColBlockEntry(BasicBlock &llvmBlock) {
     return llvmBlock2ColBlock.at(&llvmBlock);
 }
 
-col::LlvmBasicBlock &FunctionCursor::generateIntermediaryColBlock(
-    llvm::Instruction &originInstruction) {
-    // create basic block
-    col::LlvmBasicBlock *bb =
-        functionBody.add_statements()->mutable_llvm_basic_block();
-    bb->set_allocated_origin(
-        llvm2col::generateSingleStatementOrigin(originInstruction));
-    // create label declaration in buffer
-    col::LabelDecl *labelDecl = bb->mutable_label();
-    labelDecl->set_allocated_origin(
-        llvm2col::generateSingleStatementOrigin(originInstruction));
-    llvm2col::setColNodeId(labelDecl);
-    // create nested block
-    col::Block *block = bb->mutable_body()->mutable_block();
-    block->set_allocated_origin(
-        llvm2col::generateSingleStatementOrigin(originInstruction));
-    return *bb;
-}
-
 col::LlvmBasicBlock &FunctionCursor::visitLLVMBlock(BasicBlock &llvmBlock) {
     col::LlvmBasicBlock &labeledBlock =
         this->getOrSetLLVMBlock2ColBlockEntry(llvmBlock);
-    col::Block *body = labeledBlock.mutable_body()->mutable_block();
-    visitedColBlocks.insert(body);
+    visitedColBlocks.insert(&labeledBlock);
     return labeledBlock;
 }
 
@@ -186,16 +159,19 @@ col::Variable &FunctionCursor::declareVariable(Instruction &llvmInstruction,
     return *varDecl;
 }
 
-col::Assign &FunctionCursor::createAssignmentAndDeclaration(
-    Instruction &llvmInstruction, col::Block &colBlock, Type *llvmPointerType) {
+col::Assign &
+FunctionCursor::createAssignmentAndDeclaration(Instruction &llvmInstruction,
+                                               col::LlvmBasicBlock &colBlock,
+                                               Type *llvmPointerType) {
     col::Variable &varDecl = declareVariable(llvmInstruction, llvmPointerType);
     return createAssignment(llvmInstruction, colBlock, varDecl);
 }
 
 col::Assign &FunctionCursor::createAssignment(Instruction &llvmInstruction,
-                                              col::Block &colBlock,
+                                              col::LlvmBasicBlock &colBlock,
                                               col::Variable &varDecl) {
-    col::Assign *assignment = colBlock.add_statements()->mutable_assign();
+    col::Block &body = pallas::bodyAsBlock(colBlock);
+    col::Assign *assignment = body.add_statements()->mutable_assign();
     assignment->set_allocated_blame(new col::Blame());
     assignment->set_allocated_origin(
         llvm2col::generateSingleStatementOrigin(llvmInstruction));
@@ -205,20 +181,11 @@ col::Assign &FunctionCursor::createAssignment(Instruction &llvmInstruction,
         llvm2col::generateAssignTargetOrigin(llvmInstruction));
     // set target to refer to var decl
     colLocal->mutable_ref()->set_id(varDecl.id());
-    if (isComplete(colBlock)) {
-        // if the colBlock is completed, the assignment will be inserted after
-        // the goto/branch statement this can occur due to e.g. phi nodes back
-        // tracking assignments in their origin blocks. therefore we need to
-        // swap the last two elements of the block (i.e. the goto statement and
-        // the newest assignment)
-        int lastIndex = colBlock.statements_size() - 1;
-        colBlock.mutable_statements()->SwapElements(lastIndex, lastIndex - 1);
-    }
     return *assignment;
 }
 
 col::Assign &FunctionCursor::createPhiAssignment(Instruction &llvmInstruction,
-                                                 col::Block &colBlock,
+                                                 col::LlvmBasicBlock &colBlock,
                                                  col::Variable &varDecl) {
     col::Assign *assignment = new col::Assign();
     assignment->set_allocated_blame(new col::Blame());
@@ -231,14 +198,8 @@ col::Assign &FunctionCursor::createPhiAssignment(Instruction &llvmInstruction,
     // set target to refer to var decl
     colLocal->mutable_ref()->set_id(varDecl.id());
     if (isComplete(colBlock)) {
-        // if the colBlock is completed, the assignment will be inserted after
-        // the goto/branch statement this can occur due to e.g. phi nodes back
-        // tracking assignments in their origin blocks. therefore we need to
-        // swap the last two elements of the block (i.e. the goto statement and
-        // the newest assignment)
-        colBlock.add_statements()->set_allocated_assign(assignment);
-        int lastIndex = colBlock.statements_size() - 1;
-        colBlock.mutable_statements()->SwapElements(lastIndex, lastIndex - 1);
+        pallas::bodyAsBlock(colBlock).add_statements()->set_allocated_assign(
+            assignment);
     } else {
         // Buffer the phi assignments so they appear at the end
         phiAssignBuffer.insert({&colBlock, assignment});

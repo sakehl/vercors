@@ -1200,13 +1200,24 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       implicit o: Origin
   ): Expr[Post] = Result[Post](llvmFunctionMap.ref(ref.decl))
 
-  private def blockToLabel(block: LLVMBasicBlock[Pre]): Statement[Post] =
-    if (elidedBackEdges.contains(block.label)) { rw.dispatch(block.body) }
-    else {
-      Label(rw.labelDecls.dispatch(block.label), rw.dispatch(block.body))(
-        block.o
-      )
+  // Merges the statements of a basic-block´s body with the
+  // terminator instruction.
+  private def assembleBasicBlockBody(
+      basicBlock: LLVMBasicBlock[Pre]
+  ): Block[Pre] = {
+    implicit val o: Origin = basicBlock.o
+    basicBlock.body match {
+      case b: Block[Pre] => Block[Pre](b.statements :+ basicBlock.terminator)
+      case _ => throw UnexpectedLLVMNode(basicBlock.body)
     }
+  }
+
+  private def blockToLabel(block: LLVMBasicBlock[Pre]): Statement[Post] = {
+    // Append the terminator-instruction to the body
+    val newBody = rw.dispatch(assembleBasicBlockBody(block))
+    if (elidedBackEdges.contains(block.label)) { newBody }
+    else { Label(rw.labelDecls.dispatch(block.label), newBody)(block.o) }
+  }
 
   def rewriteBasicBlock(block: LLVMBasicBlock[Pre]): Statement[Post] = {
     if (loopBlocks.contains(block))
@@ -1303,26 +1314,22 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
     def eliminate(bb: LLVMBasicBlock[Pre]): Block[Post] = {
       implicit val o: Origin = bb.o
-      bb.body match {
-        case block: Block[Pre] =>
-          block.statements.last match {
-            case goto: Goto[Pre] =>
-              Block[Post](
-                block.statements.dropRight(1).map(rw.dispatch) ++
-                  eliminate(labelDeclMap(goto.lbl.decl)).statements
-              )
-            case _: Return[Pre] =>
-              rw.dispatch(block) match {
-                case block: Block[Post] => block
-                case other => throw UnexpectedLLVMNode(other)
-              }
-            case branch: Branch[Pre] =>
-              Block[Post](
-                block.statements.dropRight(1).map(rw.dispatch) :+
-                  eliminate(branch)
-              )
+      val block = assembleBasicBlockBody(bb)
+      block.statements.last match {
+        case goto: Goto[Pre] =>
+          Block[Post](
+            block.statements.dropRight(1).map(rw.dispatch) ++
+              eliminate(labelDeclMap(goto.lbl.decl)).statements
+          )
+        case _: Return[Pre] =>
+          rw.dispatch(block) match {
+            case block: Block[Post] => block
             case other => throw UnexpectedLLVMNode(other)
           }
+        case branch: Branch[Pre] =>
+          Block[Post](
+            block.statements.dropRight(1).map(rw.dispatch) :+ eliminate(branch)
+          )
         case other => throw UnexpectedLLVMNode(other)
       }
     }

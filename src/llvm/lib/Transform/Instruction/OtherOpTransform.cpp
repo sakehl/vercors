@@ -11,6 +11,7 @@
 #include "Passes/Function/ExprWrapperMapper.h"
 #include "Transform/BlockTransform.h"
 #include "Transform/Transform.h"
+#include "Util/BlockUtils.h"
 #include "Util/Constants.h"
 #include "Util/Exceptions.h"
 #include "Util/PallasMD.h"
@@ -18,7 +19,7 @@
 const std::string SOURCE_LOC = "Transform::Instruction::OtherOp";
 
 void llvm2col::transformOtherOp(llvm::Instruction &llvmInstruction,
-                                col::Block &colBlock,
+                                col::LlvmBasicBlock &colBlock,
                                 pallas::FunctionCursor &funcCursor) {
     switch (llvm::Instruction::OtherOps(llvmInstruction.getOpcode())) {
     case llvm::Instruction::PHI:
@@ -42,16 +43,14 @@ void llvm2col::transformOtherOp(llvm::Instruction &llvmInstruction,
     }
 }
 
-void llvm2col::transformPhi(llvm::PHINode &phiInstruction, col::Block &colBlock,
+void llvm2col::transformPhi(llvm::PHINode &phiInstruction, col::LlvmBasicBlock &colBlock,
                             pallas::FunctionCursor &funcCursor) {
     col::Variable &varDecl = funcCursor.declareVariable(phiInstruction);
     for (auto &B : phiInstruction.blocks()) {
         // add assignment of the variable to the block of the conditional
         // branch
-        col::Block &targetBlock =
-            *funcCursor.getOrSetLLVMBlock2ColBlockEntry(*B)
-                 .mutable_body()
-                 ->mutable_block();
+        col::LlvmBasicBlock &targetBlock =
+            funcCursor.getOrSetLLVMBlock2ColBlockEntry(*B);
 
         col::Assign &assignment = funcCursor.createPhiAssignment(
             phiInstruction, targetBlock, varDecl);
@@ -65,7 +64,7 @@ void llvm2col::transformPhi(llvm::PHINode &phiInstruction, col::Block &colBlock,
 }
 
 void llvm2col::transformICmp(llvm::ICmpInst &icmpInstruction,
-                             col::Block &colBlock,
+                             col::LlvmBasicBlock &colBlock,
                              pallas::FunctionCursor &funcCursor) {
     col::Assign &assignment =
         funcCursor.createAssignmentAndDeclaration(icmpInstruction, colBlock);
@@ -111,7 +110,7 @@ void llvm2col::transformICmp(llvm::ICmpInst &icmpInstruction,
 }
 
 void llvm2col::transformFCmp(llvm::FCmpInst &fcmpInstruction,
-                             col::Block &colBlock,
+                             col::LlvmBasicBlock &colBlock,
                              pallas::FunctionCursor &funcCursor) {
     // TODO: Deal with fastmath flags
     // TODO: Deal with NaNs, LLVM generally pretends signalling NaNs don't
@@ -248,7 +247,7 @@ bool llvm2col::checkCallSupport(llvm::CallInst &callInstruction) {
 }
 
 void llvm2col::transformCallExpr(llvm::CallInst &callInstruction,
-                                 col::Block &colBlock,
+                                 col::LlvmBasicBlock &colBlock,
                                  pallas::FunctionCursor &funcCursor) {
     if (!checkCallSupport(callInstruction) ||
         callInstruction.getCalledFunction() == nullptr)
@@ -270,7 +269,7 @@ void llvm2col::transformCallExpr(llvm::CallInst &callInstruction,
     col::Expr *functionCallExpr;
     // if void function add an eval expression
     if (callInstruction.getType()->isVoidTy()) {
-        col::Eval *eval = colBlock.add_statements()->mutable_eval();
+        col::Eval *eval = pallas::bodyAsBlock(colBlock).add_statements()->mutable_eval();
         eval->set_allocated_origin(
             llvm2col::generateSingleStatementOrigin(callInstruction));
         functionCallExpr = eval->mutable_expr();
@@ -298,7 +297,7 @@ void llvm2col::transformCallExpr(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasSpecLibCall(llvm::CallInst &callInstruction,
-                                          col::Block &colBlock,
+                                          col::LlvmBasicBlock &colBlock,
                                           pallas::FunctionCursor &funcCursor) {
     auto specLibType =
         pallas::utils::isPallasSpecLib(*callInstruction.getCalledFunction())
@@ -390,7 +389,7 @@ bool checkPtrBlockSpecFuncWellformed(llvm::Function &specFunc,
 } // namespace
 
 void llvm2col::transformPallasSpecResult(llvm::CallInst &callInstruction,
-                                         col::Block &colBlock,
+                                         col::LlvmBasicBlock &colBlock,
                                          pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     bool isRegularReturn = !llvmSpecFunc->getReturnType()->isVoidTy();
@@ -449,7 +448,7 @@ void llvm2col::transformPallasSpecResult(llvm::CallInst &callInstruction,
 
         // Replace the call to the result-function with a store-instruction that
         // stores the value of \result.
-        col::LlvmStore *store = colBlock.add_statements()->mutable_llvm_store();
+        col::LlvmStore *store = pallas::bodyAsBlock(colBlock).add_statements()->mutable_llvm_store();
         store->set_allocated_origin(
             llvm2col::generateFunctionCallOrigin(callInstruction));
         store->set_allocated_blame(new col::Blame());
@@ -472,7 +471,7 @@ void llvm2col::transformPallasSpecResult(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasFracOf(llvm::CallInst &callInstruction,
-                                     col::Block &colBlock,
+                                     col::LlvmBasicBlock &colBlock,
                                      pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
 
@@ -498,7 +497,7 @@ void llvm2col::transformPallasFracOf(llvm::CallInst &callInstruction,
         return;
     }
 
-    col::LlvmFracOf *fracOf = colBlock.add_statements()->mutable_llvm_frac_of();
+    col::LlvmFracOf *fracOf = pallas::bodyAsBlock(colBlock).add_statements()->mutable_llvm_frac_of();
     fracOf->set_allocated_origin(
         llvm2col::generateFunctionCallOrigin(callInstruction));
     fracOf->set_allocated_blame(new col::Blame());
@@ -514,7 +513,7 @@ void llvm2col::transformPallasFracOf(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasPerm(llvm::CallInst &callInstruction,
-                                   col::Block &colBlock,
+                                   col::LlvmBasicBlock &colBlock,
                                    pallas::FunctionCursor &funcCursor) {
     // Check that the function signature is wellformed
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
@@ -543,7 +542,7 @@ void llvm2col::transformPallasPerm(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasPtrBlockLength(
-    llvm::CallInst &callInstruction, col::Block &colBlock,
+    llvm::CallInst &callInstruction, col::LlvmBasicBlock &colBlock,
     pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     if (!checkPtrBlockSpecFuncWellformed(*llvmSpecFunc, "PtrBlockLength")) {
@@ -562,7 +561,7 @@ void llvm2col::transformPallasPtrBlockLength(
 }
 
 void llvm2col::transformPallasPtrBlockOffset(
-    llvm::CallInst &callInstruction, col::Block &colBlock,
+    llvm::CallInst &callInstruction, col::LlvmBasicBlock &colBlock,
     pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     if (!checkPtrBlockSpecFuncWellformed(*llvmSpecFunc, "PtrBlockOffset")) {
@@ -581,7 +580,7 @@ void llvm2col::transformPallasPtrBlockOffset(
 }
 
 void llvm2col::transformPallasPtrLength(llvm::CallInst &callInstruction,
-                                        col::Block &colBlock,
+                                        col::LlvmBasicBlock &colBlock,
                                         pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     if (!checkPtrBlockSpecFuncWellformed(*llvmSpecFunc, "PtrLength")) {
@@ -600,7 +599,7 @@ void llvm2col::transformPallasPtrLength(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasImply(llvm::CallInst &callInstruction,
-                                    col::Block &colBlock,
+                                    col::LlvmBasicBlock &colBlock,
                                     pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     // Check that the function signature is wellformed
@@ -622,7 +621,7 @@ void llvm2col::transformPallasImply(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasAnd(llvm::CallInst &callInstruction,
-                                  col::Block &colBlock,
+                                  col::LlvmBasicBlock &colBlock,
                                   pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     // Check that the function signature is wellformed
@@ -643,7 +642,7 @@ void llvm2col::transformPallasAnd(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasOr(llvm::CallInst &callInstruction,
-                                 col::Block &colBlock,
+                                 col::LlvmBasicBlock &colBlock,
                                  pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     // Check that the function signature is wellformed
@@ -664,7 +663,7 @@ void llvm2col::transformPallasOr(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasStar(llvm::CallInst &callInstruction,
-                                   col::Block &colBlock,
+                                   col::LlvmBasicBlock &colBlock,
 
                                    pallas::FunctionCursor &funcCursor) {
     // Check that the function signature is wellformed
@@ -687,7 +686,7 @@ void llvm2col::transformPallasStar(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasOld(llvm::CallInst &callInstruction,
-                                  col::Block &colBlock,
+                                  col::LlvmBasicBlock &colBlock,
                                   pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     bool isRegularReturn = !llvmSpecFunc->getReturnType()->isVoidTy();
@@ -718,7 +717,7 @@ void llvm2col::transformPallasOld(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasBoundVar(llvm::CallInst &callInstruction,
-                                       col::Block &colBlock,
+                                       col::LlvmBasicBlock &colBlock,
                                        pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     bool isRegularReturn = !llvmSpecFunc->getReturnType()->isVoidTy();
@@ -760,7 +759,7 @@ void llvm2col::transformPallasBoundVar(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasForall(llvm::CallInst &callInstruction,
-                                     col::Block &colBlock,
+                                     col::LlvmBasicBlock &colBlock,
                                      pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     if (!checkQuantifierSpecFuncWellformed(*llvmSpecFunc, "forall")) {
@@ -781,7 +780,7 @@ void llvm2col::transformPallasForall(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasSepForall(llvm::CallInst &callInstruction,
-                                        col::Block &colBlock,
+                                        col::LlvmBasicBlock &colBlock,
                                         pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     if (!checkQuantifierSpecFuncWellformed(*llvmSpecFunc, "forall*")) {
@@ -803,7 +802,7 @@ void llvm2col::transformPallasSepForall(llvm::CallInst &callInstruction,
 }
 
 void llvm2col::transformPallasExists(llvm::CallInst &callInstruction,
-                                     col::Block &colBlock,
+                                     col::LlvmBasicBlock &colBlock,
                                      pallas::FunctionCursor &funcCursor) {
     auto *llvmSpecFunc = callInstruction.getCalledFunction();
     if (!checkQuantifierSpecFuncWellformed(*llvmSpecFunc, "exists")) {
