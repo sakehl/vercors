@@ -1036,6 +1036,9 @@ final case class CoerceCPPArrayPointer[G](elementType: Type[G])(
 final case class CoerceCVectorVector[G](size: BigInt, elementType: Type[G])(
     implicit val o: Origin
 ) extends Coercion[G] with CoerceCVectorVectorImpl[G]
+final case class CoerceNullLLVMPointer[G](elementType: Option[Type[G]])(
+    implicit val o: Origin
+) extends Coercion[G] with CoerceNullLLVMPointerImpl[G]
 
 final case class CoerceFracZFrac[G]()(implicit val o: Origin)
     extends Coercion[G] with CoerceFracZFracImpl[G]

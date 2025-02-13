@@ -123,7 +123,9 @@ case object CoercionUtils {
       case (TNull(), TAnyClass()) => CoerceNullAnyClass()
       case (TNull(), TPointer(target)) => CoerceNullPointer(target)
       case (TNull(), CTPointer(target)) => CoerceNullPointer(target)
+      case (TNull(), CTArray(_, target)) => CoerceNullPointer(target)
       case (TNull(), TEnum(target)) => CoerceNullEnum(target)
+      case (TNull(), LLVMTPointer(target)) => CoerceNullLLVMPointer(target)
 
       case (CTArray(_, innerType), TArray(element)) if element == innerType =>
         CoerceCArrayPointer(element)
@@ -156,6 +158,14 @@ case object CoercionUtils {
         else {
           CoercionSequence(Seq(
             CoerceCArrayPointer(element),
+            getAnyCoercion(element, innerType).getOrElse(return None),
+          ))
+        }
+      case (CPPTArray(_, innerType), TPointer(element)) =>
+        if (element == innerType) { CoerceCPPArrayPointer(innerType) }
+        else {
+          CoercionSequence(Seq(
+            CoerceCPPArrayPointer(element),
             getAnyCoercion(element, innerType).getOrElse(return None),
           ))
         }

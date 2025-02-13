@@ -735,7 +735,7 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case (TAnyValue(), _) | (_, TAnyValue()) =>
         cons(coerce(left, TAnyValue()), coerce(right, TAnyValue()))
       case (lt, rt) =>
-        val sharedType = Types.leastCommonSuperType(left.t, right.t)
+        val sharedType = Types.leastCommonSuperType(lt, rt)
         if (sharedType == TAnyValue[Pre]()) {
           throw IncoercibleExplanation(
             e,

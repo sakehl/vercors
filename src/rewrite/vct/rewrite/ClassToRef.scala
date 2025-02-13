@@ -858,6 +858,8 @@ case class ClassToRef[Pre <: Generation]() extends Rewriter[Pre] {
             const(typeNumber(t.cls.decl))(e.o)
           // Keep pointer casts intact for the adtPointer stage
           case _: TPointer[Pre] | _: TNonNullPointer[Pre] => e.rewriteDefault()
+          // Keep integer casts intact for casting between integers and pointers
+          case _: TInt[Pre] => e.rewriteDefault()
           // Keep any casts intact for the adtAny stage
           case _: TAnyValue[Pre] => e.rewriteDefault()
           case other => ???
