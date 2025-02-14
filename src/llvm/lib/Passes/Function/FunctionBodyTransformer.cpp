@@ -175,8 +175,7 @@ col::Assign &FunctionCursor::createPhiAssignment(Instruction &llvmInstruction,
                                                  col::LlvmBasicBlock &colBlock,
                                                  col::Variable &varDecl) {
     // col::Assign *assignment = new col::Assign();
-    col::Assign *assignment =
-        colBlock.add_phi_assignments()->mutable_assign();
+    col::Assign *assignment = colBlock.add_phi_assignments()->mutable_assign();
     assignment->set_allocated_blame(new col::Blame());
     assignment->set_allocated_origin(
         llvm2col::generateSingleStatementOrigin(llvmInstruction));
