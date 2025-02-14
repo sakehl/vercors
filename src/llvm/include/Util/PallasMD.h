@@ -56,8 +56,8 @@ bool isWellformedPallasLocation(const llvm::MDNode *mdNode);
 llvm::MDNode *getPallasLoopContract(const llvm::Loop &llvmLoop);
 
 /*
- * Attempts to get the wrapper-function from the given MDNode which 
- * represents a Pallas loop-invariant clause. 
+ * Attempts to get the wrapper-function from the given MDNode which
+ * represents a Pallas loop-invariant clause.
  * Returns nullptr on failure.
  */
 llvm::Function *getWrapperFromLoopInv(const llvm::MDNode &invMD);

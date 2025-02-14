@@ -45,7 +45,8 @@ FunctionContractDeclarerPass::run(Function &F, FunctionAnalysisManager &FAM) {
     // get col contract
     FDCResult result = FAM.getResult<FunctionContractDeclarer>(F);
     col::VcllvmFunctionContract *colContract =
-        result.getAssociatedColFuncContract().mutable_vcllvm_function_contract();
+        result.getAssociatedColFuncContract()
+            .mutable_vcllvm_function_contract();
     colContract->set_allocated_blame(new col::Blame());
     colContract->set_name(F.getName());
     // check if contract keyword is present

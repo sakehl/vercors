@@ -172,8 +172,8 @@ bool llvm2col::addInvariantToContract(llvm::MDNode &invMD, llvm::Loop &llvmLoop,
                 llvm2col::generatePallasWrapperCallOrigin(*llvmWFunc, *srcLoc));
             local->mutable_ref()->set_id(colVar->id());
         } else if (llvm::isa<llvm::PHINode>(llvmVal)) {
-            col::Variable *colVar = &functionCursor.getVariableMapEntry(
-                *llvmVal, true);
+            col::Variable *colVar =
+                &functionCursor.getVariableMapEntry(*llvmVal, true);
             // Local to var of phi-node
             auto *local = wrapperCall->add_args()->mutable_local();
             local->set_allocated_origin(

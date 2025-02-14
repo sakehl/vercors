@@ -43,7 +43,8 @@ void llvm2col::transformOtherOp(llvm::Instruction &llvmInstruction,
     }
 }
 
-void llvm2col::transformPhi(llvm::PHINode &phiInstruction, col::LlvmBasicBlock &colBlock,
+void llvm2col::transformPhi(llvm::PHINode &phiInstruction,
+                            col::LlvmBasicBlock &colBlock,
                             pallas::FunctionCursor &funcCursor) {
     col::Variable &varDecl = funcCursor.declareVariable(phiInstruction);
     for (auto &B : phiInstruction.blocks()) {
@@ -269,7 +270,8 @@ void llvm2col::transformCallExpr(llvm::CallInst &callInstruction,
     col::Expr *functionCallExpr;
     // if void function add an eval expression
     if (callInstruction.getType()->isVoidTy()) {
-        col::Eval *eval = pallas::bodyAsBlock(colBlock).add_statements()->mutable_eval();
+        col::Eval *eval =
+            pallas::bodyAsBlock(colBlock).add_statements()->mutable_eval();
         eval->set_allocated_origin(
             llvm2col::generateSingleStatementOrigin(callInstruction));
         functionCallExpr = eval->mutable_expr();
@@ -448,7 +450,9 @@ void llvm2col::transformPallasSpecResult(llvm::CallInst &callInstruction,
 
         // Replace the call to the result-function with a store-instruction that
         // stores the value of \result.
-        col::LlvmStore *store = pallas::bodyAsBlock(colBlock).add_statements()->mutable_llvm_store();
+        col::LlvmStore *store = pallas::bodyAsBlock(colBlock)
+                                    .add_statements()
+                                    ->mutable_llvm_store();
         store->set_allocated_origin(
             llvm2col::generateFunctionCallOrigin(callInstruction));
         store->set_allocated_blame(new col::Blame());
@@ -497,7 +501,8 @@ void llvm2col::transformPallasFracOf(llvm::CallInst &callInstruction,
         return;
     }
 
-    col::LlvmFracOf *fracOf = pallas::bodyAsBlock(colBlock).add_statements()->mutable_llvm_frac_of();
+    col::LlvmFracOf *fracOf =
+        pallas::bodyAsBlock(colBlock).add_statements()->mutable_llvm_frac_of();
     fracOf->set_allocated_origin(
         llvm2col::generateFunctionCallOrigin(callInstruction));
     fracOf->set_allocated_blame(new col::Blame());

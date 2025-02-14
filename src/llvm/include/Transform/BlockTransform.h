@@ -11,7 +11,7 @@ namespace col = vct::col::ast;
  * <li>Create or fetch the corresponding labeled col block from the function
  * cursor</li> <li>Check if all predecessor blocks have been visited yet,
  * otherwise, return</li> <li>If block turns out to be a loop header, hand over
- * transformation of the loo-contract to <code>LoopContractTransform</code>. 
+ * transformation of the loo-contract to <code>LoopContractTransform</code>.
  * </li>
  * <li> Transform instructions of the block</li>
  * </ol>

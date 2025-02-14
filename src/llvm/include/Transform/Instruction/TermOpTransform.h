@@ -6,10 +6,12 @@
 namespace llvm2col {
 namespace col = vct::col::ast;
 
-void transformTermOp(llvm::Instruction &llvmInstruction, col::LlvmBasicBlock &colBlock,
+void transformTermOp(llvm::Instruction &llvmInstruction,
+                     col::LlvmBasicBlock &colBlock,
                      pallas::FunctionCursor &funcCursor);
 
-void transformRet(llvm::ReturnInst &llvmRetInstruction, col::LlvmBasicBlock &colBlock,
+void transformRet(llvm::ReturnInst &llvmRetInstruction,
+                  col::LlvmBasicBlock &colBlock,
                   pallas::FunctionCursor &funcCursor);
 
 void transformConditionalBranch(llvm::BranchInst &llvmBrInstruction,
