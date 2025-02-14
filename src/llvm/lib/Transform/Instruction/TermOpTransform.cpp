@@ -63,9 +63,6 @@ void llvm2col::transformConditionalBranch(llvm::BranchInst &llvmBrInstruction,
     col::Branch *colBranch = colBlock.mutable_terminator()->mutable_branch();
     colBranch->set_allocated_origin(
         generateSingleStatementOrigin(llvmBrInstruction));
-    // pre-declare completion because the final branch statement is already
-    // present
-    funcCursor.complete(colBlock);
 
     /*
      * I hear you think, why query the 2nd operand? wouldn't that be the false
@@ -147,8 +144,6 @@ void llvm2col::transformUnConditionalBranch(
     // set origin of goto statement
     colGoto->set_allocated_origin(
         llvm2col::generateSingleStatementOrigin(llvmBrInstruction));
-    // pre-declare completion because the final goto is already present
-    funcCursor.complete(colBlock);
 }
 
 void llvm2col::transformUnreachable(

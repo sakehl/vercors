@@ -1200,21 +1200,64 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       implicit o: Origin
   ): Expr[Post] = Result[Post](llvmFunctionMap.ref(ref.decl))
 
-  // Merges the statements of a basic-block´s body with the
-  // terminator instruction.
-  private def assembleBasicBlockBody(
+  def phiTmpVarOrigin() =
+    Origin(Seq(
+      PreferredName(Seq("phiTmp")),
+      LabelContext(s"Generated tmp-var for phi-assignment"),
+    ))
+
+  def phiTmpVarAssignOrigin() =
+    Origin(Seq(LabelContext(s"Generated assignment to tmp-var for phi-node")))
+
+  private def buildPhiAssignments(
       basicBlock: LLVMBasicBlock[Pre]
-  ): Block[Pre] = {
+  ): Scope[Post] = {
     implicit val o: Origin = basicBlock.o
-    basicBlock.body match {
-      case b: Block[Pre] => Block[Pre](b.statements :+ basicBlock.terminator)
-      case _ => throw UnexpectedLLVMNode(basicBlock.body)
+    // We split the phi-assignments to ensure that cases where the value
+    // of a phi-node is used in an assignment to another phi-node get encoded
+    // correctly.
+    // I.e. we first generate a block where we assign the values of all
+    // phi-assignments to temporary variables, and then a block where
+    // we assign the values of the temporary variables to the actual
+    // target of the phi-assignment.
+    var tmpAssignments = Seq[Statement[Post]]()
+    var phiAssignments = Seq[Statement[Post]]()
+    var tmpVars = Seq[Variable[Post]]()
+    basicBlock.phiAssignments.foreach { a =>
+      a match {
+        case a @ Assign(Local(Ref(targetVar)), expr) =>
+          // Build temporary assignment
+          val vT = rw.dispatch(getLocalVarType(targetVar))
+          val tmpVar = new Variable[Post](vT)(phiTmpVarOrigin())
+          tmpVars = tmpVars :+ tmpVar
+          tmpAssignments =
+            tmpAssignments :+ Assign(
+              Local[Post](tmpVar.ref)(phiTmpVarOrigin()),
+              rw.dispatch(expr),
+            )(a.blame)(a.o)
+          // Build assignment of tmp-var to actual var.
+          phiAssignments =
+            phiAssignments :+ Assign[Post](
+              rw.dispatch(a.target),
+              Local[Post](tmpVar.ref)(phiTmpVarOrigin()),
+            )(PanicBlame("Generated assign may not fail"))(
+              phiTmpVarAssignOrigin()
+            )
+        case _ => throw UnexpectedLLVMNode(a)
+      }
     }
+    val newBlock = Block[Post](tmpAssignments ++ phiAssignments)
+    Scope[Post](tmpVars, newBlock)
   }
 
   private def blockToLabel(block: LLVMBasicBlock[Pre]): Statement[Post] = {
-    // Append the terminator-instruction to the body
-    val newBody = rw.dispatch(assembleBasicBlockBody(block))
+    implicit val o: Origin = block.o
+    val newBody = Block[Post](Seq(
+      rw.dispatch(block.body),
+      buildPhiAssignments(block),
+      rw.dispatch(block.terminator),
+    ))
+
     if (elidedBackEdges.contains(block.label)) { newBody }
     else { Label(rw.labelDecls.dispatch(block.label), newBody)(block.o) }
   }
@@ -1314,22 +1357,22 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
     def eliminate(bb: LLVMBasicBlock[Pre]): Block[Post] = {
       implicit val o: Origin = bb.o
-      val block = assembleBasicBlockBody(bb)
-      block.statements.last match {
+      bb.terminator match {
         case goto: Goto[Pre] =>
           Block[Post](
-            block.statements.dropRight(1).map(rw.dispatch) ++
+            Seq(rw.dispatch(bb.body), buildPhiAssignments(bb)) ++
               eliminate(labelDeclMap(goto.lbl.decl)).statements
           )
-        case _: Return[Pre] =>
-          rw.dispatch(block) match {
-            case block: Block[Post] => block
-            case other => throw UnexpectedLLVMNode(other)
-          }
-        case branch: Branch[Pre] =>
+        case ret: Return[Pre] =>
           Block[Post](
-            block.statements.dropRight(1).map(rw.dispatch) :+ eliminate(branch)
+            Seq(rw.dispatch(bb.body), buildPhiAssignments(bb), rw.dispatch(ret))
           )
+        case branch: Branch[Pre] =>
+          Block[Post](Seq(
+            rw.dispatch(bb.body),
+            buildPhiAssignments(bb),
+            eliminate(branch),
+          ))
         case other => throw UnexpectedLLVMNode(other)
       }
     }

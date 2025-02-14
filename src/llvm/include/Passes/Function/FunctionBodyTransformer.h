@@ -43,18 +43,8 @@ class FunctionCursor {
     std::unordered_map<llvm::BasicBlock *, col::LlvmBasicBlock &>
         llvmBlock2ColBlock;
 
-    /// set of all COL blocks that have been completed. Completed meaning all
-    /// instructions of the corresponding LLVM block have been transformed. This
-    /// excludes possible future phi node back transformations.
-    std::set<col::LlvmBasicBlock *> completedColBlocks;
-
     /// set of all COL blocks that we have started transforming.
     std::set<col::LlvmBasicBlock *> visitedColBlocks;
-
-    /// map of assignments which should be added to the basic block when it is
-    /// completed.
-    std::unordered_multimap<col::LlvmBasicBlock *, col::Assign *>
-        phiAssignBuffer;
 
     /// Almost always when adding a variable to the variableMap, some extra
     /// processing is required which is why this method is private as to not
@@ -138,20 +128,6 @@ class FunctionCursor {
      * @return
      */
     bool isVisited(llvm::BasicBlock &llvmBlock);
-
-    /**
-     * Mark COL Block as complete by adding it to the completedColBlocks set.
-     * @param llvmBlock
-     */
-    void complete(col::LlvmBasicBlock &colBlock);
-
-    /**
-     * Indicates whether an llvmBlock has been fully transformed (excluding
-     * possible phi node back transformations). Any completed block is also
-     * visited.
-     * @return true if block is in the completedColBlocks set, false otherwise.
-     */
-    bool isComplete(col::LlvmBasicBlock &colBlock);
 
     LoopInfo &getLoopInfo();
 

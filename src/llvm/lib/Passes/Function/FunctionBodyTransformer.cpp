@@ -64,19 +64,6 @@ bool FunctionCursor::isVisited(BasicBlock &llvmBlock) {
         &this->getOrSetLLVMBlock2ColBlockEntry(llvmBlock));
 }
 
-void FunctionCursor::complete(col::LlvmBasicBlock &colBlock) {
-    auto range = phiAssignBuffer.equal_range(&colBlock);
-    for (auto it = range.first; it != range.second; ++it) {
-        pallas::bodyAsBlock(colBlock).add_statements()->set_allocated_assign(
-            it->second);
-    }
-    completedColBlocks.insert(&colBlock);
-}
-
-bool FunctionCursor::isComplete(col::LlvmBasicBlock &colBlock) {
-    return completedColBlocks.contains(&colBlock);
-}
-
 col::LlvmBasicBlock &
 FunctionCursor::getOrSetLLVMBlock2ColBlockEntry(BasicBlock &llvmBlock) {
     if (!llvmBlock2ColBlock.contains(&llvmBlock)) {
@@ -187,7 +174,9 @@ col::Assign &FunctionCursor::createAssignment(Instruction &llvmInstruction,
 col::Assign &FunctionCursor::createPhiAssignment(Instruction &llvmInstruction,
                                                  col::LlvmBasicBlock &colBlock,
                                                  col::Variable &varDecl) {
-    col::Assign *assignment = new col::Assign();
+    // col::Assign *assignment = new col::Assign();
+    col::Assign *assignment =
+        colBlock.add_phi_assignments()->mutable_assign();
     assignment->set_allocated_blame(new col::Blame());
     assignment->set_allocated_origin(
         llvm2col::generateSingleStatementOrigin(llvmInstruction));
@@ -197,13 +186,6 @@ col::Assign &FunctionCursor::createPhiAssignment(Instruction &llvmInstruction,
         llvm2col::generateAssignTargetOrigin(llvmInstruction));
     // set target to refer to var decl
     colLocal->mutable_ref()->set_id(varDecl.id());
-    if (isComplete(colBlock)) {
-        pallas::bodyAsBlock(colBlock).add_statements()->set_allocated_assign(
-            assignment);
-    } else {
-        // Buffer the phi assignments so they appear at the end
-        phiAssignBuffer.insert({&colBlock, assignment});
-    }
     return *assignment;
 }
 
