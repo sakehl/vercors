@@ -52,12 +52,10 @@ class TechnicalSpec extends VercorsSpec {
     void main(C arg);
   """
 
-  vercors should verify using anyBackend in
+  vercors should error withCode "resolutionError:type" in
     "example showing comparison of unrelated types" pvl """
     void test() {
-      /*[/expect assertFailed:false]*/
       assert 1 == false;
-      /*[/end]*/
     }
   """
 

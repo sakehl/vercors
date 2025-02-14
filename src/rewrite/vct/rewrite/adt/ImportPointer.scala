@@ -556,6 +556,8 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
             OptSome(applyAsTypeFunction(innerType, value, newValue))
           case (TNonNullPointer(innerType), TNonNullPointer(_)) =>
             applyAsTypeFunction(innerType, value, newValue)
+          // Other type of cast probably a cast to any
+          case (_, _) => super.postCoerce(e)
         }
       case IntegerPointerCast(value, typeValue, typeSize) =>
         val targetType = typeValue.t.asInstanceOf[TType[Pre]].t
