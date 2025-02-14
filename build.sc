@@ -566,7 +566,7 @@ object vercors extends Module {
     def key = "main"
     def name = "VerCors"
     def dockerName = DockerImageName.Public("utwentefmt", "vercors")
-    def maintainer = "Pieter Bos <p.h.bos@utwente.nl>"
+    def maintainer = "The VerCors Team <vercors@lists.utwente.nl>"
     def homepage = Some("https://utwente.nl/vercors")
     def executableName = "vercors"
     def version = T { buildInfo.gitVersion() }
