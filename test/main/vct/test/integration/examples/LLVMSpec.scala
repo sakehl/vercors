@@ -42,4 +42,5 @@ class LLVMSpec extends VercorsSpec {
   vercors should verify using silicon example "concepts/llvm/pallas/pallas_c_multiply.ll"
   vercors should verify using silicon example "concepts/llvm/pallas/pallas_c_lower_bound.ll"
   vercors should fail withCode "notMaintained:false" using silicon example "concepts/llvm/pallas/pallas_c_square_fail.ll"
+  vercors should verify using silicon example "concepts/llvm/pallas/pallas_c_fibonacci.ll"
 }

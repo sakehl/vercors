@@ -114,7 +114,6 @@ class PallasFunctionContractDeclarerPass
      * and true is returned. Otherwise, false is returned.
      */
     bool hasConflictingContract(Function &f);
-
 };
 } // namespace pallas
 #endif // PALLAS_PALLASFUNCTIONCONTRACTDECLARERPASS_H

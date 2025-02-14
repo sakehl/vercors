@@ -31,7 +31,6 @@ const std::string PALLAS_SPEC_FORALL = "pallas.forall";
 const std::string PALLAS_SPEC_SEPFORALL = "pallas.forallSep";
 const std::string PALLAS_SPEC_EXISTS = "pallas.exists";
 
-
 // Legacy VCLLVM constants
 const std::string VC_PREFIX = "VC.";
 
