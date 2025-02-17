@@ -158,27 +158,41 @@ case class AssignFieldFailed(node: SilverFieldAssign[_])
     s"Insufficient permission for assignment `$source`."
 }
 
-case class CopyStructFailed(node: Expr[_], field: String)
-    extends AssignFailed with NodeVerificationFailure {
-  override def code: String = "copyStructFailed"
+case class CopyClassFailed(node: Node[_], clazz: ByValueClass[_], field: String)
+    extends PointerDerefError with NodeVerificationFailure {
+  override def code: String = "copyClassFailed"
   override def descInContext: String =
-    s"Insufficient read permission for field '$field' to copy struct."
+    s"Insufficient read permission for field '$field' to copy ${clazz.o
+        .find[TypeName].map(_.name).getOrElse("class")}."
   override def inlineDescWithSource(source: String): String =
     s"Insufficient permission for assignment `$source`."
 }
 
-case class CopyStructFailedBeforeCall(node: Expr[_], field: String)
-    extends AssignFailed
-    with FrontendInvocationError
+case class CopyClassFailedBeforeCall(
+    node: Node[_],
+    clazz: ByValueClass[_],
+    field: String,
+) extends PointerDerefError
+    with InvocationFailure
     with NodeVerificationFailure {
-  override def code: String = "copyStructFailedBeforeCall"
+  override def code: String = "copyClassFailedBeforeCall"
   override def descInContext: String =
-    s"Insufficient read permission for field '$field' to copy struct before call."
+    s"Insufficient read permission for field '$field' to copy ${clazz.o
+        .find[TypeName].map(_.name).getOrElse("class")} before call."
   override def inlineDescWithSource(source: String): String =
     s"Insufficient permission for call `$source`."
 }
 
-case class AssertFailed(failure: ContractFailure, node: Assert[_])
+case class TypeSizeMayBeZero(node: CCast[_])
+    extends FrontendInvocationError with NodeVerificationFailure {
+  override def code: String = "typeSizeZero"
+  override def descInContext: String =
+    s"The size of '${node.castType}' may be zero"
+  override def inlineDescWithSource(source: String): String =
+    s"The size of '${node.castType}' may be zero for cast `$source`"
+}
+
+case class AssertFailed(failure: ContractFailure, node: Node[_])
     extends WithContractFailure {
   override def baseCode: String = "assertFailed"
   override def descInContext: String = "Assertion may not hold, since"
@@ -367,6 +381,16 @@ case class ContextEverywhereFailedInPost(
     node: ContractApplicable[_],
 ) extends ContractedFailure with WithContractFailure {
   override def baseCode: String = "contextPostFailed"
+  override def descInContext: String =
+    "Context may not hold in postcondition, since"
+  override def inlineDescWithSource(node: String, failure: String): String =
+    s"Context of `$node` may not hold in the postcondition, since $failure."
+}
+case class ContextEverywhereFailedInRunPost(
+    failure: ContractFailure,
+    node: RunMethod[_],
+) extends ContractedFailure with WithContractFailure {
+  override def baseCode: String = "contextRunPostFailed"
   override def descInContext: String =
     "Context may not hold in postcondition, since"
   override def inlineDescWithSource(node: String, failure: String): String =
@@ -606,17 +630,6 @@ case class ChannelInvariantNotEstablished(
     "This channel invariant cannot be estalished, since"
   override def inlineDescWithSource(node: String, failure: String): String =
     s"The channel invariant at `$node` cannot be established, since $failure"
-}
-
-case class ChannelInvariantNotEstablishedLocally(
-    failure: ContractFailure,
-    node: Communicate[_],
-) extends CommunicateFailure with WithContractFailure {
-  override def baseCode: String = "channelInvariantNotEstablishedLocally"
-  override def descInContext: String =
-    "This channel invariant cannot be estalished when `\\chor` expressions are removed, since"
-  override def inlineDescWithSource(node: String, failure: String): String =
-    s"The channel invariant at `$node` cannot be established without `\\chor`, since $failure"
 }
 
 sealed trait DerefInsufficientPermission extends FrontendDerefError
@@ -1023,6 +1036,16 @@ case class ArrayValuesPerm(node: Values[_]) extends ArrayValuesError {
     "there may be insufficient permission to access the array at the specified range"
 }
 
+// TODO: Signed-ness
+case class IntegerOutOfBounds(node: Node[_], bits: Int)
+    extends NodeVerificationFailure {
+  override def code: String = "intBounds"
+  override def descInContext: String =
+    s"Integer may be out of bounds, expected a `$bits`-bit integer"
+  override def inlineDescWithSource(source: String) =
+    s"Integer `$source` may be out of bounds, expected a `$bits`-bit integer"
+}
+
 sealed trait PointerSubscriptError extends FrontendSubscriptError
 sealed trait PointerDerefError
     extends PointerSubscriptError with FrontendDerefError
@@ -1336,6 +1359,17 @@ case class TransitionPreconditionFailed(
     s"Precondition of $node does not hold, in a particular synchronization, since $failure"
 }
 
+case class UnreachableReachedError(node: Node[_])
+    extends NodeVerificationFailure {
+  override def code: String = "unreachable"
+
+  override def descInContext: String =
+    "Location marked as unreachable was reached"
+
+  override def inlineDescWithSource(source: String): String =
+    s"Location `$source` was reached but was marked unreachable"
+}
+
 trait Blame[-T <: VerificationFailure] {
   def blame(error: T): Unit
 }
@@ -1448,6 +1482,8 @@ object NeverNone
     extends PanicBlame(
       "get in `opt == none ? _ : get(opt)` should always be ok."
     )
+object NoZeroDiv
+    extends PanicBlame("denominator of division is guaranteed not to be zero.")
 object FramedSeqIndex
     extends PanicBlame(
       "access in `∀i. 0 <= i < |xs| ==> ...xs[i]...` should never be out of bounds"
@@ -1541,9 +1577,20 @@ object JavaArrayInitializerBlame
       "The explicit initialization of an array in Java should never generate an assignment that exceeds the bounds of the array"
     )
 
+object NonNullPointerNull
+    extends PanicBlame("A non-null pointer can never be null")
+
+object LLVMSretPerm
+    extends PanicBlame(
+      "Contracts always contain write-permission for function-arguments with an LLVM sret-attribute."
+    )
+
 object UnsafeDontCare {
   case class Satisfiability(reason: String)
       extends UnsafeDontCare[NontrivialUnsatisfiable]
+  case class Contract(reason: String) extends UnsafeDontCare[ContractedFailure]
+  case class Invocation(reason: String)
+      extends UnsafeDontCare[InvocationFailure]
 }
 
 trait UnsafeDontCare[T <: VerificationFailure]

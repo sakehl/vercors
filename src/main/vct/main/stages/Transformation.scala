@@ -3,6 +3,7 @@ package vct.main.stages
 import com.typesafe.scalalogging.LazyLogging
 import hre.debug.TimeTravel
 import hre.debug.TimeTravel.CauseWithBadEffect
+import hre.io.Readable
 import hre.progress.Progress
 import hre.stages.Stage
 import vct.col.ast.{Program, SimplificationRule, Verification}
@@ -15,30 +16,46 @@ import vct.col.rewrite.adt._
 import vct.col.rewrite.bip._
 import vct.col.rewrite.exc._
 import vct.rewrite.lang.NoSupportSelfLoop
-import vct.col.rewrite.veymont.StructureCheck
 import vct.importer.{PathAdtImporter, Util}
 import vct.main.Main.TemporarilyUnsupported
 import vct.main.stages.Transformation.{PassEventHandler, TransformationCheckError}
 import vct.options.Options
 import vct.options.types.{Backend, PathOrStd}
+import vct.parsers.debug.DebugOptions
 import vct.resources.Resources
 import vct.result.VerificationError.SystemError
-import vct.rewrite.adt.ImportSetCompat
+import vct.rewrite.adt.{EncodeBitVectors, ImportSetCompat}
 import vct.rewrite.{
   DisambiguatePredicateExpression,
+  EncodeAssuming,
   EncodeAutoValue,
+  EncodeByValueClassUsage,
+  EncodePointerComparison,
   EncodeRange,
   EncodeResourceValues,
   ExplicitResourceValues,
+  GenerateSingleOwnerPermissions,
   HeapVariableToRef,
   InlineTrivialLets,
+  LowerLocalHeapVariables,
   MonomorphizeClass,
   SmtlibToProverTypes,
+  VariableToPointer,
   TypeQualifierCoercion,
   MakeUniqueMethodCopies,
 }
 import vct.rewrite.lang.ReplaceSYCLTypes
+import vct.rewrite.pallas.{
+  InlinePallasPermLets,
+  InlinePallasWrappers,
+  ResolvePallasQuantifiers,
+}
 import vct.rewrite.veymont._
+import vct.rewrite.veymont.generation._
+import vct.rewrite.veymont.verification._
+import vct.rewrite.veymont.verification.EncodePermissionStratification.{
+  Mode => PermissionStratificationMode
+}
 
 import java.nio.file.Path
 import java.nio.file.Files
@@ -91,9 +108,28 @@ object Transformation extends LazyLogging {
     }
   }
 
+  def loadPVLLibraryFileStage[G](
+      readable: Readable,
+      debugOptions: DebugOptions,
+  ): Program[G] = {
+    /* This is currently a hacky way to make time spent in the pvl simplification rule parser visible in the
+    CLI interface. Instead, we should follow the advice in the docs of `Progress.hiddenStage`:
+    A better design would be that the pvl library files are parsed when the appropriate
+    simplification pass is encountered. Then the transformation pass could, for user friendliness, check if the
+    simplification files exists before doing all the other transformations. This moves the time spent for loading
+    the files to the same place where the file is actually used, which sounds right.
+
+    Of course, this all while still retaining the functionality of making it possible to pass more simplification rules
+    using command line flags.
+     */
+    Progress.hiddenStage(s"Loading PVL library file ${readable.fileName}") {
+      Util.loadPVLLibraryFile(readable, debugOptions)
+    }
+  }
+
   def simplifierFor(path: PathOrStd, options: Options): RewriterBuilder =
     ApplyTermRewriter.BuilderFor(
-      ruleNodes = Util.loadPVLLibraryFile[InitialGeneration](
+      ruleNodes = loadPVLLibraryFileStage[InitialGeneration](
         path,
         options.getParserDebugOptions,
       ).declarations.collect {
@@ -136,8 +172,10 @@ object Transformation extends LazyLogging {
           splitVerificationByProcedure =
             options.devSplitVerificationByProcedure,
           optimizeUnsafe = options.devUnsafeOptimization,
-          veymontGeneratePermissions = options.veymontGeneratePermissions,
+          generatePermissions = options.generatePermissions,
           veymontBranchUnanimity = options.veymontBranchUnanimity,
+          veymontPermissionStratificationMode =
+            options.veymontPermissionStratificationMode,
         )
     }
 
@@ -149,11 +187,20 @@ object Transformation extends LazyLogging {
         options.veymontResourcePath,
         options.getParserDebugOptions,
       ),
+      options.generatePermissions,
       onPassEvent =
         options.outputIntermediatePrograms
           .map(p => reportIntermediateProgram(p, "generate")).toSeq ++
           writeOutFunctions(before, options.outputBeforePass) ++
           writeOutFunctions(after, options.outputAfterPass),
+    )
+
+  def pvlJavaCompatOfOptions(options: Options): Transformation =
+    PvlJavaCompat(onPassEvent =
+      options.outputIntermediatePrograms
+        .map(p => reportIntermediateProgram(p, "pvlJavaCompat")).toSeq ++
+        writeOutFunctions(before, options.outputBeforePass) ++
+        writeOutFunctions(after, options.outputAfterPass)
     )
 
   sealed trait TransformationEvent
@@ -220,6 +267,8 @@ class Transformation(
           action(passes, Transformation.before, passIndex, result)
         }
 
+        logger.debug(s"Running transformation ${pass.key}")
+
         result =
           try { pass().dispatch(result) }
           catch {
@@ -227,6 +276,8 @@ class Transformation(
               logger.error(s"An error occurred in pass ${pass.key}")
               throw c
           }
+
+        logger.debug(s"Finished transformation ${pass.key}")
 
         onPassEvent.foreach { action =>
           action(passes, Transformation.after, passIndex, result)
@@ -276,7 +327,7 @@ class Transformation(
   *   Check that non-trivial contracts are satisfiable.
   * @param splitVerificationByProcedure
   *   Splits verification into one task per procedure body.
-  * @param veymontGeneratePermissions
+  * @param generatePermissions
   *   Generates permissions such that each callable requires full permissions
   *   its arguments and any transitively reachable locations.
   * @param veymontBranchUnanimity
@@ -298,16 +349,23 @@ case class SilverTransformation(
     checkSat: Boolean = true,
     splitVerificationByProcedure: Boolean = false,
     override val optimizeUnsafe: Boolean = false,
-    veymontGeneratePermissions: Boolean = false,
+    generatePermissions: Boolean = false,
     veymontBranchUnanimity: Boolean = true,
+    veymontPermissionStratificationMode: PermissionStratificationMode =
+      PermissionStratificationMode.Wrap,
 ) extends Transformation(
       onPassEvent,
       Seq(
+        CFloatIntCoercion,
         // Replace leftover SYCL types
         ReplaceSYCLTypes,
-        CFloatIntCoercion,
         TypeQualifierCoercion,
         MakeUniqueMethodCopies,
+        // Inline pallas-specifications
+        InlinePallasWrappers,
+        InlinePallasPermLets,
+        ResolvePallasQuantifiers,
+        // BIP transformations
         ComputeBipGlue,
         InstantiateBipSynchronizations,
         EncodeBipPermissions,
@@ -319,15 +377,33 @@ case class SilverTransformation(
         // Delete stuff that may be declared unsupported at a later stage
         FilterSpecIgnore,
 
-        // Normalize AST
+        // Disambiguate AST
         // Make sure Disambiguate comes after CFloatIntCoercion, so CInts are gone
         Disambiguate, // Resolve overloaded operators (+, subscript, etc.)
         DisambiguateLocation, // Resolve location type
         DisambiguatePredicateExpression,
+
+        // VeyMont choreography encoding
+        BranchToIfElse,
+        GenerateSingleOwnerPermissions.withArg(generatePermissions),
+        InferEndpointContexts,
+        StratifyExpressions,
+        StratifyUnpointedExpressions,
+        DeduplicateChorGuards,
+        EncodeChorBranchUnanimity.withArg(veymontBranchUnanimity),
+        EncodeEndpointInequalities,
+        EncodeChannels,
+        EncodePermissionStratification
+          .withArg(veymontPermissionStratificationMode),
+        EncodeChoreography,
+        // All VeyMont nodes should now be gone
+
+        // Desugar high-level COL constructs
         EncodeRangedFor,
         EncodeString, // Encode spec string as seq<int>
         EncodeChar,
         CollectLocalDeclarations, // all decls in Scope
+        VariableToPointer, // should happen before ParBlockEncoder so it can distinguish between variables which can and can't altered in a parallel block
         DesugarPermissionOperators, // no PointsTo, \pointer, etc.
         ReadToValue, // resolve wildcard into fractional permission
         TrivialAddrOf,
@@ -344,30 +420,12 @@ case class SilverTransformation(
         EncodeForkJoin,
         InlineApplicables,
         InlineTrivialLets,
-
-        // VeyMont choreography encoding
-        // Explicitly after InlineApplicables such that VeyMont doesn't care about inline predicates
-        // (Even though this makes inferring endpoint ownership annotations less complete)
-        // Also, VeyMont requires branches to be nested, instead of flat, because the false branch
-        // may refine the set of participating endpoints
-        BranchToIfElse,
-        GenerateChoreographyPermissions.withArg(veymontGeneratePermissions),
-        InferEndpointContexts,
-        PushInChor.withArg(veymontGeneratePermissions),
-        StratifyExpressions,
-        StratifyUnpointedExpressions,
-        DeduplicateChorGuards,
-        EncodeChorBranchUnanimity.withArg(veymontBranchUnanimity),
-        EncodeEndpointInequalities,
-        EncodeChannels,
-        EncodePermissionStratification.withArg(veymontGeneratePermissions),
-        EncodeChoreography,
-        // All VeyMont nodes should now be gone
-
         PureMethodsToFunctions,
         RefuteToInvertedAssert,
         ExplicitResourceValues,
         EncodeResourceValues,
+        EncodeAssuming,
+        EncodePointerComparison, // Assumes no context_everywhere
 
         // Encode parallel blocks
         EncodeSendRecv,
@@ -396,7 +454,7 @@ case class SilverTransformation(
         // flatten out functions in the rhs of assignments, making it harder to detect final field assignments where the
         // value is pure and therefore be put in the contract of the constant function.
         ConstantifyFinalFields,
-
+        EncodeByValueClassUsage,
         // Resolve side effects including method invocations, for encodetrythrowsignals.
         ResolveExpressionSideChecks,
         ResolveExpressionSideEffects,
@@ -406,10 +464,12 @@ case class SilverTransformation(
         // No more classes
         ClassToRef,
         HeapVariableToRef,
+        LowerLocalHeapVariables,
         CheckContractSatisfiability.withArg(checkSat),
         DesugarCollectionOperators,
         EncodeNdIndex,
         ExtractInlineQuantifierPatterns,
+        EncodeBitVectors,
         // Translate internal types to domains
         FloatToRat,
         SmtlibToProverTypes,
@@ -460,11 +520,13 @@ case class VeyMontImplementationGeneration(
       Resources.getVeymontPath,
       vct.parsers.debug.DebugOptions.NONE,
     ),
+    generatePermissions: Boolean,
     override val onPassEvent: Seq[PassEventHandler] = Nil,
 ) extends Transformation(
       onPassEvent,
       Seq(
         DropChorExpr,
+        GenerateSingleOwnerPermissions.withArg(generatePermissions),
         InferEndpointContexts,
         StratifyExpressions,
         StratifyUnpointedExpressions,
@@ -474,4 +536,12 @@ case class VeyMontImplementationGeneration(
         GenerateImplementation,
         PrettifyBlocks,
       ),
+    )
+
+// Compiles away several aspects of PVL that are not natively support in Java, which are too involved to handle
+// ad-hoc in the pretty printer, or possibly for which the COL ast has no support yet
+case class PvlJavaCompat(override val onPassEvent: Seq[PassEventHandler] = Nil)
+    extends Transformation(
+      onPassEvent,
+      Seq(ImplicationToTernary, EncodeGlobalApplicables),
     )

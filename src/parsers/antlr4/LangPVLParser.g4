@@ -131,6 +131,8 @@ seqAddExpr
 unaryExpr
  : '!' unaryExpr
  | '-' unaryExpr
+ | '*' unaryExpr
+ | '&' unaryExpr
  | valPrefix unaryExpr
  | newExpr
  ;
@@ -155,6 +157,11 @@ unit
  | '(' '\\' '[' identifier ']' expr ')' # pvlShortEndpointExpr
  | '(' '\\chor' expr ')' # pvlLongChorExpr
  | '(' '\\' '[' ']' expr ')' # pvlShortChorExpr
+ | '(' type ')' expr #pvlCastExpr
+ | '(' 'asserting' expr ')' # pvlBoolAsserting
+ | '(' 'asserting' expr ';' expr ')' # pvlAsserting
+ | '(' 'assuming' expr ')' # pvlBoolAssuming
+ | '(' 'assuming' expr ';' expr ')' # pvlAssuming
  | 'this' # pvlThis
  | 'null' # pvlNull
  | '\\sender' # pvlSender

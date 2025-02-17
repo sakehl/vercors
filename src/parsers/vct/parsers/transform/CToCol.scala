@@ -13,6 +13,7 @@ import vct.col.ref.{Ref, UnresolvedRef}
 import vct.col.resolve.lang.C
 import vct.col.util.AstBuildHelpers
 
+import java.util.Locale
 import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.util.Try
@@ -223,7 +224,7 @@ case class CToCol[G](
       case TypeSpecifier3(struct) => convert(struct)
       case TypeSpecifier4(_) => ??(typeSpec)
       case TypeSpecifier5(name) =>
-        name match { case TypedefName0(name) => CTypedefName(convert(name)) }
+        name match { case TypedefName0(name) => CTypedefName(name) }
       case TypeSpecifier6(_, _, _, _) => ??(typeSpec)
       case TypeSpecifier7(_, _, t, _, size, _) =>
         CSpecificationType(TOpenCLVector(BigInt(size), convert(t)))
@@ -428,6 +429,16 @@ case class CToCol[G](
 
   def convert(implicit params: ParameterListContext): Seq[CParam[G]] =
     params match {
+      // foo(void)
+      case ParameterList0(
+            ParameterDeclaration1(
+              DeclarationSpecifiers20(
+                Seq(DeclarationSpecifier1(TypeSpecifier0("void")))
+              ),
+              None,
+            )
+          ) =>
+        Nil
       case ParameterList0(decl) => Seq(convert(decl))
       case ParameterList1(init, _, last) => convert(init) :+ convert(last)
     }
@@ -684,11 +695,11 @@ case class CToCol[G](
               case "%=" => AmbiguousTruncMod(target, value)(blame(expr))
               case "+=" => col.AmbiguousPlus(target, value)(blame(valueNode))
               case "-=" => col.AmbiguousMinus(target, value)((blame(valueNode)))
-              case "<<=" => BitShl(target, value)
-              case ">>=" => BitShr(target, value)
-              case "&=" => BitAnd(target, value)
-              case "^=" => BitXor(target, value)
-              case "|=" => BitOr(target, value)
+              case "<<=" => BitShl(target, value, 0, signed = true)(blame(expr))
+              case ">>=" => AmbiguousBitShr(target, value)(blame(expr))
+              case "&=" => BitAnd(target, value, 0, signed = true)(blame(expr))
+              case "^=" => BitXor(target, value, 0, signed = true)(blame(expr))
+              case "|=" => BitOr(target, value, 0, signed = true)(blame(expr))
             },
           )(blame(expr))
 
@@ -731,30 +742,30 @@ case class CToCol[G](
     expr match {
       case InclusiveOrExpression0(inner) => convert(inner)
       case InclusiveOrExpression1(left, _, right) =>
-        BitOr(convert(left), convert(right))
+        BitOr(convert(left), convert(right), 0, signed = true)(blame(expr))
     }
 
   def convert(implicit expr: ExclusiveOrExpressionContext): Expr[G] =
     expr match {
       case ExclusiveOrExpression0(inner) => convert(inner)
       case ExclusiveOrExpression1(left, _, right) =>
-        BitXor(convert(left), convert(right))
+        BitXor(convert(left), convert(right), 0, signed = true)(blame(expr))
     }
 
   def convert(implicit expr: AndExpressionContext): Expr[G] =
     expr match {
       case AndExpression0(inner) => convert(inner)
       case AndExpression1(left, _, right) =>
-        BitAnd(convert(left), convert(right))
+        BitAnd(convert(left), convert(right), 0, signed = true)(blame(expr))
     }
 
   def convert(implicit expr: EqualityExpressionContext): Expr[G] =
     expr match {
       case EqualityExpression0(inner) => convert(inner)
       case EqualityExpression1(left, _, right) =>
-        AmbiguousEq(convert(left), convert(right), TCInt())
+        AmbiguousEq(convert(left), convert(right), TCInt(), None)
       case EqualityExpression2(left, _, right) =>
-        AmbiguousNeq(convert(left), convert(right), TCInt())
+        AmbiguousNeq(convert(left), convert(right), TCInt(), None)
     }
 
   def convert(implicit expr: RelationalExpressionContext): Expr[G] =
@@ -762,10 +773,10 @@ case class CToCol[G](
       case RelationalExpression0(inner) => convert(inner)
       case RelationalExpression1(left, RelationalOp0(op), right) =>
         op match {
-          case "<" => col.AmbiguousLess(convert(left), convert(right))
-          case ">" => col.AmbiguousGreater(convert(left), convert(right))
-          case "<=" => AmbiguousLessEq(convert(left), convert(right))
-          case ">=" => AmbiguousGreaterEq(convert(left), convert(right))
+          case "<" => col.AmbiguousLess(convert(left), convert(right), None)
+          case ">" => col.AmbiguousGreater(convert(left), convert(right), None)
+          case "<=" => AmbiguousLessEq(convert(left), convert(right), None)
+          case ">=" => AmbiguousGreaterEq(convert(left), convert(right), None)
         }
       case RelationalExpression1(left, RelationalOp1(specOp), right) =>
         convert(expr, specOp, convert(left), convert(right))
@@ -775,9 +786,12 @@ case class CToCol[G](
     expr match {
       case ShiftExpression0(inner) => convert(inner)
       case ShiftExpression1(left, _, right) =>
-        BitShl(convert(left), convert(right))
+        BitShl(convert(left), convert(right), 0, signed = true)(blame(expr))
       case ShiftExpression2(left, _, right) =>
-        BitShr(convert(left), convert(right))
+        val l = convert(left)
+        val r = convert(right)
+        // The true in BitUShr will be replaced in LangSpecificToCol
+        AmbiguousBitShr(l, r)(blame(expr))
     }
 
   def convert(implicit expr: AdditiveExpressionContext): Expr[G] =
@@ -846,41 +860,41 @@ case class CToCol[G](
 
   def convert(implicit expr: CastExpressionContext): Expr[G] =
     expr match {
-      case CastExpression0(inner) => convert(inner)
-      case CastExpression1(_, typeName, _, e) =>
+      case CastExpression0(_, typeName, _, e) =>
         CCast(convert(e), convert(typeName))
-      case CastExpression1(_, _, _, _) => ??(expr)
-      case CastExpression2(_, _, _, _, _) => ??(expr)
+      case CastExpression0(_, _, _, _) => ??(expr)
+      case CastExpression1(_, _, _, _, _) => ??(expr)
+      case CastExpression2(inner) => convert(inner)
     }
 
   def convert(implicit expr: UnaryExpressionContext): Expr[G] =
     expr match {
-      case UnaryExpression0(inner) => convert(inner)
-      case UnaryExpression1(_, arg) =>
+      case UnaryExpression0(_, arg) =>
         val target = convert(arg)
         PreAssignExpression(
           target,
           col.AmbiguousPlus(target, c_const(1))(blame(expr)),
         )(blame(expr))
-      case UnaryExpression2(_, arg) =>
+      case UnaryExpression1(_, arg) =>
         val target = convert(arg)
         PreAssignExpression(
           target,
           col.AmbiguousMinus(target, c_const(1))(blame(expr)),
         )(blame(expr))
-      case UnaryExpression3(UnaryOperator0(op), arg) =>
+      case UnaryExpression2(UnaryOperator0(op), arg) =>
         op match {
           case "&" => AddrOf(convert(arg))
           case "*" => DerefPointer(convert(arg))(blame(expr))
           case "+" => convert(arg)
           case "-" => UMinus(convert(arg))
-          case "~" => BitNot(convert(arg))
+          case "~" => BitNot(convert(arg), 0, signed = true)(blame(expr))
           case "!" => col.Not(convert(arg))
         }
-      case UnaryExpression4(_, _) => ??(expr)
-      case UnaryExpression5(_, _, tname, _) => SizeOf(convert(tname))
-      case UnaryExpression6(_, _, _, _) => ??(expr)
-      case UnaryExpression7(_, _) => ??(expr)
+      case UnaryExpression3(_, _) => ??(expr)
+      case UnaryExpression4(_, _, tname, _) => SizeOf(convert(tname))
+      case UnaryExpression5(_, _, _, _) => ??(expr)
+      case UnaryExpression6(_, _) => ??(expr)
+      case UnaryExpression7(inner) => convert(inner)
       case UnaryExpression8(SpecPrefix0(op), inner) =>
         convert(expr, op, convert(inner))
     }
@@ -962,9 +976,29 @@ case class CToCol[G](
     } catch { case _: NumberFormatException => None }
   }
 
-  def parseInt(i: String)(implicit o: Origin): Option[Expr[G]] =
-    try { Some(CIntegerValue(BigInt(i))) }
+  def parseInt(i: String)(implicit o: Origin): Option[Expr[G]] = {
+    val lower = i.toLowerCase(Locale.ROOT)
+    // TODO: Check if value in range
+    val (s, t: Seq[CDeclarationSpecifier[G]]) =
+      if (
+        lower.endsWith("uwb") || lower.endsWith("wbu") || lower.endsWith("wb")
+      ) {
+        // Bit-precise integers from C23 unimplemented
+        return None
+      } else if (lower.endsWith("ull") || lower.endsWith("llu")) {
+        (i.substring(0, i.length - 3), Seq(CUnsigned(), CLong(), CLong()))
+      } else if (lower.endsWith("lu") || lower.endsWith("ul")) {
+        (i.substring(0, i.length - 2), Seq(CUnsigned(), CLong()))
+      } else if (lower.endsWith("ll")) {
+        (i.substring(0, i.length - 2), Seq(CLong(), CLong()))
+      } else if (lower.endsWith("u")) {
+        (i.substring(0, i.length - 1), Seq(CUnsigned()))
+      } else if (lower.endsWith("l")) {
+        (i.substring(0, i.length - 1), Seq(CLong()))
+      } else { (i, Seq(CInt())) }
+    try { Some(CIntegerValue(BigInt(s), CPrimitiveType(t))) }
     catch { case e: NumberFormatException => None }
+  }
 
   def convert(implicit expr: PrimaryExpressionContext): Expr[G] =
     expr match {
@@ -1184,6 +1218,8 @@ case class CToCol[G](
           case "pure" => collector.pure += mod
           case "inline" => collector.inline += mod
           case "thread_local" => collector.threadLocal += mod
+          case "bip_annotation" =>
+            fail(mod, "This modifier is not allowed here.")
         }
       case ValStatic(_) => collector.static += mod
     }
@@ -1846,6 +1882,7 @@ case class CToCol[G](
         PermPointer(convert(ptr), convert(n), convert(perm))
       case ValPointerIndex(_, _, ptr, _, idx, _, perm, _) =>
         PermPointerIndex(convert(ptr), convert(idx), convert(perm))
+      case ValPointerBlock(_, _, ptr, _) => PointerBlock(convert(ptr))(blame(e))
       case ValPointerBlockLength(_, _, ptr, _) =>
         PointerBlockLength(convert(ptr))(blame(e))
       case ValPointerBlockOffset(_, _, ptr, _) =>
@@ -2015,6 +2052,13 @@ case class CToCol[G](
       case ValIsInt(_, _, arg, _) => SmtlibIsInt(convert(arg))
       case ValChoose(_, _, xs, _) => Choose(convert(xs))(blame(e))
       case ValChooseFresh(_, _, xs, _) => ChooseFresh(convert(xs))(blame(e))
+      case ValBoolAssuming(_, _, assn, _) => Assuming(convert(assn), tt)
+      case ValAssuming(_, _, assn, _, inner, _) =>
+        Assuming(convert(assn), convert(inner))
+      case ValBoolAsserting(_, _, assn, _) =>
+        Asserting(convert(assn), tt)(blame(e))
+      case ValAsserting(_, _, assn, _, inner, _) =>
+        Asserting(convert(assn), convert(inner))(blame(e))
     }
 
   def convert(implicit e: ValExprPairContext): (Expr[G], Expr[G]) =
@@ -2067,4 +2111,5 @@ case class CToCol[G](
           args.map(convert(_)).getOrElse(Nil),
         )
     }
+
 }

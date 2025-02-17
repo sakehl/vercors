@@ -385,7 +385,7 @@ trait SilverBackend
           .NegativePermissionValue(
             info(p).permissionValuePermissionNode.get
           ) // need to fetch access
-      case _ => ???
+      case r => throw new NotImplementedError("Missing: " + r)
     }
 
   def getDecreasesBlame(invoking: col.InvokingNode[_], reason: ErrorReason) : blame.TerminationMeasureFailed = {
@@ -451,7 +451,9 @@ trait SilverBackend
       case reasons.MapKeyNotContained(_, key) =>
         val get = info(key).mapGet.get
         get.blame.blame(blame.MapKeyError(get))
-
+      case reasons.AssertionFalse(expr) =>
+        val asserting = info(expr).asserting.get
+        asserting.blame.blame(blame.AssertFailed(getFailure(reason), asserting))
       case other =>
         throw NotSupported(
           s"Viper returned an error reason that VerCors does not recognize: $other"

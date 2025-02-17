@@ -9,9 +9,6 @@ case object ExampleFiles {
     "examples/private/",
     "examples/archive/",
     "examples/concepts/resourceValues",
-    // TODO (RR): The next two can be deleted when the veymont permissions paper artefact is finished
-    "examples/concepts/veymont/FM2024 - VeyMont/1-TTTmsg/TTTmsg-generatedImplementation.pvl",
-    "examples/concepts/veymont/FM2024 - VeyMont/2-TTTlast/TTTlast-generated.pvl",
   ).map(_.replaceAll("/", File.separator))
 
   val IGNORE_EXTS: Seq[String] = Seq(".h", ".bib", ".xml")
@@ -31,9 +28,31 @@ case object ExampleFiles {
     "examples/concepts/openmp/test-other.c",
   ).map(_.replaceAll("/", File.separator))
 
+  val CONTRACT_FILES: Set[String] = Set(
+    "examples/concepts/llvm/cubed-contracts.pvl",
+    "examples/concepts/llvm/void-contracts.pvl",
+    // Files that are used to generate the .ll-versions of the examples
+    "examples/concepts/llvm/pallas/pallas_function_contract.c",
+    "examples/concepts/llvm/pallas/pallas_function_contract_fail.c",
+    "examples/concepts/llvm/pallas/pallas_result.c",
+    "examples/concepts/llvm/pallas/pallas_c_perm.c",
+    "examples/concepts/llvm/pallas/pallas_c_perm_fail_1.c",
+    "examples/concepts/llvm/pallas/pallas_c_perm_fail_2.c",
+    "examples/concepts/llvm/pallas/pallas_c_perm_fail_3.c",
+    "examples/concepts/llvm/pallas/pallas_c_old.c",
+    "examples/concepts/llvm/pallas/pallas_c_old_fail.c",
+    "examples/concepts/llvm/pallas/pallas_c_quantifier.c",
+    "examples/concepts/llvm/pallas/pallas_c_quantifier_fail.c",
+    "examples/concepts/llvm/pallas/pallas_c_multiply.c",
+    "examples/concepts/llvm/pallas/pallas_c_lower_bound.c",
+    "examples/concepts/llvm/pallas/pallas_c_square_fail.c",
+    "examples/concepts/llvm/pallas/pallas_c_fibonacci.c"
+  ).map(_.replaceAll("/", File.separator))
+
   val EXCLUSIONS: Seq[Path => Boolean] = Seq(
     f => IGNORE_DIRS.exists(dir => f.toString.startsWith(dir)),
     f => MAIN_FILES.contains(f.toString),
+    f => CONTRACT_FILES.contains(f.toString),
     f => IGNORE_FILES.contains(f.getFileName.toString),
     f => IGNORE_EXTS.exists(ext => f.getFileName.toString.endsWith(ext)),
   )

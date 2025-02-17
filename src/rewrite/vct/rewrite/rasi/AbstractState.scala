@@ -335,7 +335,8 @@ case class AbstractState[G](
       is_contract: Boolean = false,
   ): UncertainIntegerValue =
     expr match {
-      case CIntegerValue(value) => UncertainIntegerValue.single(value.intValue)
+      case CIntegerValue(value, _) =>
+        UncertainIntegerValue.single(value.intValue)
       case IntegerValue(value) => UncertainIntegerValue.single(value.intValue)
       case SizeOf(tname) =>
         UncertainIntegerValue
@@ -381,19 +382,19 @@ case class AbstractState[G](
         resolve_integer_expression(left, is_old, is_contract) %
           resolve_integer_expression(right, is_old, is_contract)
       // Bit operations destroy any knowledge of integer state       TODO: Support bit operations?
-      case BitNot(_) => UncertainIntegerValue.uncertain()
+      case BitNot(_, _, _) => UncertainIntegerValue.uncertain()
       case AmbiguousComputationalOr(_, _) => UncertainIntegerValue.uncertain()
       case AmbiguousComputationalXor(_, _) => UncertainIntegerValue.uncertain()
       case AmbiguousComputationalAnd(_, _) => UncertainIntegerValue.uncertain()
       case ComputationalOr(_, _) => UncertainIntegerValue.uncertain()
       case ComputationalXor(_, _) => UncertainIntegerValue.uncertain()
       case ComputationalAnd(_, _) => UncertainIntegerValue.uncertain()
-      case BitAnd(_, _) => UncertainIntegerValue.uncertain()
-      case BitOr(_, _) => UncertainIntegerValue.uncertain()
-      case BitXor(_, _) => UncertainIntegerValue.uncertain()
-      case BitShl(_, _) => UncertainIntegerValue.uncertain()
-      case BitShr(_, _) => UncertainIntegerValue.uncertain()
-      case BitUShr(_, _) => UncertainIntegerValue.uncertain()
+      case BitAnd(_, _, _, _) => UncertainIntegerValue.uncertain()
+      case BitOr(_, _, _, _) => UncertainIntegerValue.uncertain()
+      case BitXor(_, _, _, _) => UncertainIntegerValue.uncertain()
+      case BitShl(_, _, _, _) => UncertainIntegerValue.uncertain()
+      case BitShr(_, _, _) => UncertainIntegerValue.uncertain()
+      case BitUShr(_, _, _, _) => UncertainIntegerValue.uncertain()
       case Select(cond, ift, iff) =>
         var value: UncertainIntegerValue = UncertainIntegerValue.empty()
         if (resolve_boolean_expression(cond, is_old, is_contract).can_be_true) {
@@ -510,24 +511,24 @@ case class AbstractState[G](
       case Implies(left, right) =>
         (!resolve_boolean_expression(left, is_old, is_contract)) ||
         resolve_boolean_expression(right, is_old, is_contract)
-      case AmbiguousEq(left, right, _) =>
+      case AmbiguousEq(left, right, _, _) =>
         handle_equality(left, right, is_old, is_contract, negate = false)
       case Eq(left, right) =>
         handle_equality(left, right, is_old, is_contract, negate = false)
-      case AmbiguousNeq(left, right, _) =>
+      case AmbiguousNeq(left, right, _, _) =>
         handle_equality(left, right, is_old, is_contract, negate = true)
       case Neq(left, right) =>
         handle_equality(left, right, is_old, is_contract, negate = true)
-      case AmbiguousGreater(left, right) =>
+      case AmbiguousGreater(left, right, _) =>
         resolve_integer_expression(left, is_old, is_contract) >
           resolve_integer_expression(right, is_old, is_contract)
-      case AmbiguousLess(left, right) =>
+      case AmbiguousLess(left, right, _) =>
         resolve_integer_expression(left, is_old, is_contract) <
           resolve_integer_expression(right, is_old, is_contract)
-      case AmbiguousGreaterEq(left, right) =>
+      case AmbiguousGreaterEq(left, right, _) =>
         resolve_integer_expression(left, is_old, is_contract) >=
           resolve_integer_expression(right, is_old, is_contract)
-      case AmbiguousLessEq(left, right) =>
+      case AmbiguousLessEq(left, right, _) =>
         resolve_integer_expression(left, is_old, is_contract) <=
           resolve_integer_expression(right, is_old, is_contract)
       case Greater(left, right) =>

@@ -144,14 +144,27 @@ sealed trait CheckError {
       case SeqProgNoParticipant(s) =>
         Seq(
           context(s) ->
-            s"Unclear what the participating endpoint is in this statement"
+            s"Unclear what the participating endpoint is in this statement."
         )
       case SeqProgEndpointAssign(a) =>
         Seq(context(a) -> s"Raw assignment to an endpoint is not allowed.")
       case SeqProgInstanceMethodPure(m) =>
         Seq(context(m) -> s"Instance methods in choreographies cannot be pure.")
       case ChorNonTrivialContextEverywhere(e) =>
-        Seq(context(e) -> s"Context everywhere is not supported here")
+        Seq(context(e) -> s"Context everywhere is not supported here.")
+      case ChorInEndpointExpr(e) =>
+        Seq(context(e) -> s"`\\chor` not allowed in `\\endpoint`.")
+      case OnlyInChannelInvariant(e) =>
+        Seq(
+          context(e) ->
+            s"This expression is only allowed within a `channel_invariant` clause."
+        )
+      case InconsistentEndpointExprNesting(outer, inner) =>
+        Seq(
+          context(outer) ->
+            "The endpoint referenced in the outer expression here...",
+          context(inner) -> "...differs from the endpoint referenced here",
+        )
     }): _*)
 
   def subcode: String
@@ -259,6 +272,16 @@ case class SeqProgInstanceMethodPure(m: InstanceMethod[_]) extends CheckError {
 case class ChorNonTrivialContextEverywhere(expr: Node[_]) extends CheckError {
   val subcode = "chorNonTrivialContextEverywhere"
 }
+case class ChorInEndpointExpr(expr: Node[_]) extends CheckError {
+  val subcode = "chorInEndpointExpr"
+}
+case class OnlyInChannelInvariant(expr: Node[_]) extends CheckError {
+  val subcode = "onlyInChannelInvariant"
+}
+case class InconsistentEndpointExprNesting(outer: Node[_], inner: Node[_])
+    extends CheckError {
+  val subcode = "inconsistentEndpointExprNesting"
+}
 
 case object CheckContext {
   case class ScopeFrame[G](
@@ -287,6 +310,9 @@ case class CheckContext[G](
     currentChoreography: Option[Choreography[G]] = None,
     currentReceiverEndpoint: Option[Endpoint[G]] = None,
     currentParticipatingEndpoints: Option[Set[Endpoint[G]]] = None,
+    inChor: Boolean = false,
+    inEndpointExpr: Option[EndpointExpr[G]] = None,
+    inCommunicateInvariant: Option[Communicate[G]] = None,
     declarationStack: Seq[Declaration[G]] = Nil,
 ) {
   def withScope(decls: Seq[Declaration[G]]): Seq[CheckContext.ScopeFrame[G]] =
@@ -321,6 +347,9 @@ case class CheckContext[G](
 
   def withReceiverEndpoint(endpoint: Endpoint[G]): CheckContext[G] =
     copy(currentReceiverEndpoint = Some(endpoint))
+
+  def withCommunicateInvariant(communicate: Communicate[G]): CheckContext[G] =
+    copy(inCommunicateInvariant = Some(communicate))
 
   def withCurrentParticipatingEndpoints(
       endpoints: Seq[Endpoint[G]]

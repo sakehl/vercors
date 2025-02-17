@@ -207,7 +207,7 @@ case object CoercionUtils {
 
       case (TNull(), TRef()) => CoerceNullRef()
       case (TNull(), TArray(target)) => CoerceNullArray(target)
-      case (TNull(), TClass(target, typeArgs)) =>
+      case (TNull(), TByReferenceClass(target, typeArgs)) =>
         CoerceNullClass(target, typeArgs)
       case (TNull(), TClassUnique(target, _)) =>
         CoerceNullClass(target, Seq())
@@ -216,6 +216,7 @@ case object CoercionUtils {
       case (TNull(), target: PointerType[G]) => CoerceNullPointer(target)
       case (TNull(), target: CPointerType[G]) => CoerceNullPointer(target)
       case (TNull(), TEnum(target)) => CoerceNullEnum(target)
+      case (TNull(), LLVMTPointer(target)) => CoerceNullLLVMPointer(target)
 
       case (CTArray(_, innerType), TArray(element)) if element == innerType =>
         CoerceCArrayPointer(element)
@@ -235,12 +236,26 @@ case object CoercionUtils {
         getPointerCoercion(s, t, innerLeft, innerRight).getOrElse(return None)
       case (s@TPointer(innerLeft), t@CTPointer(innerRight)) =>
         getPointerCoercion(s, t, innerLeft, innerRight).getOrElse(return None)
+      case (TNonNullPointer(innerType), TPointer(element))
+          if innerType == element =>
+        CoerceNonNullPointer(innerType)
+      case (TNonNullPointer(a), TNonNullPointer(b))
+          if getAnyCoercion(a, b).isDefined =>
+        CoerceIdentity(target)
       case (CTArray(_, innerType), t@CTPointer(element)) =>
         if (element == innerType) { CoerceCArrayPointer(innerType) }
         else {
           CoercionSequence(Seq(
             CoerceCArrayPointer(element),
             getPointerCoercion(CTPointer(innerType), t, innerType, element).getOrElse(return None)
+          ))
+        }
+      case (CPPTArray(_, innerType), TPointer(element)) =>
+        if (element == innerType) { CoerceCPPArrayPointer(innerType) }
+        else {
+          CoercionSequence(Seq(
+            CoerceCPPArrayPointer(element),
+            getAnyCoercion(element, innerType).getOrElse(return None),
           ))
         }
       case (TFraction(), TZFraction()) => CoerceFracZFrac()
@@ -282,7 +297,15 @@ case object CoercionUtils {
           CoerceDecreasePrecision(source, coercedCFloat),
           CoerceCFloatFloat(coercedCFloat, target),
         ))
-      case (TCInt(), TInt()) => CoerceCIntInt()
+      case (TCInt(), TInt()) => CoerceCIntInt(source)
+      case (LLVMTInt(_), TInt()) => CoerceLLVMIntInt()
+      case (TInt(), LLVMTInt(_)) => CoerceIdentity(target)
+      case (l @ LLVMTFloat(_), TFloat(mantissa, exponent))
+          if l.mantissa == mantissa && l.exponent == exponent =>
+        CoerceIdentity(target)
+      case (TFloat(mantissa, exponent), r @ LLVMTFloat(_))
+          if r.mantissa == mantissa && r.exponent == exponent =>
+        CoerceIdentity(target)
 
       case (TBoundedInt(gte, lt), TFraction()) if gte >= 1 && lt <= 2 =>
         CoerceBoundIntFrac()
@@ -301,13 +324,13 @@ case object CoercionUtils {
         CoercionSequence(Seq(CoerceUnboundInt(source, TInt()), CoerceIntRat()))
       case (_: IntType[G], TRational()) => CoerceIntRat()
 
-      case (
-            source @ TClass(sourceClass, Seq()),
-            target @ TClass(targetClass, Seq()),
-          ) if source.transSupportArrows().exists { case (_, supp) =>
-            supp.cls.decl == targetClass.decl
-          } =>
-        CoerceSupports(sourceClass, targetClass)
+      case (source: TClass[G], target: TClass[G])
+          if source.typeArgs.isEmpty && target.typeArgs.isEmpty &&
+            source.transSupportArrows().exists { case (_, supp) =>
+              supp.cls.decl == target.cls.decl
+            } =>
+        CoerceSupports(source.cls, target.cls)
+
       case (source @ TClass(clsS, _), target@TClassUnique(clsT, _)) if clsS == clsT =>
         CoerceBetweenUniqueClass(source, target)
       case (source@TClassUnique(clsS,_), target@ TClass(clsT, _)) if clsS == clsT =>
@@ -315,8 +338,8 @@ case object CoercionUtils {
       case (source@TClassUnique(clsS, _), target@TClassUnique(clsT, _))
         if clsS == clsT =>
         CoerceBetweenUniqueClass(source, target)
-      case (source @ TClass(sourceClass, typeArgs), TAnyClass()) =>
-        CoerceClassAnyClass(sourceClass, typeArgs)
+      case (source: TClass[G], TAnyClass()) =>
+        CoerceClassAnyClass(source.cls, source.typeArgs)
 
       case (source @ TClassUnique(cls, _), TAnyClass()) =>
         CoerceClassAnyClass(cls, Seq())
@@ -350,7 +373,7 @@ case object CoercionUtils {
       case (TCInt(), target @ TCFloat(_, _)) => CoerceCIntCFloat(target)
 
       case (source @ TCFloat(_, _), TInt()) =>
-        CoercionSequence(Seq(CoerceCFloatCInt(source), CoerceCIntInt()))
+        CoercionSequence(Seq(CoerceCFloatCInt(source), CoerceCIntInt(TCInt())))
       case (TCInt(), target @ TFloat(exponent, mantissa)) =>
         val coercedCFloat = TCFloat[G](exponent, mantissa)
         CoercionSequence(Seq(
@@ -398,6 +421,9 @@ case object CoercionUtils {
             ))
           case None => return None
         }
+
+      case (TPointer(TAny()), TPointer(any)) => CoerceIdentity(TPointer(any))
+      case (TPointer(any), TPointer(TAny())) => CoerceIdentity(TPointer(any))
 
       // Something with TVar?
 
@@ -544,12 +570,37 @@ case object CoercionUtils {
       case t: PointerType[G] => Some((CoerceIdentity(source), t))
       case t: CTPointer[G] => Some((CoerceIdentity(source), TPointer(t.innerType)))
       case t: CTArray[G] => Some((CoerceCArrayPointer(t.innerType), TPointer(t.innerType)))
+      case t: TNonNullPointer[G] =>
+        Some((CoerceIdentity(source), TPointer(t.element)))
       case t: CPPPrimitiveType[G] => chainCPPCoercion(t, getAnyPointerCoercion)
-      case t: CPPTArray[G] => Some((CoerceCPPArrayPointer(t.innerType), TPointer(t.innerType)))
+      case t: CPPTArray[G] =>
+        Some((CoerceCPPArrayPointer(t.innerType), TPointer(t.innerType)))
+      case LLVMTPointer(None) =>
+        Some((CoerceIdentity(source), TPointer[G](TAnyValue())))
+      case LLVMTPointer(Some(innerType)) =>
+        Some((CoerceIdentity(source), TPointer(innerType)))
+      case LLVMTArray(numElements, innerType) if numElements > 0 =>
+        Some((CoerceIdentity(source), TPointer(innerType)))
       case _: TNull[G] =>
         val t = TPointer[G](TAnyValue())
         Some((CoerceNullPointer(t), t))
       case _ => None
+    }
+
+  def firstElementIsType[G](aggregate: Type[G], innerType: Type[G]): Boolean =
+    aggregate match {
+      case aggregate if getAnyCoercion(aggregate, innerType).isDefined => true
+      case clazz: TByValueClass[G] =>
+        clazz.cls.decl.decls.collectFirst { case field: InstanceField[G] =>
+          firstElementIsType(field.t, innerType)
+        }.getOrElse(false)
+      case TArray(element) => firstElementIsType(element, innerType)
+      case LLVMTStruct(_, _, elements) =>
+        firstElementIsType(elements.head, innerType)
+      case LLVMTArray(numElements, elementType) =>
+        numElements > 0 && firstElementIsType(elementType, innerType)
+      case LLVMTVector(_, _) => false // TODO: Should this be possible?
+      case _ => false
     }
 
   def getAnyCArrayCoercion[G](

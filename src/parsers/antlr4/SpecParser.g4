@@ -185,6 +185,7 @@ valPrimaryPermission
  | '\\array'  '(' langExpr ',' langExpr ')' # valArray
  | '\\pointer' '(' langExpr ',' langExpr ',' langExpr ')' # valPointer
  | '\\pointer_index' '(' langExpr ',' langExpr ',' langExpr ')' # valPointerIndex
+ | '\\pointer_block' '(' langExpr ')' # valPointerBlock
  | '\\pointer_block_length' '(' langExpr ')' # valPointerBlockLength
  | '\\pointer_block_offset' '(' langExpr ')' # valPointerBlockOffset
  | '\\pointer_length' '(' langExpr ')' # valPointerLength
@@ -298,6 +299,10 @@ valPrimary
  | '\\is_int' '(' langExpr ')' # valIsInt
  | '\\choose' '(' langExpr ')' # valChoose
  | '\\choose_fresh' '(' langExpr ')' # valChooseFresh
+ | '(' '\\assuming' langExpr ')' # valBoolAssuming
+ | '(' '\\assuming' langExpr ';' langExpr ')' # valAssuming
+ | '(' '\\asserting' langExpr ')' # valBoolAsserting
+ | '(' '\\asserting' langExpr ';' langExpr ')' # valAsserting
  ;
 
 // Out spec: defined meaning: a language local
