@@ -79,7 +79,7 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
 
   private def getPointerField(ptr: Expr[Pre]): Ref[Post, SilverField[Post]] = {
     val (tElementPre: Type[Pre], uniqueID) = ptr.t.asPointer.get match {
-      case TUniquePointer(e, i) => (e, Some(i))
+      case TPointerUnique(e, i) => (e, Some(i))
       case TPointer(e) => (e, None)
     }
     val tElement = dispatch(tElementPre)
@@ -102,7 +102,7 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
   override def postCoerce(t: Type[Pre]): Type[Post] =
     t match {
       case TPointer(_) => TOption(TAxiomatic(pointerAdt.ref, Nil))
-      case TUniquePointer(_, _) => TOption(TAxiomatic(pointerAdt.ref, Nil))
+      case TPointerUnique(_, _) => TOption(TAxiomatic(pointerAdt.ref, Nil))
       case other => rewriteDefault(other)
     }
 

@@ -1,9 +1,10 @@
-package vct.col.ast.unsorted
+package vct.col.ast.`type`
 
 import vct.col.ast.CTStructUnique
 import vct.col.ast.ops.CTStructUniqueOps
 import vct.col.print._
 
 trait CTStructUniqueImpl[G] extends CTStructUniqueOps[G] { this: CTStructUnique[G] =>
-  // override def layout(implicit ctx: Ctx): Doc = ???
+  override def layout(implicit ctx: Ctx): Doc = Text("unique_struct_field<") <>
+    ctx.name(fieldRef) <> "," <> unique.toString <> ">" <+> inner
 }

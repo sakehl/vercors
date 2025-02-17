@@ -177,7 +177,7 @@ case object ResolveTypes {
     val pf: Seq[CUniquePointerField[G]] = specifiers.collect
     { case CTypeQualifierDeclarationSpecifier(s: CUniquePointerField[G]) => s}
     pf.foreach(f =>
-      f.ref = Some(C.getUniquePointerStructFieldRef(specifiers, ctx).getOrElse(
+      f.ref = Some(C.getUniquePointerStructFieldRef(specifiers, f, ctx).getOrElse(
         throw NotSupportedStructUniqueField(blameNode)
       ))
     )

@@ -273,13 +273,20 @@ case object C extends LazyLogging {
       case _ => t
     }
 
+  def stripUniqueType[G](t: Type[G]): Type[G] =
+    t match {
+      case CTStructUnique(innerT, _, _) => stripUniqueType(innerT)
+      case TUnique(innerT, _) => stripUniqueType(innerT)
+      case _ => t
+    }
+
     def findPointerDeref[G](
       obj: Expr[G],
       name: String,
       ctx: ReferenceResolutionContext[G],
       blame: Blame[BuiltinError],
   ): Option[CDerefTarget[G]] =
-    stripCPrimitiveType(obj.t) match {
+      stripUniqueType(stripCPrimitiveType(obj.t)) match {
       case CTPointer(t) => findStruct(t, name)
       case CTArray(_, t) => findStruct(t, name)
       case _ => None
@@ -292,6 +299,8 @@ case object C extends LazyLogging {
     }
     case struct: CTStruct[G] => getCStructDeref(struct.ref.decl, name)
     case struct: CTStructUnique[G] => findStruct(struct.inner, name)
+    case _ => None
+//      ???
   }
 
   def getCStructDeref[G](
@@ -308,24 +317,21 @@ case object C extends LazyLogging {
 
   def getUniquePointerStructFieldRef[G](
       specs: Seq[CDeclarationSpecifier[G]],
+      pointerField: CUniquePointerField[G],
       ctx: TypeResolutionContext[G]
   ): Option[RefCStructField[G]] = {
-    var pf: Option[CUniquePointerField[G]] = None
     var struct: Option[CStructSpecifier[G]] = None
     specs foreach {
-      case CTypeQualifierDeclarationSpecifier(s: CUniquePointerField[G]) =>
-        if(pf.isDefined) return None
-        pf = Some(s)
       case s: CStructSpecifier[G] =>
         if(struct.isDefined) return None
         struct = Some(s)
       case _ =>
     }
-    if(pf.isEmpty || struct.isEmpty) return None
+    if(struct.isEmpty) return None
 
     val structRef: RefCStruct[G] = C.findCStruct(struct.get.name, ctx)
       .getOrElse(return None)
-    C.getCStructDeref(structRef.decl, pf.get.name)
+    C.getCStructDeref(structRef.decl, pointerField.name)
   }
 
   def openCLVectorAccessString[G](
@@ -378,7 +384,7 @@ case object C extends LazyLogging {
       ctx: ReferenceResolutionContext[G],
       blame: Blame[BuiltinError],
   ): Option[CDerefTarget[G]] =
-    (stripCPrimitiveType(obj.t) match {
+    (stripUniqueType(stripCPrimitiveType(obj.t)) match {
       case t: TNotAValue[G] =>
         t.decl.get match {
           case RefAxiomaticDataType(decl) =>
@@ -402,7 +408,7 @@ case object C extends LazyLogging {
       case v: TOpenCLVector[G] =>
         openCLVectorAccessString(name, v.size).map(RefOpenCLVectorMembers[G])
       case _ => None
-    }).orElse(Spec.builtinField(obj, name, blame))
+    }).orElse(Spec.builtinField(stripCPrimitiveType(obj.t), name, blame, obj.o))
 
   def resolveInvocation[G](
       obj: Expr[G],

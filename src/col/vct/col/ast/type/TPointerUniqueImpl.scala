@@ -1,11 +1,11 @@
 package vct.col.ast.`type`
 
-import vct.col.ast.TUniquePointer
-import vct.col.ast.ops.TUniquePointerOps
+import vct.col.ast.TPointerUnique
+import vct.col.ast.ops.TPointerUniqueOps
 import vct.col.print._
 
-trait TUniquePointerImpl[G] extends TUniquePointerOps[G] {
-  this: TUniquePointer[G] =>
+trait TPointerUniqueImpl[G] extends TPointerUniqueOps[G]{
+  this: TPointerUnique[G] =>
   override def layoutSplitDeclarator(implicit ctx: Ctx): (Doc, Doc) = {
     val (spec, decl) = element.layoutSplitDeclarator
     (spec, decl <> "*")

@@ -5,5 +5,5 @@ import vct.col.ast.ops.CoerceFromUniqueOps
 import vct.col.print._
 
 trait CoerceFromUniqueImpl[G] extends CoerceFromUniqueOps[G] { this: CoerceFromUnique[G] =>
-  // override def layout(implicit ctx: Ctx): Doc = ???
+
 }

@@ -68,6 +68,13 @@ case object LangCToCol {
       decl.o.messageInContext(s"This has a struct type that is not supported.")
   }
 
+  case class WrongUniqueFieldStruct(decl: Node[_]) extends UserError {
+    override def code: String = "wrongUniqueFieldStruct"
+
+    override def text: String =
+      decl.o.messageInContext(s"Cannot add a unique pointer field towards a field which already had one for that field.")
+  }
+
   case class WrongOpenCLLiteralVector(e: Node[_]) extends UserError {
     override def code: String = "wrongOpenCLLiteralVector"
 
@@ -394,9 +401,30 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       case CPrimitiveType(specs) => getBaseType(C.getPrimitiveType(specs, Some(t)))
       case TUnique(it, _) => getBaseType(it)
       case TConst(it) => getBaseType(it)
-      case TClassUnique(it, _, _) => getBaseType(it)
+      case TClassUnique(cls, _) => TClass(cls, Seq())
       case CTStructUnique(it, _, _) => getBaseType(it)
       case _ => t
+    }
+
+  def getStructType[G](t: Type[G]): CType[G] =
+    t match {
+      case CPrimitiveType(specs) => getStructType(C.getPrimitiveType(specs, Some(t)))
+      case st: CTStructUnique[G] => st
+      case st: CTStruct[G] => st
+      case _ => throw WrongStructType(t)
+    }
+
+  def getBaseStructTypeWithUnique[G](
+    t: Type[G],
+    m: Map[Ref[G, CStructMemberDeclarator[G]],BigInt] = Map[Ref[G, CStructMemberDeclarator[G]],BigInt]()):
+    Option[(CTStruct[G], Map[Ref[G, CStructMemberDeclarator[G]],BigInt])] =
+    t match {
+      case CPrimitiveType(specs) => getBaseStructTypeWithUnique(C.getPrimitiveType(specs, Some(t)), m)
+      case CTStructUnique(it, ref, unique) =>
+        if(m.contains(ref)) throw WrongUniqueFieldStruct(t)
+        getBaseStructTypeWithUnique(it, m + (ref -> unique))
+      case ts: CTStruct[G] => Some(ts, m)
+      case _ => None
     }
 
   def castIsId(exprType: Type[Pre], castType: Type[Pre]): Boolean = {
@@ -1166,27 +1194,30 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
   def rewriteStructDeclaration(
       decl: CLocalDeclaration[Pre],
-      cts: CTStruct[Pre],
+      structT: Type[Pre]
   ): Statement[Post] = {
     val init = decl.decl.inits.head
     val info = C.getDeclaratorInfo(init.decl)
-    val ref = cts.ref
+    val classT = structType(getStructType(structT))
 
+    val (classRef, uniqueMap) = classT match {
+      case TClass(cls, _) => (cls, None)
+      case TClassUnique(cls, m) => (cls, Some(m))
+    }
     implicit val o: Origin = init.o
-    val targetClass: Class[Post] = cStructSuccessor(ref.decl)
-    val t = TClass[Post](targetClass.ref, Seq())
 
-    val v = new Variable[Post](t)(o.sourceName(info.name))
+    val v = new Variable[Post](classT)(o.sourceName(info.name))
     cNameSuccessor(RefCLocalDeclaration(decl, 0)) = v
 
     val initialVal = init.init.map(i =>
       createStructCopy(
         rw.dispatch(i),
-        ref.decl,
+        getStructType(structT),
         (f: InstanceField[_]) =>
           PanicBlame("Cannot fail due to insufficient perm"),
       )
-    ).getOrElse(NewObject[Post](targetClass.ref))
+    ).orElse( uniqueMap.map(m => NewObjectUnique[Post](classRef, m)) )
+     .getOrElse(NewObject[Post](classRef))
 
     Block(Seq(LocalDecl(v), assignInitial(v.get, initialVal)))
   }
@@ -1206,6 +1237,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         case t: CTArray[Pre] =>
           return rewriteArrayDeclaration(decl, t, init)
         case t: CTStruct[Pre] => return rewriteStructDeclaration(decl, t)
+        case t: CTStructUnique[Pre] => return rewriteStructDeclaration(decl, t)
         case t => rw.dispatch(t)
       }
 
@@ -1264,13 +1296,13 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
   def isVector(t: Type[Pre]): Boolean =
     getBaseType(t) match {
-      case t : CTVector[Pre] => true
+      case _ : CTVector[Pre] => true
       case _ => false
     }
 
   def isArray(t: Type[Pre]): Boolean =
     getBaseType(t) match {
-      case t : CTArray[Pre] => true
+      case _ : CTArray[Pre] => true
       case _ => false
     }
 
@@ -1284,16 +1316,16 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
   def isPointer(t: Type[Pre]): Boolean =
     getBaseType(t) match {
-      case t @ TPointer(_) => true
-      case t @ CTPointer(_) => true
+      case TPointer(_) => true
+      case CTPointer(_) => true
       case _ => false
     }
 
   def isPointerOrArray(t: Type[Pre]): Boolean =
     getBaseType(t) match {
-      case t @ TPointer(_) => true
-      case t @ CTPointer(_) => true
-      case t @ CTArray(_, _) => true
+      case TPointer(_) => true
+      case CTPointer(_) => true
+      case CTArray(_, _) => true
       case _ => false
     }
 
@@ -1451,8 +1483,8 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         val b: Blame[PointerDerefError] = deref.blame
         val structRef =
           getBaseType(deref.struct.t) match {
-            case CTPointer(CTStruct(struct)) => struct
-            case CTPointer(CTStructUnique(CTStruct(struct), fieldRef, unique)) => struct
+            case CTPointer(struct) => getBaseStructTypeWithUnique(struct).map({case (t,_) => t.ref})
+              .getOrElse(throw WrongStructType(deref.struct.t))
             case t => throw WrongStructType(t)
           }
         Deref[Post](
@@ -1506,18 +1538,21 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
   def createStructCopy(
       value: Expr[Post],
-      struct: CGlobalDeclaration[Pre],
+      structT: CType[Pre],
       blame: InstanceField[_] => Blame[InsufficientPermission],
   )(implicit o: Origin): Expr[Post] = {
-    val targetClass: Class[Post] = cStructSuccessor(struct)
-    val t = TClass[Post](targetClass.ref, Seq())
+    val t = structType(structT)
+    val (targetClass, uniqueMap) = t match {
+      case TClass(cls, _) => (cls, None)
+      case TClassUnique(cls, m) => (cls, Some(m))
+    }
 
     // Assign a new variable towards the value, such that methods do not get executed multiple times.
     val vValue = new Variable[Post](t)
     // The copy of the value
     val vCopy = new Variable[Post](t)
 
-    val fieldAssigns = targetClass.declarations.collect {
+    val fieldAssigns = targetClass.decl.declarations.collect {
       case field: InstanceField[Post] =>
         val ref: Ref[Post, InstanceField[Post]] = field.ref
         assignField(
@@ -1527,6 +1562,8 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           PanicBlame("Assignment should work"),
         )
     }
+    val newStruct = uniqueMap.map(m => NewObjectUnique[Post](targetClass, m))
+      .getOrElse(NewObject[Post](targetClass))
 
     With(
       Block(
@@ -1534,7 +1571,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           LocalDecl(vCopy),
           LocalDecl(vValue),
           assignInitial(vValue.get, value),
-          assignInitial(vCopy.get, NewObject[Post](targetClass.ref)),
+          assignInitial(vCopy.get, newStruct),
         ) ++ fieldAssigns
       ),
       vCopy.get,
@@ -1542,19 +1579,12 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   }
 
   def assignStruct(assign: PreAssignExpression[Pre]): Expr[Post] = {
-    getBaseType(assign.target.t) match {
-      case CTStruct(ref) =>
-        val copy =
-          createStructCopy(
-            rw.dispatch(assign.value),
-            ref.decl,
-            (f: InstanceField[_]) => StructCopyFailed(assign, f),
-          )(assign.o)
-        PreAssignExpression(rw.dispatch(assign.target), copy)(AssignLocalOk)(
-          assign.o
-        )
-      case _ => throw WrongStructType(assign.target)
-    }
+    val copy = createStructCopy(
+        rw.dispatch(assign.value),
+        getStructType(assign.target.t),
+        (f: InstanceField[_]) => StructCopyFailed(assign, f),
+      )(assign.o)
+    PreAssignExpression(rw.dispatch(assign.target), copy)(AssignLocalOk)(assign.o)
   }
 
   def createUpdateVectorFunction(size: Int): Function[Post] = {
@@ -1787,17 +1817,16 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     }
 
     // Create copy for any direct structure arguments
-    val newArgs = args.map(a =>
-      getBaseType(a.t) match {
-        case CTStruct(ref) =>
-          createStructCopy(
-            rw.dispatch(a),
-            ref.decl,
-            (f: InstanceField[_]) => StructCopyBeforeCallFailed(inv, f),
-          )(a.o)
-        case _ => rw.dispatch(a)
+    val newArgs = args.map(a => {
+      if (isStruct(a.t)) {
+        createStructCopy(
+          rw.dispatch(a),
+          getStructType(a.t),
+          (f: InstanceField[_]) => StructCopyBeforeCallFailed(inv, f),
+        )(a.o)
       }
-    )
+      rw.dispatch(a)
+    })
 
     implicit val o: Origin = inv.o
     inv.ref.get match {
@@ -2039,13 +2068,14 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       val targetClass =
         new LazyRef[Post, Class[Post]](cStructSuccessor(ref.decl))
       TClass[Post](targetClass, Seq())(t.o)
-    case CTStructUnique(CTStruct(ref), fieldRef, unique) =>
+    case t@CTStructUnique(_, _, _) =>
+      val(CTStruct(ref), map) = getBaseStructTypeWithUnique(t).get
       val targetClass =
         new LazyRef[Post, Class[Post]](cStructSuccessor(ref.decl))
-      val targetField =
-        new LazyRef[Post, InstanceField[Post]](cStructFieldsSuccessor((ref.decl, fieldRef.decl)))
-      val tInner = TClass[Post](targetClass, Seq())(t.o)
-      TClassUnique[Post](tInner, targetField, unique)(t.o)
+      val uniqueMap = map.toSeq.map{case (fieldRef, unique) =>
+        (new LazyRef[Post, InstanceField[Post]](cStructFieldsSuccessor((ref.decl, fieldRef.decl))), unique)
+      }
+      TClassUnique[Post](targetClass, uniqueMap)(t.o)
     case _ => ???
   }
 }

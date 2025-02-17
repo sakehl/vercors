@@ -143,7 +143,7 @@ final case class TUnique[G](inner: Type[G], unique: BigInt)(
 final case class CTStructUnique[G](inner: Type[G], fieldRef: Ref[G, CStructMemberDeclarator[G]], unique: BigInt)(
   implicit val o: Origin = DiagnosticOrigin
 ) extends CType[G] with CTStructUniqueImpl[G]
-final case class TClassUnique[G](inner: Type[G], fieldRef: Ref[G, InstanceField[G]], unique: BigInt)(
+final case class TClassUnique[G](cls: Ref[G, Class[G]], uniqueMap: Seq[(Ref[G, InstanceField[G]], BigInt)])(
   implicit val o: Origin = DiagnosticOrigin
 ) extends Type[G] with TClassUniqueImpl[G]
 
@@ -152,9 +152,9 @@ sealed trait PointerType[G] extends Type[G] with PointerTypeImpl[G]
 final case class TPointer[G](element: Type[G])(
   implicit val o: Origin = DiagnosticOrigin
 ) extends PointerType[G] with TPointerImpl[G]
-final case class TUniquePointer[G](element: Type[G], id: BigInt)(
+final case class TPointerUnique[G](element: Type[G], id: BigInt)(
   implicit val o: Origin = DiagnosticOrigin
-) extends PointerType[G] with TUniquePointerImpl[G]
+) extends PointerType[G] with TPointerUniqueImpl[G]
 final case class TConstPointer[G](pureElement: Type[G])(
   implicit val o: Origin = DiagnosticOrigin
 ) extends PointerType[G] with TConstPointerImpl[G]
@@ -977,7 +977,6 @@ final case class CoerceBetweenUniqueClass[G](source: Type[G], target: Type[G])(
 final case class CoerceBetweenUniqueStruct[G](source: Type[G], target: Type[G])(
   implicit val o: Origin
 ) extends Coercion[G] with CoerceBetweenUniqueStructImpl[G]
-
 
 final case class CoerceToConst[G](source: Type[G])(
   implicit val o: Origin
@@ -1876,6 +1875,8 @@ final case class Select[G](
     extends Expr[G] with SelectImpl[G]
 final case class NewObject[G](cls: Ref[G, Class[G]])(implicit val o: Origin)
     extends Expr[G] with NewObjectImpl[G]
+final case class NewObjectUnique[G](cls: Ref[G, Class[G]], uniqueMap: Seq[(Ref[G, InstanceField[G]], BigInt)])(implicit val o: Origin)
+  extends Expr[G] with NewObjectUniqueImpl[G]
 final case class NewArray[G](
     element: Type[G],
     dims: Seq[Expr[G]],

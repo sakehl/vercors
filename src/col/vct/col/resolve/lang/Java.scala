@@ -641,7 +641,7 @@ case object Java extends LazyLogging {
         }
       case _ => None
     }): Option[JavaDerefTarget[G]])
-      .orElse[JavaDerefTarget[G]](Spec.builtinField(obj, name, blame))
+      .orElse[JavaDerefTarget[G]](Spec.builtinField(obj.t, name, blame, obj.o))
 
   def findMethodInClass[G](
       cls: JavaClassOrInterface[G],

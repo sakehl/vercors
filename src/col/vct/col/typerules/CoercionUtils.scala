@@ -36,6 +36,17 @@ case object CoercionUtils {
         if(l == r) CoerceFromUniquePointer(source, target) else return None
       case (l, TUnique(r, _)) =>
         if(l == r) CoerceToUniquePointer(source, target) else return None
+      case (t: CTStructUnique[G], s) if C.stripUniqueType(t) == C.stripUniqueType(s) =>
+        CoerceBetweenUniqueStruct(source, target)
+      case (t, s: CTStructUnique[G]) if C.stripUniqueType(t) == C.stripUniqueType(s) =>
+        CoerceBetweenUniqueStruct(source, target)
+      case (s: TClass[G], TClassUnique(clsT, _)) if clsT == s.cls =>
+        CoerceBetweenUniqueClass(source, target)
+      case (s@TClassUnique(clsS, _), t: TClass[G]) if clsS == t.cls =>
+        CoerceBetweenUniqueClass(source, target)
+      case (s@TClassUnique(clsS, _), t@TClassUnique(clsT, _))
+        if clsS == clsT =>
+        CoerceBetweenUniqueClass(source, target)
       case _ => return None
     })
   }
@@ -73,6 +84,10 @@ case object CoercionUtils {
           val inner = getAnyCoercion(source, target).getOrElse(return None)
           CoercionSequence(Seq(inner, CoerceToUnique(target, ti)))
         }
+      case (t: CTStructUnique[G], s) if C.stripUniqueType(t) == C.stripUniqueType(s) =>
+        CoerceBetweenUniqueStruct(t, s)
+      case (t, s: CTStructUnique[G]) if C.stripUniqueType(t) == C.stripUniqueType(s) =>
+        CoerceBetweenUniqueStruct(t, s)
       case (TConst(source), TConst(target)) =>
         getAnyCoercion(source, target).getOrElse(return None)
       case (source, TConst(target)) =>
@@ -194,8 +209,8 @@ case object CoercionUtils {
       case (TNull(), TArray(target)) => CoerceNullArray(target)
       case (TNull(), TClass(target, typeArgs)) =>
         CoerceNullClass(target, typeArgs)
-      case (TNull(), TClassUnique(TClass(target, typeArgs), _, _)) =>
-        CoerceNullClass(target, typeArgs)
+      case (TNull(), TClassUnique(target, _)) =>
+        CoerceNullClass(target, Seq())
       case (TNull(), JavaTClass(target, _)) => CoerceNullJavaClass(target)
       case (TNull(), TAnyClass()) => CoerceNullAnyClass()
       case (TNull(), target: PointerType[G]) => CoerceNullPointer(target)
@@ -293,18 +308,18 @@ case object CoercionUtils {
             supp.cls.decl == targetClass.decl
           } =>
         CoerceSupports(sourceClass, targetClass)
-      case (source @ TClass(_, _), target@TClassUnique(innerT @ TClass(_, _), _, _)) if innerT == source =>
+      case (source @ TClass(clsS, _), target@TClassUnique(clsT, _)) if clsS == clsT =>
         CoerceBetweenUniqueClass(source, target)
-      case (source@TClassUnique(innerS @ TClass(_, _), _, _), target@ TClass(_, _)) if innerS == target =>
+      case (source@TClassUnique(clsS,_), target@ TClass(clsT, _)) if clsS == clsT =>
         CoerceBetweenUniqueClass(source, target)
-      case (source@TClassUnique(innerS @ TClass(_, _), _, _), target@TClassUnique(innerT @ TClass(_, _), _, _))
-        if innerT == innerS =>
+      case (source@TClassUnique(clsS, _), target@TClassUnique(clsT, _))
+        if clsS == clsT =>
         CoerceBetweenUniqueClass(source, target)
       case (source @ TClass(sourceClass, typeArgs), TAnyClass()) =>
         CoerceClassAnyClass(sourceClass, typeArgs)
 
-      case (source @ TClassUnique(TClass(sourceClass, typeArgs), _ ,_), TAnyClass()) =>
-        CoerceClassAnyClass(sourceClass, typeArgs)
+      case (source @ TClassUnique(cls, _), TAnyClass()) =>
+        CoerceClassAnyClass(cls, Seq())
 
       case (
             source @ JavaTClass(sourceClass, Nil),
@@ -682,8 +697,7 @@ case object CoercionUtils {
       case t: TConst[G] =>
         getAnyClassCoercion(t.inner).map{ case (c, res) => (CoercionSequence(Seq(CoerceFromConst(t.inner), c)), res)}
       case t: TClass[G] => Some((CoerceIdentity(source), t))
-      case t: TClassUnique[G] => getAnyClassCoercion(t.inner)
-
+      case t: TClassUnique[G] => Some((CoerceIdentity(source), TClass(t.cls, Seq())))
       case t: TUnion[G] =>
         val superType = Types.leastCommonSuperType(t.types)
         getAnyClassCoercion(superType) match {

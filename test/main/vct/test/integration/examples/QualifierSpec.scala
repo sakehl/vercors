@@ -2,31 +2,40 @@ package vct.test.integration.examples
 
 import vct.test.integration.helper.VercorsSpec
 
-class QualifierSpecWIP extends VercorsSpec {
+class StructQualifierSpec extends VercorsSpec {
   vercors should verify using silicon in "Unique pointer field of struct containing unique struct" c """
   struct vec2 {
     int* xxs;
   };
 
   struct vec {
+    int y;
     int* xs;
     /*@unique_pointer_field<xxs, 3>@*/ struct vec2 v;
   };
 
   /*@
-    context xs != NULL;
+    context xs != NULL && xs2 != NULL;
     context x1 != NULL ** \pointer_length(x1)==1 ** Perm(x1, write) ** Perm(*x1, write);
+    context Perm(v, write) ** v.xxs != NULL;
   @*/
-  int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  x1, /*@ unique<2> @*/ int* xs, /*@unique_pointer_field<xxs, 3>@*/ struct vec2 v){
+
+  int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  x1, /*@ unique<2> @*/ int* xs,
+      /*@unique_pointer_field<xxs, 3>@*/ struct vec2 v, /*@ unique<3>@*/ int* xs2){
+    /*@unique_pointer_field<xs, 2>@*/ struct vec test;
+    test.y = 5;
+
     x1->xs = xs;
     x1->v = v;
     //@ assert xs != NULL;
+    //@ assert x1->xs != NULL;
+    // assert x1->v.xxs != NULL;
+    x1->v.xxs = xs2;
+    //@ assert x1->v.xxs != NULL;
     return 0;
   }
   """
-}
 
-class StructQualifierSpec extends VercorsSpec {
   vercors should verify using silicon in "Unique pointer field of struct" c """
   struct vec {
     int* xs;
@@ -38,7 +47,23 @@ class StructQualifierSpec extends VercorsSpec {
   @*/
   int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  x1, /*@ unique<2> @*/ int* xs){
     x1->xs = xs;
-    //@ assert xs != NULL;
+    //@ assert x1->xs != NULL;
+    return 0;
+  }
+  """
+
+  vercors should error withCode "disallowedQualifiedCoercion" in "Assign wrong type to unique pointer field of struct" c """
+  struct vec {
+    int* xs;
+  };
+
+  /*@
+    context xs != NULL;
+    context x1 != NULL ** \pointer_length(x1)==1 ** Perm(x1, write) ** Perm(*x1, write);
+  @*/
+  int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  x1, int* xs){
+    x1->xs = xs;
+    //@ assert x1->xs != NULL;
     return 0;
   }
   """
@@ -63,6 +88,188 @@ class StructQualifierSpec extends VercorsSpec {
     return 0;
   }
   """
+
+  vercors should error withCode "disallowedQualifiedCoercion" in "Assign wrong type to unique pointer field of struct of struct" c """
+  struct vec2 {
+    int* xxs;
+  };
+
+  struct vec {
+    int* xs;
+    /*@unique_pointer_field<xxs, 3>@*/ struct vec2 v;
+  };
+
+  /*@
+    context xs != NULL && xs2 != NULL;
+    context x1 != NULL ** \pointer_length(x1)==1 ** Perm(x1, write) ** Perm(*x1, write);
+    context Perm(v, write) ** v.xxs != NULL;
+  @*/
+
+  int f(struct vec*  x1, int* xs, struct vec2 v, int* xs2){
+    x1->xs = xs;
+    x1->v = v;
+    //@ assert xs != NULL;
+    //@ assert x1->xs != NULL;
+    // assert x1->v.xxs != NULL;
+    x1->v.xxs = xs2;
+    //@ assert x1->v.xxs != NULL;
+    return 0;
+  }
+  """
+
+  vercors should verify using silicon in "Multiple unique pointer fields for struct" c """
+  struct vec {
+    int* xs;
+    int* ys;
+  };
+
+  /*@
+    context xs1 != NULL && ys1 != NULL;
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, write) ** Perm(*v, write);
+  @*/
+  int f(/*@unique_pointer_field<ys, 1>@*/ /*@unique_pointer_field<xs, 2>@*/ struct vec*  v,
+    /*@ unique<2> @*/ int* xs1,
+    /*@ unique<1> @*/ int* ys1){
+      v->xs = xs1;
+      //@ assert v->xs != NULL;
+      v->ys = ys1;
+      //@ assert v->ys != NULL;
+    }
+  """
+
+  vercors should error withCode "wrongUniqueFieldStruct" in "Multiple same unique pointer fields for struct" c """
+  struct vec {
+    int* xs;
+    int* ys;
+  };
+
+  /*@
+    context xs1 != NULL && ys1 != NULL;
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, write) ** Perm(*v, write);
+  @*/
+  int f(/*@unique_pointer_field<xs, 1>@*/ /*@unique_pointer_field<xs, 2>@*/ struct vec*  v,
+    /*@ unique<2> @*/ int* xs1,
+    /*@ unique<1> @*/ int* ys1){
+      v->xs = xs1;
+      //@ assert v->xs != NULL;
+      v->ys = ys1;
+      //@ assert v->ys != NULL;
+    }
+  """
+
+  vercors should verify using silicon in "Coerce struct" c """
+  struct vec {
+    int* xs;
+    int* ys;
+  };
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    ensures \result == v->xs;
+  @*/
+  /*@ unique<1> @*/ int* get_xs(/*@unique_pointer_field<xs, 1>@*/ struct vec* v){
+    return v->xs;
+   }
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, write) ** Perm(*v, write);
+    context v->xs != NULL;
+  @*/
+  int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  v){
+      /*@ unique<2> @*/ int* xs2 = get_xs(v);
+      //@ assert xs2 != NULL;
+    }
+  """
+
+  vercors should error withCode "disallowedQualifiedMethodCoercion" in "Coerce struct not allowed" c """
+  struct vec {
+    int* xs;
+    int* ys;
+  };
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    ensures \result == v->xs;
+  @*/
+  int* get_xs(struct vec* v){
+    return v->xs;
+   }
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, write) ** Perm(*v, write);
+    context v->xs != NULL;
+  @*/
+  int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  v){
+      /*@ unique<2> @*/ int* xs2 = get_xs(v);
+      //@ assert xs2 != NULL;
+    }
+  """
+
+  vercors should verify using silicon in "Coerce self reference struct" c """
+  struct vec {
+    int* xs;
+    int* ys;
+    struct vec* link;
+  };
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    ensures \result == v->xs;
+  @*/
+  /*@unique<1>@*/ int* get_xs(/*@unique_pointer_field<xs, 1>@*/ struct vec* v){
+    return v->xs;
+   }
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, write) ** Perm(*v, write);
+    context v->xs != NULL;
+  @*/
+  int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  v){
+      /*@ unique<2> @*/ int* xs2 = get_xs(v);
+      //@ assert xs2 != NULL;
+    }
+  """
+
+  vercors should error withCode "disallowedQualifiedMethodCoercion" in "coercion with invalid args inside ADTs" c
+"""
+struct vec {
+    int* xs;
+  };
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    ensures v->xs  == \result;
+  @*/
+  int* get_xs(struct vec* v){
+    return v->xs;
+   }
+
+  /*@
+  ghost
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100) ** v->xs != NULL;
+    context 1 \in m.keys && m[1].size >0 ==> m[1][0].fst != NULL;
+    ensures \result != NULL;
+  int* get_xs2(struct vec* v, map<int, seq<tuple<int*, void*> > > m){
+    if( 1 \in m.keys && m[1].size >0){
+      return m[1][0].fst;
+    }
+    return v->xs;
+  }
+
+  @*/
+
+  /*@
+    given map<int, seq<tuple<int*, void*> > > m;
+    context 1 \in m.keys && m[1].size >0 ==> m[1][0].fst != NULL;
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, write) ** Perm(*v, write);
+    context v->xs != NULL;
+  @*/
+  int f(/*@unique_pointer_field<xs, 1>@*/ struct vec*  v){
+      /*@unique<1>@*/int* xs2 = get_xs(v);
+      //@ assert xs2 != NULL;
+      //@ assert get_xs2(v, m) != NULL;
+    }
+"""
 }
 
 class QualifierSpec extends VercorsSpec {
@@ -85,7 +292,8 @@ class QualifierSpec extends VercorsSpec {
   vercors should error withCode "disallowedQualifiedCoercion" in "diff uniques pointer of unique pointer - 2" c """void f(){/*@ unique<1> @*/ int * /*@ unique<2> @*/ * x0; /*@ unique<1> @*/ int * /*@ unique<4> @*/ * x1; x0 = x1;}"""
   vercors should error withCode "resolutionError:type" in "diff uniques pointer of unique pointer - 3" c """void f(){/*@ unique<1> @*/ int * /*@ unique<2> @*/ * x0; /*@ unique<3> @*/ int * /*@ unique<2> @*/ * x1; x0 = x1;}"""
 
-  vercors should error withCode "cTypeNotSupported" in "multiple uniques" c """void f(/*@ unique<1> @*/ /*@ unique<2> @*/ int* x0){}"""
+
+
   vercors should error withCode "disallowedQualifiedCoercion" in "different uniques param - 1" c """void f(/*@ unique<1> @*/ int* x0){ int* x1 = x0;}"""
   vercors should error withCode "disallowedQualifiedCoercion" in "different uniques param - 2" c """void f(/*@ unique<1> @*/ int* x0){ /*@ unique<2> @*/ int* x1 = x0;}"""
   vercors should error withCode "disallowedQualifiedCoercion" in "different uniques local" c """void f(){/*@ unique<1> @*/ int x0[2] = {1,2}; /*@ unique<2> @*/ int* x1; x1 = x0;}"""
@@ -126,20 +334,6 @@ class QualifierSpec extends VercorsSpec {
     return x[0];
   }"""
 
-  vercors should error withCode "disallowedQualifiedMethodCoercion" in "Recursive procedure call wrong uniques" c """/*@
-  context n > 0;
-  context x0 != NULL ** \pointer_length(x0) >= n ** (\forall* int i; 0<=i && i<n; Perm(&x0[i], 1\2));
-  context x1 != NULL ** \pointer_length(x1) >= n ** (\forall* int i; 0<=i && i<n; Perm(&x1[i], 1\2));
-@*/
-int f(int n, /*@ unique<1> @*/ int* x0, /*@ unique<2> @*/ int* x1){
-  if(n == 1){
-    return x0[0] + x1[0];
-  }
-  else {
-    return f(n-1, x1, x0);
-  }
-}"""
-
   vercors should verify using silicon in "Recursive procedure call with uniques" c """/*@
   context n > 0;
   context x0 != NULL ** \pointer_length(x0) >= n ** (\forall* int i; 0<=i && i<n; Perm(&x0[i], 1\2));
@@ -177,26 +371,6 @@ int h(int* x){
   return x[0];
 }
 """
-
-  vercors should verify using silicon in "Call procedure with multiple consistent coercions" c """/*@
-context n > 0;
-context x0 != NULL ** \pointer_length(x0) == n ** (\forall* int i; 0<=i && i<n; Perm(&x0[i], 1\2));
-context x1 != NULL ** \pointer_length(x1) == n ** (\forall* int i; 0<=i && i<n; Perm(&x1[i], 1\2));
-ensures \result == 2*x0[0] + 2*x1[0];
-@*/
-int f(int n, /*@ unique<1> @*/ int* x0, /*@ unique<2> @*/ int* x1){
-  return h(x0, x0) + h(x1, x1);
-  h(x0, x1);
-}
-
-/*@
-  context x != NULL ** \pointer_length(x) > 0 ** Perm(&x[0], 1\4);
-  context y != NULL ** \pointer_length(y) > 0 ** Perm(&y[0], 1\4);
-  ensures \result == x[0] + y[0];
-@*/
-int h(int* x, int* y){
-  return x[0] + y[0];
-}"""
 
   vercors should error withCode "disallowedQualifiedMethodCoercion" in "Call procedure with multiple inconsistent coercions" c """/*@
 context n > 0;
@@ -290,38 +464,7 @@ int g(int n, /*@ unique<1> @*/ int* x, /*@ unique<2> @*/ int* y){
   return f(n, x, y);
 }"""
 
-  vercors should error withCode "disallowedQualifiedMethodCoercion" in "Indirect recursive procedure call with uniques and coercion" c """/*@
-context n > 0;
-context x0 != NULL ** \pointer_length(x0) >= n ** (\forall* int i; 0<=i && i<n; Perm(&x0[i], 1\2));
-context x1 != NULL ** \pointer_length(x1) >= n ** (\forall* int i; 0<=i && i<n; Perm(&x1[i], 1\2));
-ensures \result == x0[0] + x1[0];
-@*/
-int f(int n, /*@ unique<1> @*/ int* x0, /*@ unique<2> @*/ int* x1){
-  if(n == 1){
-    return h(x0) + h(x1);
-  }
-  else {
-    return g(n-1, x1, x0);
-  }
-}
 
-/*@
-  context x != NULL ** \pointer_length(x) > 0 ** Perm(&x[0], 1\2);
-  ensures \result == x[0];
-@*/
-int h(int* x){
-  return x[0];
-}
-
-/*@
-  context n > 0;
-  context x != NULL ** \pointer_length(x) >= n ** (\forall* int i; 0<=i && i<n; Perm(&x[i], 1\2));
-  context y != NULL ** \pointer_length(y) >= n ** (\forall* int i; 0<=i && i<n; Perm(&y[i], 1\2));
-  ensures \result == x[0] + y[0];
-@*/
-int g(int n, /*@ unique<1> @*/ int* x, /*@ unique<2> @*/ int* y){
-  return f(n, x, y);
-}"""
 
   vercors should verify using silicon in "Call procedure which already has unique type" c """/*@
 context n > 0;
@@ -381,30 +524,6 @@ int* h(int /*@ unique<1> @*/ * x, int /*@ unique<2> @*/ * y){
 }
 """
 
-  vercors should error withCode "disallowedQualifiedMethodCoercion" in "Arguments are same but should be unique" c """/*@
-context n > 1;
-context x0 != NULL ** \pointer_length(x0) == n;
-@*/
-int f(int n, /*@ unique<1> @*/ int* x0, int* x1){
-  h(x0, x0);
-}
-
-/*@ unique<1> @*/ int* h(int /*@ unique<1> @*/ * x, int /*@ unique<2> @*/ * y){
-  return x;
-}"""
-
-  vercors should error withCode "disallowedQualifiedMethodCoercion" in "Return type cannot be same as coerced argument type" c """/*@
-context n > 1;
-context x0 != NULL ** \pointer_length(x0) == n;
-@*/
-int f(int n, /*@ unique<1> @*/ int* x0, int* x1){
-  h(x0);
-}
-
-/*@ unique<1> @*/ int* h(int /*@ unique<2> @*/ * y){
-  return NULL;
-}"""
-
   vercors should verify using silicon in "Call function in contract, which needs coercion" c """/*@
   context n > 0;
   context x0 != NULL ** \pointer_length(x0) == n ** (\forall* int i; 0<=i && i<n; Perm(&x0[i], 1\2));
@@ -450,4 +569,217 @@ int f(int n, /*@ unique<1> @*/ int* x0, int* x1){
   pure int h(int* x) = x[0];
   @*/
   """
+
+  vercors should verify using silicon in "Can coerce to function with all the same types" c """/*@
+  context n > 1;
+  context x0 != NULL ** \pointer_length(x0) == n;
+  @*/
+  int f(int n, /*@ unique<1> @*/ int* x0, /*@ unique<1> @*/ int* x1){
+    h(x0, x1);
+  }
+
+  /*@ unique<1> @*/ int* h(int /*@ unique<2> @*/ * y, int /*@ unique<1> @*/ * x){
+    return x;
+  }"""
+
+  vercors should verify using silicon in "Arguments are same even if original function parameters were diff" c """/*@
+context n > 1;
+context x0 != NULL ** \pointer_length(x0) == n;
+@*/
+int f(int n, /*@ unique<1> @*/ int* x0, int* x1){
+  h(x0, x0);
+}
+
+/*@ unique<1> @*/ int* h(int /*@ unique<1> @*/ * x, int /*@ unique<2> @*/ * y){
+  return x;
+}"""
+
+  vercors should verify using silicon in "Indirect recursive procedure call with uniques and coercion - 2" c """/*@
+context n > 0;
+context x0 != NULL ** \pointer_length(x0) >= n ** (\forall* int i; 0<=i && i<n; Perm(&x0[i], 1\2));
+context x1 != NULL ** \pointer_length(x1) >= n ** (\forall* int i; 0<=i && i<n; Perm(&x1[i], 1\2));
+ensures \result == x0[0] + x1[0];
+@*/
+int f(int n, /*@ unique<1> @*/ int* x0, /*@ unique<2> @*/ int* x1){
+  if(n == 1){
+    return h(x0) + h(x1);
+  }
+  else {
+    return g(n-1, x1, x0);
+  }
+}
+
+/*@
+  context x != NULL ** \pointer_length(x) > 0 ** Perm(&x[0], 1\2);
+  ensures \result == x[0];
+@*/
+int h(int* x){
+  return x[0];
+}
+
+/*@
+  context n > 0;
+  context x != NULL ** \pointer_length(x) >= n ** (\forall* int i; 0<=i && i<n; Perm(&x[i], 1\2));
+  context y != NULL ** \pointer_length(y) >= n ** (\forall* int i; 0<=i && i<n; Perm(&y[i], 1\2));
+  ensures \result == x[0] + y[0];
+@*/
+int g(int n, /*@ unique<1> @*/ int* x, /*@ unique<2> @*/ int* y){
+  return f(n, x, y);
+}"""
+
+  vercors should verify using silicon in "Recursive procedure call wrong uniques" c """/*@
+  context n > 0;
+  context x0 != NULL ** \pointer_length(x0) >= n ** (\forall* int i; 0<=i && i<n; Perm(&x0[i], 1\2));
+  context x1 != NULL ** \pointer_length(x1) >= n ** (\forall* int i; 0<=i && i<n; Perm(&x1[i], 1\2));
+@*/
+int f(int n, /*@ unique<1> @*/ int* x0, /*@ unique<2> @*/ int* x1){
+  if(n == 1){
+    return x0[0] + x1[0];
+  }
+  else {
+    return f(n-1, x1, x0);
+  }
+}"""
+
+  vercors should error withCode "disallowedQualifiedType" in "multiple uniques" c """void f(/*@ unique<1> @*/ /*@ unique<2> @*/ int* x0){}"""
+
+  vercors should verify using silicon in "Call procedure with multiple consistent coercions" c """/*@
+context n > 0;
+context x0 != NULL ** \pointer_length(x0) == n ** (\forall* int i; 0<=i && i<n; Perm(&x0[i], 1\2));
+context x1 != NULL ** \pointer_length(x1) == n ** (\forall* int i; 0<=i && i<n; Perm(&x1[i], 1\2));
+ensures \result == 2*x0[0] + 2*x1[0];
+@*/
+int f(int n, /*@ unique<1> @*/ int* x0, /*@ unique<2> @*/ int* x1){
+  return h(x0, x0) + h(x1, x1);
+}
+
+/*@
+  context x != NULL ** \pointer_length(x) > 0 ** Perm(&x[0], 1\4);
+  context y != NULL ** \pointer_length(y) > 0 ** Perm(&y[0], 1\4);
+  ensures \result == x[0] + y[0];
+@*/
+int h(int* x, int* y){
+  return x[0] + y[0];
+}"""
+
+  vercors should error withCode "disallowedQualifiedMethodCoercion" in "coercion with invalid args inside ADTs" c
+    """
+struct vec {
+    int* xs;
+  };
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    ensures v->xs  == \result;
+  @*/
+  int* get_xs(struct vec* v){
+    return v->xs;
+   }
+
+  /*@
+  ghost
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100) ** v->xs != NULL;
+    context 1 \in m.keys && m[1].size >0 ==> m[1][0].fst != NULL;
+    ensures \result != NULL;
+  int* get_xs2(struct vec* v, map<int, seq<tuple<int*, void*> > > m){
+    if( 1 \in m.keys && m[1].size >0){
+      return m[1][0].fst;
+    }
+    return v->xs;
+  }
+
+  @*/
+
+  /*@
+    given map<int, seq<tuple<int*, void*> > > m;
+    context 1 \in m.keys && m[1].size >0 ==> m[1][0].fst != NULL;
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, write) ** Perm(*v, write);
+    context v->xs != NULL;
+  @*/
+  int f(/*@unique_pointer_field<xs, 1>@*/ struct vec*  v){
+      /*@unique<1>@*/int* xs2 = get_xs(v);
+      //@ assert xs2 != NULL;
+      //@ assert get_xs2(v, m) != NULL;
+    }
+"""
+
+  vercors should error withCode "disallowedQualifiedMethodCoercion" in "struct has more int pointers" c """
+  struct s {
+    int* sx;
+  };
+
+  struct vec {
+    int* xs;
+    struct s* s;
+  };
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    ensures \result == v->xs;
+  @*/
+  int* get_xs(struct vec* v){
+    return v->xs;
+  }
+
+  /*@
+    context xs != NULL;
+    context x1 != NULL ** \pointer_length(x1)==1 ** Perm(x1, write) ** Perm(*x1, write);
+  @*/
+  int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  x1, /*@ unique<2> @*/ int* xs){
+    get_xs(x1);
+    return 0;
+  }
+  """
+
+  vercors should error withCode "disallowedQualifiedMethodCoercion" in "Unique coercion with wrong given in method" c
+    """
+struct vec {
+    int* xs;
+  };
+
+  /*@
+    given int* ys;
+    yields int* res;
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    ensures v->xs  == \result;
+  @*/
+  int* get_xs(struct vec* v){
+    return v->xs;
+   }
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, write) ** Perm(*v, write);
+    context v->xs != NULL;
+  @*/
+  int f(/*@unique_pointer_field<xs, 1>@*/ struct vec*  v, int* ys){
+      /*@unique<1>@*/int* xs2 = get_xs(v) /*@ given { ys = ys }  @*/;
+      //@ assert xs2 != NULL;
+    }
+"""
+
+  vercors should verify using silicon in "Unique coercion with given in method" c
+    """
+struct vec {
+    int* xs;
+  };
+
+  /*@
+    given int* ys;
+    yields int* res;
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    ensures v->xs  == \result;
+  @*/
+  int* get_xs(struct vec* v){
+    return v->xs;
+   }
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, write) ** Perm(*v, write);
+    context v->xs != NULL;
+  @*/
+  int f(/*@unique_pointer_field<xs, 1>@*/ struct vec*  v, /*@unique<1>@*/ int* ys){
+      /*@unique<1>@*/int* xs2 = get_xs(v) /*@ given { ys = ys }  @*/;
+      //@ assert xs2 != NULL;
+    }
+"""
 }

@@ -251,7 +251,7 @@ case object CPP {
               if decl.isInstanceOf[CPPInvocationTarget[G]] =>
             decl
         })
-      case _ => Spec.builtinField(obj, name, blame).toSeq
+      case _ => Spec.builtinField(CPP.unwrappedType(obj.t), name, blame, obj.o).toSeq
     }
 
   def findForwardDeclaration[G](

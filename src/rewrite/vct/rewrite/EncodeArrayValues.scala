@@ -122,7 +122,7 @@ case class EncodeArrayValues[Pre <: Generation]() extends Rewriter[Pre] {
     var errors: Seq[Expr[Pre] => PointerFreeError] = Seq()
     val innerT = t match {
       case TPointer(it) => it
-      case TUniquePointer(it, _) => it
+      case TPointerUnique(it, _) => it
     }
 
     val proc = globalDeclarations.declare({
@@ -570,7 +570,7 @@ case class EncodeArrayValues[Pre <: Generation]() extends Rewriter[Pre] {
       val newElementType = dispatch(elementType)
       val returnT = {
         if(isConst) TConstPointer(newElementType)
-        else unique.map(TUniquePointer(newElementType, _)).getOrElse(TPointer(newElementType))
+        else unique.map(TPointerUnique(newElementType, _)).getOrElse(TPointer(newElementType))
       }
       val name = if(isConst)"make_const_pointer_array_" + elementType.toString
         else "make_pointer_array_" + elementType.toString
