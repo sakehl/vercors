@@ -64,7 +64,7 @@ PallasFunctionContractDeclarerPass::run(Function &f,
     }
 
     auto *mdSrcLoc = dyn_cast<MDNode>(contractNode->getOperand(0).get());
-    if (!isWellformedPallasLocation(mdSrcLoc)) {
+    if (!pallas::utils::isWellformedPallasLocation(mdSrcLoc)) {
         pallas::ErrorReporter::addError(
             SOURCE_LOC,
             "Ill-formed contract. First operand should encode source-location.",
@@ -367,7 +367,7 @@ Function *PallasFunctionContractDeclarerPass::getWrapperFuncFromClause(
 
     // Check that the function is marked as a pallas wrapper function.
     auto *wrapperF = cast<Function>(wrapperFuncMD->getValue());
-    if (!wrapperF->hasMetadata(pallas::constants::PALLAS_WRAPPER_FUNC)) {
+    if (!utils::isPallasExprWrapper(*wrapperF)) {
         pallas::ErrorReporter::addError(
             SOURCE_LOC,
             "Ill-formed contract clause. Second operand does not point to "
@@ -449,43 +449,6 @@ bool PallasFunctionContractDeclarerPass::hasConflictingContract(Function &f) {
             "The function has both, a vcllvm and a pallas contract.", f);
     }
     return conflict;
-}
-
-bool PallasFunctionContractDeclarerPass::isWellformedPallasLocation(
-    const MDNode *mdNode) {
-
-    if (mdNode == nullptr)
-        return false;
-
-    if (mdNode->getNumOperands() != 5)
-        return false;
-
-    // Check that first operand is a string-identifier
-    if (auto *mdStr = dyn_cast<MDString>(mdNode->getOperand(0).get())) {
-        if (mdStr->getString().str() != pallas::constants::PALLAS_SRC_LOC_ID)
-            return false;
-    } else {
-        return false;
-    }
-
-    // Check that the last four operands are integer constants
-    if (!isConstantInt(mdNode->getOperand(1).get()) ||
-        !isConstantInt(mdNode->getOperand(2).get()) ||
-        !isConstantInt(mdNode->getOperand(3).get()) ||
-        !isConstantInt(mdNode->getOperand(4).get())) {
-        return false;
-    }
-
-    return true;
-}
-
-bool PallasFunctionContractDeclarerPass::isConstantInt(llvm::Metadata *md) {
-    if (auto *mdConst = dyn_cast<llvm::ConstantAsMetadata>(md)) {
-        if (isa<llvm::ConstantInt>(mdConst->getValue())) {
-            return true;
-        }
-    }
-    return false;
 }
 
 } // namespace pallas

@@ -115,10 +115,14 @@ FDResult FunctionDeclarer::run(Function &F, FunctionAnalysisManager &FAM) {
     if (utils::isPallasExprWrapper(F)) {
         auto mapperResult = FAM.getResult<pallas::ExprWrapperMapper>(F);
         auto *wrapperParent = mapperResult.getParentFunc();
-
-        auto colParent = FAM.getResult<FunctionDeclarer>(*wrapperParent);
-        llvmFuncDef->mutable_pallas_expr_wrapper_for()->set_id(
-            colParent.getFunctionId());
+        if (wrapperParent != nullptr) {
+            auto colParent = FAM.getResult<FunctionDeclarer>(*wrapperParent);
+            llvmFuncDef->mutable_pallas_expr_wrapper_for()->set_id(
+                colParent.getFunctionId());
+        } else {
+            pallas::ErrorReporter::addError(
+                SOURCE_LOC, "Wrapper-function without parent!", F);
+        }
     }
 
     try {

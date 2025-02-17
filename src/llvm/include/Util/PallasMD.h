@@ -1,7 +1,10 @@
 #ifndef PALLAS_MD_H
 #define PALLAS_MD_H
 
+#include <llvm/Analysis/LoopInfo.h>
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Metadata.h>
 #include <optional>
 #include <string>
 
@@ -38,6 +41,31 @@ bool hasVcllvmContract(const llvm::Function &f);
  * pallas specification.
  */
 bool isPallasExprWrapper(const llvm::Function &f);
+
+/**
+ * Checks if the given metadata-node is a wellformed encoding of a
+ * pallas source-location.
+ */
+bool isWellformedPallasLocation(const llvm::MDNode *mdNode);
+
+/**
+ * If the given loop has a Pallas loop-contract, a pointer to the MDNode
+ * that represents the contract is returned.
+ * If no loop contract is present, a nullptr is returned.
+ */
+llvm::MDNode *getPallasLoopContract(const llvm::Loop &llvmLoop);
+
+/*
+ * Attempts to get the wrapper-function from the given MDNode which
+ * represents a Pallas loop-invariant clause.
+ * Returns nullptr on failure.
+ */
+llvm::Function *getWrapperFromLoopInv(const llvm::MDNode &invMD);
+
+/**
+ * Checks if the given metadata-node refers to a integer-constant.
+ */
+bool isConstantInt(llvm::Metadata *md);
 
 } // namespace pallas::utils
 

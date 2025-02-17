@@ -2,6 +2,7 @@ package vct.rewrite.lang
 
 import com.typesafe.scalalogging.LazyLogging
 import hre.util.ScopedStack
+import vct.col.ast.RewriteHelpers._
 import vct.col.ast._
 import vct.col.ast.expr.op.BinOperatorTypes
 import vct.col.origin._
@@ -13,6 +14,7 @@ import vct.col.rewrite.{
   Rewriter,
   RewriterBuilderArg,
   RewriterBuilderArg2,
+  Rewritten,
 }
 import vct.col.typerules.TypeSize
 import vct.result.VerificationError.UserError
@@ -605,6 +607,16 @@ case class LangSpecificToCol[Pre <: Generation](
         if (l.signed == r.signed) { l.signed }
         else { throw IncompatibleBitVectorSign(op, l.signed, r.signed) }
       case _ => throw IndeterminableBitVectorSign(op)
+    }
+  }
+
+  override def dispatch(
+      node: LoopContract[Pre]
+  ): LoopContract[Rewritten[Pre]] = {
+    node match {
+      case llvmLoopContract: LLVMLoopContract[Pre] =>
+        llvm.rewriteLoopContract(llvmLoopContract)
+      case other => rewriteDefault(other)
     }
   }
 }

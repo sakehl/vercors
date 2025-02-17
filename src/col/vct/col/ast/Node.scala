@@ -3633,6 +3633,11 @@ final class PallasFunctionContract[G](val content: ApplicableContract[G])(
 )(implicit val o: Origin)
     extends LLVMFunctionContract[G] with PallasFunctionContractImpl[G] {}
 
+final case class LLVMLoopContract[G](invariant: Expr[G])(
+    val blame: Blame[LoopInvariantFailure]
+)(implicit val o: Origin)
+    extends LoopContract[G] with LLVMLoopContractImpl[G]
+
 final case class LLVMGlobalVariable[G](
     variableType: Type[G],
     value: Option[Expr[G]],
@@ -3687,6 +3692,8 @@ final class LLVMBasicBlock[G](
     val label: LabelDecl[G],
     val loop: Option[LLVMLoop[G]],
     val body: Statement[G],
+    val phiAssignments: Seq[Statement[G]],
+    val terminator: Statement[G],
 )(implicit val o: Origin)
     extends LLVMStatement[G] with LLVMBasicBlockImpl[G]
 

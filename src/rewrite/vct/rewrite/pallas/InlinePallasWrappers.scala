@@ -23,12 +23,6 @@ case object InlinePallasWrappers extends RewriterBuilder {
     LabelContext("Assign of argument during inlining"),
   ))
 
-  private def WrapperInliningOrigin(wrapperDef: Origin, inv: Node[_]): Origin =
-    Origin(
-      (LabelContext("inlining of ") +: inv.o.originContents) ++
-        (LabelContext("definition") +: wrapperDef.originContents)
-    )
-
   case class WrapperInlineFailed(inv: ProcedureInvocation[_], msg: String = "")
       extends SystemError {
     override def text: String = {

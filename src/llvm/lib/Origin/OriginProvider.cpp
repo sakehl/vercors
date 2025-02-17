@@ -292,6 +292,31 @@ llvm2col::generatePallasFunctionContractOrigin(const llvm::Function &f,
 }
 
 col::Origin *
+llvm2col::generatePallasLoopContractOrigin(const llvm::Loop &loop,
+                                           const llvm::MDNode &srcLoc) {
+    col::Origin *origin = new col::Origin();
+    col::OriginContent *preferredNameContent = origin->add_content();
+    col::PreferredName *preferredName = new col::PreferredName();
+    preferredName->add_preferred_name("Loop contract (" + loop.getName().str() +
+                                      ")");
+    preferredNameContent->set_allocated_preferred_name(preferredName);
+
+    llvm::Function *parentFunc = loop.getHeader()->getParent();
+    if (parentFunc == nullptr || parentFunc->getSubprogram() == nullptr) {
+        return origin;
+    }
+
+    llvm::DIScope *scope = parentFunc->getSubprogram();
+    auto startLine = getIntValue(srcLoc.getOperand(1).get());
+    auto startCol = getIntValue(srcLoc.getOperand(2).get());
+    auto endLine = std::make_optional(getIntValue(srcLoc.getOperand(3).get()));
+    auto endCol = std::make_optional(getIntValue(srcLoc.getOperand(4).get()));
+    generateSourceRangeOrigin(origin, *scope, startLine, startCol, endLine,
+                              endCol);
+    return origin;
+}
+
+col::Origin *
 llvm2col::generateSingleStatementOrigin(llvm::Instruction &llvmInstruction) {
     col::Origin *origin = new col::Origin();
     col::OriginContent *preferredNameContent = origin->add_content();

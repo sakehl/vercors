@@ -130,6 +130,15 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   // Keeps track if the currently transformed function is a wrapper-function.
   private val inWrapperFunction: ScopedStack[Boolean] = ScopedStack()
 
+  // Local variables that were allocated using alloca in the current function.
+  private val allocaVars: ScopedStack[mutable.Set[Variable[Pre]]] =
+    ScopedStack()
+
+  // When a loop is constructed, this keeps track of the variables that
+  // are assigned using store-instructions.
+  private val assignedInLoop: ScopedStack[mutable.Set[Variable[Pre]]] =
+    ScopedStack()
+
   def gatherPallasTypeSubst(program: Program[Pre]): Unit = {
     // Get all variables that are assigned a new type directly
     program.collect {
@@ -432,76 +441,79 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     Local(rw.succ(local.ref.get.decl))
   }
 
+  /** Return the type of the given variable after applying type-substitutions
+    * and type-inference.
+    */
+  private def getLocalVarType(v: Variable[Pre]): Type[Pre] = {
+    typeSubstitutions.getOrElse(v, localVariableInferredType.getOrElse(v, v.t))
+  }
+
   def rewriteLocalVariable(v: Variable[Pre]): Unit = {
     implicit val o: Origin = v.o;
-    rw.variables.succeed(
-      v,
-      new Variable[Post](rw.dispatch(
-        typeSubstitutions
-          .getOrElse(v, localVariableInferredType.getOrElse(v, v.t))
-      )),
-    )
+    rw.variables.succeed(v, new Variable[Post](rw.dispatch(getLocalVarType(v))))
   }
 
   def rewriteFunctionDef(func: LLVMFunctionDefinition[Pre]): Unit = {
     implicit val o: Origin = func.o
     val procedure = rw.labelDecls.scope {
-      val newArgs = func.importedArguments.getOrElse(func.args).map { it =>
-        // Apply type-inference to function-arguments
-        new Variable(
-          rw.dispatch(localVariableInferredType.getOrElse(it, it.t))
-        )(it.o)
-      }
-      val argList =
-        rw.variables.collect {
-          func.args.zip(newArgs).foreach { case (a, b) =>
-            rw.variables.succeed(a, b)
-          }
-        }._1
-      // If func returns its result in an argument, this is a reference to that argument
-      val cRetArg =
-        func.returnInParam match {
-          case Some((idx, _)) => Some(argList(idx).ref)
-          case None => None
+      allocaVars.having(mutable.Set[Variable[Pre]]()) {
+        val newArgs = func.importedArguments.getOrElse(func.args).map { it =>
+          // Apply type-inference to function-arguments
+          new Variable(
+            rw.dispatch(localVariableInferredType.getOrElse(it, it.t))
+          )(it.o)
         }
-      val isWrapper = func.pallasExprWrapperFor.isDefined
-      rw.globalDeclarations.declare(
-        new Procedure[Post](
-          returnType =
-            if (isWrapper) { TResource() }
-            else {
-              rw.dispatch(func.importedReturnType.getOrElse(func.returnType))
-            },
-          args = argList,
-          outArgs = Nil,
-          typeArgs = Nil,
-          body =
-            inWrapperFunction.having(isWrapper) {
-              func.functionBody match {
-                case None => None
-                case Some(functionBody) =>
-                  if (func.pure)
-                    Some(GotoEliminator(functionBody match {
-                      case scope: Scope[Pre] => scope;
-                      case other => throw UnexpectedLLVMNode(other)
-                    }).eliminate())
-                  else
-                    Some(rw.dispatch(functionBody))
-              }
-            },
-          contract =
-            func.contract match {
-              case contract: VCLLVMFunctionContract[Pre] =>
-                rw.dispatch(contract.data.get)
-              case contract: PallasFunctionContract[Pre] =>
-                extendContractWithSretPerm(contract.content, cRetArg)
-            },
-          pure = func.pure,
-          pallasWrapper = isWrapper,
-          pallasFunction = true,
-        )(func.blame)
-      )
+        val argList =
+          rw.variables.collect {
+            func.args.zip(newArgs).foreach { case (a, b) =>
+              rw.variables.succeed(a, b)
+            }
+          }._1
+        // If func returns its result in an argument, this is a reference to that argument
+        val cRetArg =
+          func.returnInParam match {
+            case Some((idx, _)) => Some(argList(idx).ref)
+            case None => None
+          }
+        val isWrapper = func.pallasExprWrapperFor.isDefined
+        rw.globalDeclarations.declare(
+          new Procedure[Post](
+            returnType =
+              if (isWrapper) { TResource() }
+              else {
+                rw.dispatch(func.importedReturnType.getOrElse(func.returnType))
+              },
+            args = argList,
+            outArgs = Nil,
+            typeArgs = Nil,
+            body =
+              inWrapperFunction.having(isWrapper) {
+                func.functionBody match {
+                  case None => None
+                  case Some(functionBody) =>
+                    if (func.pure)
+                      Some(GotoEliminator(functionBody match {
+                        case scope: Scope[Pre] => scope;
+                        case other => throw UnexpectedLLVMNode(other)
+                      }).eliminate())
+                    else
+                      Some(rw.dispatch(functionBody))
+                }
+              },
+            contract =
+              func.contract match {
+                case contract: VCLLVMFunctionContract[Pre] =>
+                  rw.dispatch(contract.data.get)
+                case contract: PallasFunctionContract[Pre] =>
+                  extendContractWithSretPerm(contract.content, cRetArg)
+              },
+            pure = func.pure,
+            pallasWrapper = isWrapper,
+            pallasFunction = true,
+          )(func.blame)
+        )
 
+      }
     }
     llvmFunctionMap.update(func, procedure)
   }
@@ -577,12 +589,7 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         case (a, i) =>
           val requiredType = localVariableInferredType
             .getOrElse(inv.ref.decl.args(i), inv.ref.decl.args(i).t)
-          val givenType =
-            a match {
-              // TODO: Make this more general
-              case Local(Ref(v)) => localVariableInferredType.getOrElse(v, v.t)
-              case _ => a.t
-            }
+          val givenType = getInferredType(a)
           if (
             givenType != requiredType && givenType.asPointer.isDefined &&
             requiredType.asPointer.isDefined
@@ -949,12 +956,19 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
   private def getInferredType(e: Expr[Pre]): Type[Pre] =
     e match {
-      case Local(Ref(v)) => localVariableInferredType.getOrElse(v, e.t)
+      case Local(Ref(v)) => getLocalVarType(v)
+      // localVariableInferredType.getOrElse(v, e.t)
       // Making assumption here that LLVMPointerValue only contains LLVMGlobalVariables whereas LLVMGlobalVariableImpl assumes it can also contain HeapVariables
       case LLVMPointerValue(Ref(v)) =>
         globalVariableInferredType
           .getOrElse(v.asInstanceOf[LLVMGlobalVariable[Pre]], e.t)
       case res: LLVMResult[Pre] => res.t
+      case DerefPointer(inner) =>
+        val innerT = getInferredType(inner)
+        innerT match {
+          case LLVMTPointer(Some(innerPtrT)) => innerPtrT
+          case _ => e.t
+        }
       case _ => e.t
     }
 
@@ -1037,6 +1051,8 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       // Skip the initialization if we are in a wrapper function.
       return Block(Seq())
     }
+    allocaVars.top.add(alloc.variable.decl)
+
     val t =
       localVariableInferredType.getOrElse(
         alloc.variable.decl,
@@ -1185,13 +1201,67 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       implicit o: Origin
   ): Expr[Post] = Result[Post](llvmFunctionMap.ref(ref.decl))
 
-  private def blockToLabel(block: LLVMBasicBlock[Pre]): Statement[Post] =
-    if (elidedBackEdges.contains(block.label)) { rw.dispatch(block.body) }
-    else {
-      Label(rw.labelDecls.dispatch(block.label), rw.dispatch(block.body))(
-        block.o
-      )
+  def phiTmpVarOrigin() =
+    Origin(Seq(
+      PreferredName(Seq("phiTmp")),
+      LabelContext(s"Generated tmp-var for phi-assignment"),
+    ))
+
+  def phiTmpVarAssignOrigin() =
+    Origin(Seq(LabelContext(s"Generated assignment to tmp-var for phi-node")))
+
+  private def buildPhiAssignments(
+      basicBlock: LLVMBasicBlock[Pre]
+  ): Scope[Post] = {
+    implicit val o: Origin = basicBlock.o
+    // We split the phi-assignments to ensure that cases where the value
+    // of a phi-node is used in an assignment to another phi-node get encoded
+    // correctly.
+    // I.e. we first generate a block where we assign the values of all
+    // phi-assignments to temporary variables, and then a block where
+    // we assign the values of the temporary variables to the actual
+    // target of the phi-assignment.
+    var tmpAssignments = Seq[Statement[Post]]()
+    var phiAssignments = Seq[Statement[Post]]()
+    var tmpVars = Seq[Variable[Post]]()
+    basicBlock.phiAssignments.foreach { a =>
+      a match {
+        case a @ Assign(Local(Ref(targetVar)), expr) =>
+          // Build temporary assignment
+          val vT = rw.dispatch(getLocalVarType(targetVar))
+          val tmpVar = new Variable[Post](vT)(phiTmpVarOrigin())
+          tmpVars = tmpVars :+ tmpVar
+          tmpAssignments =
+            tmpAssignments :+ Assign(
+              Local[Post](tmpVar.ref)(phiTmpVarOrigin()),
+              rw.dispatch(expr),
+            )(a.blame)(a.o)
+          // Build assignment of tmp-var to actual var.
+          phiAssignments =
+            phiAssignments :+ Assign[Post](
+              rw.dispatch(a.target),
+              Local[Post](tmpVar.ref)(phiTmpVarOrigin()),
+            )(PanicBlame("Generated assign may not fail"))(
+              phiTmpVarAssignOrigin()
+            )
+        case _ => throw UnexpectedLLVMNode(a)
+      }
     }
+    val newBlock = Block[Post](tmpAssignments ++ phiAssignments)
+    Scope[Post](tmpVars, newBlock)
+  }
+
+  private def blockToLabel(block: LLVMBasicBlock[Pre]): Statement[Post] = {
+    implicit val o: Origin = block.o
+    val newBody = Block[Post](Seq(
+      rw.dispatch(block.body),
+      buildPhiAssignments(block),
+      rw.dispatch(block.terminator),
+    ))
+
+    if (elidedBackEdges.contains(block.label)) { newBody }
+    else { Label(rw.labelDecls.dispatch(block.label), newBody)(block.o) }
+  }
 
   def rewriteBasicBlock(block: LLVMBasicBlock[Pre]): Statement[Post] = {
     if (loopBlocks.contains(block))
@@ -1200,16 +1270,46 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     else {
       val loop = block.loop.get
       loopBlocks.addAll(loop.blocks.get)
+      // Determine which variables are assigned using store-instructions
+      val assignedVars = mutable.Set[Variable[Pre]]()
+      loop.blocks.getOrElse(mutable.Set.empty).foreach { b =>
+        b.body.collect { case LLVMStore(_, Local(Ref(v)), _) =>
+          assignedVars.add(v)
+        }
+      }
       Loop(
         Block(Nil)(block.o),
         tt[Post],
         Block(Nil)(block.o),
-        rw.dispatch(loop.contract),
+        assignedInLoop.having(assignedVars) { rw.dispatch(loop.contract) },
         Block(blockToLabel(loop.headerBlock.get) +: loop.blocks.get.filterNot {
           b => b == loop.headerBlock.get || b == loop.latchBlock.get
         }.map(blockToLabel) :+ blockToLabel(loop.latchBlock.get))(block.o),
       )(block.o)
     }
+  }
+
+  def rewriteLoopContract(
+      llvmContract: LLVMLoopContract[Pre]
+  ): LoopInvariant[Post] = {
+    implicit val o: Origin = llvmContract.o
+    // Add Permission for alloca-variables
+    var extendedInv = rw.dispatch(llvmContract.invariant)
+    allocaVars.topOption.getOrElse(mutable.Set.empty).foreach { v =>
+      // If the variable is assigned to, assert write-perm, otherwise read perm
+      val perm =
+        if (assignedInLoop.topOption.getOrElse(mutable.Set.empty).contains(v)) {
+          WritePerm[Post]()
+        } else { ReadPerm[Post]() }
+      extendedInv =
+        Perm(
+          AmbiguousLocation[Post](Local(rw.succ(v)))(PanicBlame(
+            "Generated locals always have permission"
+          )),
+          perm,
+        ) &* extendedInv
+    }
+    LoopInvariant[Post](extendedInv, None)(llvmContract.blame)
   }
 
   def rewriteGoto(goto: Goto[Pre]): Statement[Post] = {
@@ -1258,26 +1358,22 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
     def eliminate(bb: LLVMBasicBlock[Pre]): Block[Post] = {
       implicit val o: Origin = bb.o
-      bb.body match {
-        case block: Block[Pre] =>
-          block.statements.last match {
-            case goto: Goto[Pre] =>
-              Block[Post](
-                block.statements.dropRight(1).map(rw.dispatch) ++
-                  eliminate(labelDeclMap(goto.lbl.decl)).statements
-              )
-            case _: Return[Pre] =>
-              rw.dispatch(block) match {
-                case block: Block[Post] => block
-                case other => throw UnexpectedLLVMNode(other)
-              }
-            case branch: Branch[Pre] =>
-              Block[Post](
-                block.statements.dropRight(1).map(rw.dispatch) :+
-                  eliminate(branch)
-              )
-            case other => throw UnexpectedLLVMNode(other)
-          }
+      bb.terminator match {
+        case goto: Goto[Pre] =>
+          Block[Post](
+            Seq(rw.dispatch(bb.body), buildPhiAssignments(bb)) ++
+              eliminate(labelDeclMap(goto.lbl.decl)).statements
+          )
+        case ret: Return[Pre] =>
+          Block[Post](
+            Seq(rw.dispatch(bb.body), buildPhiAssignments(bb), rw.dispatch(ret))
+          )
+        case branch: Branch[Pre] =>
+          Block[Post](Seq(
+            rw.dispatch(bb.body),
+            buildPhiAssignments(bb),
+            eliminate(branch),
+          ))
         case other => throw UnexpectedLLVMNode(other)
       }
     }

@@ -12,7 +12,11 @@
  */
 namespace pallas {
 
-enum PallasWrapperContext { FuncContractPre, FuncContractPost };
+enum PallasWrapperContext {
+    FuncContractPre,
+    FuncContractPost,
+    LoopContractInv
+};
 
 class EWMResult {
   private:
@@ -42,6 +46,16 @@ class ExprWrapperMapper : public llvm::AnalysisInfoMixin<ExprWrapperMapper> {
      * the result contains a nullpointer.
      */
     Result run(llvm::Function &F, llvm::FunctionAnalysisManager &FAM);
+
+  private:
+    /**
+     * Attempts to get the wrapper-function from the given MDNode which
+     * represents a clause of a Pallas function contract.
+     */
+    llvm::Function *getWrapperFromFContractClause(const llvm::MDNode &clause);
+
+    std::optional<PallasWrapperContext>
+    getContextForFContractClause(const llvm::MDNode &clause);
 };
 
 } // namespace pallas

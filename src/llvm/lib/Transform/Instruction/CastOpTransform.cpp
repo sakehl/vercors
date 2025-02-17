@@ -6,7 +6,7 @@
 
 const std::string SOURCE_LOC = "Transform::Instruction::CastOp";
 void llvm2col::transformCastOp(llvm::Instruction &llvmInstruction,
-                               col::Block &colBlock,
+                               col::LlvmBasicBlock &colBlock,
                                pallas::FunctionCursor &funcCursor) {
     switch (llvm::Instruction::CastOps(llvmInstruction.getOpcode())) {
     case llvm::Instruction::SExt:
@@ -31,7 +31,7 @@ void llvm2col::transformCastOp(llvm::Instruction &llvmInstruction,
 }
 
 void llvm2col::transformSExt(llvm::SExtInst &sextInstruction,
-                             col::Block &colBlock,
+                             col::LlvmBasicBlock &colBlock,
                              pallas::FunctionCursor &funcCursor) {
     col::Assign &assignment =
         funcCursor.createAssignmentAndDeclaration(sextInstruction, colBlock);
@@ -49,7 +49,7 @@ void llvm2col::transformSExt(llvm::SExtInst &sextInstruction,
 }
 
 void llvm2col::transformZExt(llvm::ZExtInst &zextInstruction,
-                             col::Block &colBlock,
+                             col::LlvmBasicBlock &colBlock,
                              pallas::FunctionCursor &funcCursor) {
     col::Assign &assignment =
         funcCursor.createAssignmentAndDeclaration(zextInstruction, colBlock);
@@ -67,7 +67,7 @@ void llvm2col::transformZExt(llvm::ZExtInst &zextInstruction,
 }
 
 void llvm2col::transformTrunc(llvm::TruncInst &truncInstruction,
-                              col::Block &colBlock,
+                              col::LlvmBasicBlock &colBlock,
                               pallas::FunctionCursor &funcCursor) {
     col::Assign &assignment =
         funcCursor.createAssignmentAndDeclaration(truncInstruction, colBlock);
@@ -85,7 +85,7 @@ void llvm2col::transformTrunc(llvm::TruncInst &truncInstruction,
 }
 
 void llvm2col::transformFPExt(llvm::FPExtInst &fpextInstruction,
-                              col::Block &colBlock,
+                              col::LlvmBasicBlock &colBlock,
                               pallas::FunctionCursor &funcCursor) {
     col::Assign &assignment =
         funcCursor.createAssignmentAndDeclaration(fpextInstruction, colBlock);

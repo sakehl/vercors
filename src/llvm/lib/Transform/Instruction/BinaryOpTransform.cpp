@@ -8,7 +8,7 @@
 const std::string SOURCE_LOC = "Transform::Instruction::BinaryOp";
 
 void llvm2col::transformBinaryOp(llvm::Instruction &llvmInstruction,
-                                 col::Block &colBlock,
+                                 col::LlvmBasicBlock &colBlock,
                                  pallas::FunctionCursor &funcCursor) {
     col::Assign &assignment =
         funcCursor.createAssignmentAndDeclaration(llvmInstruction, colBlock);

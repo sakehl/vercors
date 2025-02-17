@@ -77,7 +77,9 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
       case e: Local[G] =>
         // Does it have a direct int value?
         info.flatMap(_.variableValues.get(e)).foreach(x => return Some(x))
-        replaceVariable(e).foreach(_.foreach(e => isConstantIntRecurse(e).foreach(x => return Some(x))))
+        replaceVariable(e).foreach(
+          _.foreach(e => isConstantIntRecurse(e).foreach(x => return Some(x)))
+        )
         None
       case i: ConstantInt[G] => Some(i.value)
       case Exp(e1, e2) =>
@@ -183,10 +185,18 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
     equalExpressionsRecurse(lhs, rhs)
   }
 
-  def upperBound(e: Expr[G]): Option[BigInt] = { replacerDepth = 0; upperBoundRecurse(e) }
-  def lowerBound(e: Expr[G]): Option[BigInt] = { replacerDepth = 0; lowerBoundRecurse(e) }
-  private def upperBoundRecurse(e: Expr[G]): Option[BigInt] = { getBound(e, isLower = false) }
-  private def lowerBoundRecurse(e: Expr[G]): Option[BigInt] = { getBound(e, isLower = true) }
+  def upperBound(e: Expr[G]): Option[BigInt] = {
+    replacerDepth = 0; upperBoundRecurse(e)
+  }
+  def lowerBound(e: Expr[G]): Option[BigInt] = {
+    replacerDepth = 0; lowerBoundRecurse(e)
+  }
+  private def upperBoundRecurse(e: Expr[G]): Option[BigInt] = {
+    getBound(e, isLower = false)
+  }
+  private def lowerBoundRecurse(e: Expr[G]): Option[BigInt] = {
+    getBound(e, isLower = true)
+  }
 
   private def getBound(e: Expr[G], isLower: Boolean): Option[BigInt] = {
     isConstantIntRecurse(e).foreach { i => return Some(i) }
@@ -298,10 +308,12 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
 
   private def isNonZeroRecurse(e: Expr[G]): Option[Boolean] = {
     e match {
-      case v: Local[G] if info.exists(_.variableNotZero.contains(v)) => return Some(true)
+      case v: Local[G] if info.exists(_.variableNotZero.contains(v)) =>
+        return Some(true)
       case v: Local[G] =>
         replaceVariable(v) match {
-          case Some(es) => es.foreach(e => isNonZeroRecurse(e).foreach(r => return Some(r)))
+          case Some(es) =>
+            es.foreach(e => isNonZeroRecurse(e).foreach(r => return Some(r)))
           case None =>
         }
       case Mult(l, r) =>
@@ -311,11 +323,18 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
         }
       case _ =>
     }
-    isConstantIntRecurse(e).map(i => i != 0) orElse
-    upperBoundRecurse(e).flatMap(i => if(i<0) Some(true) else None) orElse
-    lowerBoundRecurse(e).flatMap(i => if(i>0) Some(true) else None) orElse
-    lessThenEq(const(1)(e.o), e) orElse
-    lessThenEq(e, const(-1)(e.o))
+    isConstantIntRecurse(e).map(i => i != 0) orElse upperBoundRecurse(e)
+      .flatMap(i =>
+        if (i < 0)
+          Some(true)
+        else
+          None
+      ) orElse lowerBoundRecurse(e).flatMap(i =>
+      if (i > 0)
+        Some(true)
+      else
+        None
+    ) orElse lessThenEq(const(1)(e.o), e) orElse lessThenEq(e, const(-1)(e.o))
   }
 
   def isSameSign(e1: Expr[G], e2: Expr[G]): Option[Boolean] = {
@@ -332,40 +351,55 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
 
     // Determine equal parts of a multiplication
     val (rest_e1, rest_e2) = removeEqExprs(
-      unfoldComm[Mult[G]](e1), unfoldComm[Mult[G]](e2)
+      unfoldComm[Mult[G]](e1),
+      unfoldComm[Mult[G]](e2),
     )
 
-    if(rest_e1.isEmpty && rest_e2.isEmpty) return Some(true)
+    if (rest_e1.isEmpty && rest_e2.isEmpty)
+      return Some(true)
 
     // Check polarity of rest terms. A negative pol changes the sign.
-    val polarity1 = rest_e1.map(getSign).foldLeft(true)({
-      case (_, None) => return None
-      case (p, Some(Pos())) => p
-      case (p, Some(Neg())) => !p
-    })
+    val polarity1 =
+      rest_e1.map(getSign).foldLeft(true)({
+        case (_, None) => return None
+        case (p, Some(Pos())) => p
+        case (p, Some(Neg())) => !p
+      })
 
-    val polarity2 = rest_e2.map(getSign).foldLeft(true)({
-      case (_, None) => return None
-      case (p, Some(Pos())) => p
-      case (p, Some(Neg())) => !p
-    })
+    val polarity2 =
+      rest_e2.map(getSign).foldLeft(true)({
+        case (_, None) => return None
+        case (p, Some(Pos())) => p
+        case (p, Some(Neg())) => !p
+      })
 
     Some(polarity1 == polarity2)
   }
 
   def isPos(b: Boolean): Sign =
-    if(b) Pos() else Neg()
+    if (b)
+      Pos()
+    else
+      Neg()
 
-  def isPos(s: Sign): Boolean = s match {
-    case Pos() => true
-    case Neg() => false
-  }
+  def isPos(s: Sign): Boolean =
+    s match {
+      case Pos() => true
+      case Neg() => false
+    }
 
   def getSign(e: Expr[G]): Option[Sign] = {
-    isConstantInt(e).map(i => isPos(i>=0)) orElse
-    lowerBound(e).flatMap(i => if(i>=0) Some(Pos()) else None) orElse
-    upperBound(e).flatMap(i => if(i<0) Some(Neg()) else None) orElse
-    lessThenEq(const(0)(e.o), e).map(isPos)
+    isConstantInt(e).map(i => isPos(i >= 0)) orElse lowerBound(e).flatMap(i =>
+      if (i >= 0)
+        Some(Pos())
+      else
+        None
+    ) orElse upperBound(e).flatMap(i =>
+      if (i < 0)
+        Some(Neg())
+      else
+        None
+    ) orElse lessThenEq(const(0)(e.o), e).map(isPos)
   }
 
   def unfoldComm[B <: BinExpr[G]](
@@ -378,9 +412,9 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
   }
 
   def partitionOptionList[A, B](
-                                 xs: Seq[A],
-                                 f: A => Option[B],
-                               ): (Seq[A], Seq[B]) = {
+      xs: Seq[A],
+      f: A => Option[B],
+  ): (Seq[A], Seq[B]) = {
     var resLeft: Seq[A] = Seq()
     var resRight: Seq[B] = Seq()
     for (x <- xs) {
@@ -392,7 +426,10 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
     (resLeft, resRight)
   }
 
-  private def removeEqExprs(e1s: Seq[Expr[G]], e2s: Seq[Expr[G]]): (Seq[Expr[G]], Seq[Expr[G]]) = {
+  private def removeEqExprs(
+      e1s: Seq[Expr[G]],
+      e2s: Seq[Expr[G]],
+  ): (Seq[Expr[G]], Seq[Expr[G]]) = {
     var resultingE2: Seq[Expr[G]] = e2s
     var resultingE1: Seq[Expr[G]] = Seq()
 
@@ -405,13 +442,14 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
           resultingE2 = resultingE2.diff(Seq(y))
         }
       }
-      if (!found) resultingE1 = resultingE1 :+ x
+      if (!found)
+        resultingE1 = resultingE1 :+ x
     }
     (resultingE1, resultingE2)
   }
 
   private def commAssoc[B <: BinExpr[G]](e1: B, e2: B)(
-    implicit tag: ClassTag[B]
+      implicit tag: ClassTag[B]
   ): Boolean = {
     val e1s = unfoldComm[B](e1)
     val e2s = unfoldComm[B](e2)
@@ -443,7 +481,6 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
       // If one is a constant expression, and the other is not, this cannot be the same
       case _ => return false
     }
-
 
     def comm(
         lhs1: Expr[G],
@@ -502,14 +539,16 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
           }
         } else
           false
-      case (name1: Local[G], e2) => replaceVariable(name1) match {
+      case (name1: Local[G], e2) =>
+        replaceVariable(name1) match {
           case Some(es) => es.exists(e => equalExpressionsRecurse(e, e2))
           case None => false
         }
-      case (e1, name2: Local[G]) => replaceVariable(name2) match {
-        case Some(es) => es.exists(e => equalExpressionsRecurse(e1, e))
-        case None => false
-      }
+      case (e1, name2: Local[G]) =>
+        replaceVariable(name2) match {
+          case Some(es) => es.exists(e => equalExpressionsRecurse(e1, e))
+          case None => false
+        }
       case (inv: MethodInvocation[G], _) if !inv.ref.decl.pure => false
       case (_, inv: MethodInvocation[G]) if !inv.ref.decl.pure => false
 
@@ -519,10 +558,10 @@ class ExpressionEqualityCheck[G](info: Option[AnnotationVariableInfo[G]]) {
   }
 
   def replaceVariable(name: Local[G]): Option[List[Expr[G]]] = {
-    if(replacerDepth > max_depth){
-      return None
-    }
-    info.map(_.variableEqualities).flatMap(_.get(name).map(x => {replacerDepth += 1; x}))
+    if (replacerDepth > max_depth) { return None }
+    info.map(_.variableEqualities).flatMap(_.get(name).map(x => {
+      replacerDepth += 1; x
+    }))
   }
 }
 
