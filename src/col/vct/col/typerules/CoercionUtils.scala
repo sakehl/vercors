@@ -123,7 +123,9 @@ case object CoercionUtils {
       case (TNull(), TAnyClass()) => CoerceNullAnyClass()
       case (TNull(), TPointer(target)) => CoerceNullPointer(target)
       case (TNull(), CTPointer(target)) => CoerceNullPointer(target)
+      case (TNull(), CTArray(_, target)) => CoerceNullPointer(target)
       case (TNull(), TEnum(target)) => CoerceNullEnum(target)
+      case (TNull(), LLVMTPointer(target)) => CoerceNullLLVMPointer(target)
 
       case (CTArray(_, innerType), TArray(element)) if element == innerType =>
         CoerceCArrayPointer(element)
@@ -156,6 +158,14 @@ case object CoercionUtils {
         else {
           CoercionSequence(Seq(
             CoerceCArrayPointer(element),
+            getAnyCoercion(element, innerType).getOrElse(return None),
+          ))
+        }
+      case (CPPTArray(_, innerType), TPointer(element)) =>
+        if (element == innerType) { CoerceCPPArrayPointer(innerType) }
+        else {
+          CoercionSequence(Seq(
+            CoerceCPPArrayPointer(element),
             getAnyCoercion(element, innerType).getOrElse(return None),
           ))
         }
@@ -198,7 +208,7 @@ case object CoercionUtils {
           CoerceDecreasePrecision(source, coercedCFloat),
           CoerceCFloatFloat(coercedCFloat, target),
         ))
-      case (TCInt(), TInt()) => CoerceCIntInt()
+      case (TCInt(), TInt()) => CoerceCIntInt(source)
       case (LLVMTInt(_), TInt()) => CoerceLLVMIntInt()
       case (TInt(), LLVMTInt(_)) => CoerceIdentity(target)
       case (l @ LLVMTFloat(_), TFloat(mantissa, exponent))
@@ -264,7 +274,7 @@ case object CoercionUtils {
       case (TCInt(), target @ TCFloat(_, _)) => CoerceCIntCFloat(target)
 
       case (source @ TCFloat(_, _), TInt()) =>
-        CoercionSequence(Seq(CoerceCFloatCInt(source), CoerceCIntInt()))
+        CoercionSequence(Seq(CoerceCFloatCInt(source), CoerceCIntInt(TCInt())))
       case (TCInt(), target @ TFloat(exponent, mantissa)) =>
         val coercedCFloat = TCFloat[G](exponent, mantissa)
         CoercionSequence(Seq(
@@ -455,7 +465,7 @@ case object CoercionUtils {
       case t: CPPTArray[G] =>
         Some((CoerceCPPArrayPointer(t.innerType), TPointer(t.innerType)))
       case LLVMTPointer(None) =>
-        Some((CoerceIdentity(source), TPointer[G](TVoid())))
+        Some((CoerceIdentity(source), TPointer[G](TAnyValue())))
       case LLVMTPointer(Some(innerType)) =>
         Some((CoerceIdentity(source), TPointer(innerType)))
       case LLVMTArray(numElements, innerType) if numElements > 0 =>

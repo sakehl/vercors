@@ -33,7 +33,7 @@ trait SYCLTBufferImpl[G] extends SYCLTBufferOps[G] {
     genericArgs match {
       case Seq(
             CPPExprOrTypeSpecifier(None, Some(typeSpec)),
-            CPPExprOrTypeSpecifier(Some(CIntegerValue(dim)), None),
+            CPPExprOrTypeSpecifier(Some(CIntegerValue(dim, _)), None),
           )
           if dim > 0 && dim <= 3 && args.nonEmpty &&
             args.head.t.asPointer.isDefined &&

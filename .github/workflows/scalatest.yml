@@ -69,18 +69,6 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
-      - name: Cache LLVM and Clang
-        id: cache-llvm
-        uses: actions/cache@v2
-        with:
-          path: ${{ runner.temp }}/llvm
-          key: llvm-10.0
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v1
-        with:
-          version: "10.0"
-          directory: ${{ runner.temp }}/llvm
-          cached: ${{ steps.cache-llvm.outputs.cache-hit }}
       - name: Download VerCors
         uses: actions/download-artifact@v4
         with:
@@ -108,8 +96,6 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
-      - name: Install clang
-        run: brew install llvm
       - name: Download VerCors
         uses: actions/download-artifact@v4
         with:

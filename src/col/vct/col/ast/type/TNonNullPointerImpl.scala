@@ -3,6 +3,7 @@ package vct.col.ast.`type`
 import vct.col.ast.TNonNullPointer
 import vct.col.ast.ops.TNonNullPointerOps
 import vct.col.print._
+import vct.col.typerules.TypeSize
 
 trait TNonNullPointerImpl[G] extends TNonNullPointerOps[G] {
   this: TNonNullPointer[G] =>

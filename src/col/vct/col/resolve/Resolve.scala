@@ -1135,6 +1135,7 @@ case object ResolveReferences extends LazyLogging {
             val importedDecl = ctx.importedDeclarations.find {
               case procedure: Procedure[G] =>
                 contract.name == procedure.o.get[SourceName].name
+              case _ => false
             }
             if (importedDecl.isDefined) {
               val importedProcedure = importedDecl.get
@@ -1165,6 +1166,7 @@ case object ResolveReferences extends LazyLogging {
         val importedDecl = ctx.importedDeclarations.find {
           case procedure: Procedure[G] =>
             contract.name == procedure.o.get[SourceName].name
+          case _ => false
         }
         if (importedDecl.isDefined) {
           val importedProcedure = importedDecl.get.asInstanceOf[Procedure[G]]

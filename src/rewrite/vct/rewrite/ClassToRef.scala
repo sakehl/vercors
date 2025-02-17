@@ -8,6 +8,7 @@ import hre.util.ScopedStack
 import vct.col.rewrite.error.{ExcludedByPassOrder, ExtraNode}
 import vct.col.ref.Ref
 import vct.col.resolve.ctx.Referrable
+import vct.col.typerules.CoercionUtils
 import vct.col.util.SuccessionMap
 import vct.result.VerificationError.UserError
 
@@ -857,6 +858,10 @@ case class ClassToRef[Pre <: Generation]() extends Rewriter[Pre] {
             const(typeNumber(t.cls.decl))(e.o)
           // Keep pointer casts intact for the adtPointer stage
           case _: TPointer[Pre] | _: TNonNullPointer[Pre] => e.rewriteDefault()
+          // Keep integer casts intact for casting between integers and pointers
+          case _: TInt[Pre] => e.rewriteDefault()
+          // Keep any casts intact for the adtAny stage
+          case _: TAnyValue[Pre] => e.rewriteDefault()
           case other => ???
         }
       case TypeOf(value) =>
@@ -900,10 +905,13 @@ case class ClassToRef[Pre <: Generation]() extends Rewriter[Pre] {
 
         e.rewriteDefault()
       }
-      case Cast(value, typeValue) =>
+      case Cast(value, typeValue)
+          if value.t.asClass.isDefined ||
+            CoercionUtils.getAnyCoercion(value.t, TAnyClass[Pre]()).isDefined =>
         dispatch(
           value
         ) // Discard for now, should assert instanceOf(value, typeValue)
+      case Cast(value, TypeValue(t)) if value.t == t => { dispatch(value) }
       case Result(Ref(app)) =>
         app match {
           case function: Function[Pre] => Result[Post](succ(function))(e.o)

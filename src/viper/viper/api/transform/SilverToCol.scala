@@ -28,8 +28,6 @@ import viper.silver.plugin.standard.termination.{
 import viper.silver.verifier.AbstractError
 import viper.silver.{ast => silver}
 
-import java.nio.file.{Path, Paths}
-
 case object SilverToCol {
   private def SilverPositionOrigin(node: silver.Positioned): Origin =
     node.pos match {
@@ -66,7 +64,7 @@ case object SilverToCol {
         })
   }
 
-  case class SilverFrontendParseError(path: Path, errors: Seq[AbstractError])
+  case class SilverFrontendParseError(path: String, errors: Seq[AbstractError])
       extends UserError {
     override def code: String = "silverFrontendError"
     override def text: String =
@@ -78,36 +76,22 @@ case object SilverToCol {
   }
 
   def transform[G](
-      diagnosticPath: Path,
+      diagnosticFilename: String,
       in: Either[Seq[AbstractError], silver.Program],
       blameProvider: BlameProvider,
   ): col.Program[G] =
     in match {
       case Right(program) => SilverToCol(program, blameProvider).transform()
       case Left(errors) =>
-        throw SilverFrontendParseError(diagnosticPath, errors)
+        throw SilverFrontendParseError(diagnosticFilename, errors)
     }
-
-  def parse[G](path: Path, blameProvider: BlameProvider): col.Program[G] =
-    transform(path, SilverParserDummyFrontend().parse(path), blameProvider)
-
-  def parse[G](
-      input: String,
-      diagnosticPath: Path,
-      blameProvider: BlameProvider,
-  ): col.Program[G] =
-    transform(
-      diagnosticPath,
-      SilverParserDummyFrontend().parse(input, diagnosticPath),
-      blameProvider,
-    )
 
   def parse[G](
       readable: Readable,
       blameProvider: BlameProvider,
   ): col.Program[G] =
     transform(
-      Paths.get(readable.fileName),
+      readable.fileName,
       SilverParserDummyFrontend().parse(readable),
       blameProvider,
     )
@@ -555,6 +539,7 @@ case class SilverToCol[G](
       case silver.TrueLit() => col.BooleanValue(true)
       case silver.Unfolding(acc, body) =>
         col.Unfolding(col.AmbiguousFoldTarget(f(acc)), f(body))(blame(e))
+      case silver.Asserting(a, body) => col.Asserting(f(a), f(body))(blame(e))
       case silver.WildcardPerm() => col.ReadPerm()
 
       case silver.ForPerm(variables, resource, body) => ??(e)
