@@ -2734,18 +2734,18 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     decl.decl.specs match {
       case Seq(CPPSpecificationType(cta @ CPPTArray(sizeOption, oldT))) =>
         val t = rw.dispatch(oldT)
-        val v = new Variable[Post](TPointer(t))(o.sourceName(info.name))
+        val v = new Variable[Post](TPointer(t, None))(o.sourceName(info.name))
         cppNameSuccessor(RefCPPLocalDeclaration(decl, 0)) = v
 
         (sizeOption, init.init) match {
           case (None, None) => throw WrongCPPType(decl)
           case (Some(size), None) =>
             val newArr =
-              NewNonNullPointerArray[Post](t, rw.dispatch(size))(cta.blame)
+              NewNonNullPointerArray[Post](t, rw.dispatch(size), None)(cta.blame)
             Block(Seq(LocalDecl(v), assignLocal(v.get, newArr)))
           case (None, Some(CPPLiteralArray(exprs))) =>
             val newArr =
-              NewNonNullPointerArray[Post](t, c_const[Post](exprs.size))(
+              NewNonNullPointerArray[Post](t, c_const[Post](exprs.size), None)(
                 cta.blame
               )
             Block(
@@ -2758,7 +2758,7 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             if (realSize < exprs.size)
               logger.warn(s"Excess elements in array initializer: '${decl}'")
             val newArr =
-              NewNonNullPointerArray[Post](t, c_const[Post](realSize))(
+              NewNonNullPointerArray[Post](t, c_const[Post](realSize), None)(
                 cta.blame
               )
             Block(
@@ -2788,6 +2788,6 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
 
   def arrayType(t: CPPTArray[Pre]): Type[Post] = {
     // TODO: we should not use pointer here
-    TPointer(rw.dispatch(t.innerType))
+    TPointer(rw.dispatch(t.innerType), None)
   }
 }

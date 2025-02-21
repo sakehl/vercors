@@ -40,11 +40,11 @@ case object CoercionUtils {
         CoerceBetweenUniqueStruct(source, target)
       case (t, s: CTStructUnique[G]) if C.stripUniqueType(t) == C.stripUniqueType(s) =>
         CoerceBetweenUniqueStruct(source, target)
-      case (s: TClass[G], TClassUnique(clsT, _)) if clsT == s.cls =>
+      case (s: TClass[G], TClassUnique(innerClass, _)) if s == innerClass =>
         CoerceBetweenUniqueClass(source, target)
-      case (s@TClassUnique(clsS, _), t: TClass[G]) if clsS == t.cls =>
+      case (TClassUnique(innerClass, _), t: TClass[G]) if innerClass == t =>
         CoerceBetweenUniqueClass(source, target)
-      case (s@TClassUnique(clsS, _), t@TClassUnique(clsT, _))
+      case (TClassUnique(clsS, _), TClassUnique(clsT, _))
         if clsS == clsT =>
         CoerceBetweenUniqueClass(source, target)
       case _ => return None
@@ -209,8 +209,8 @@ case object CoercionUtils {
       case (TNull(), TArray(target)) => CoerceNullArray(target)
       case (TNull(), TByReferenceClass(target, typeArgs)) =>
         CoerceNullClass(target, typeArgs)
-      case (TNull(), TClassUnique(target, _)) =>
-        CoerceNullClass(target, Seq())
+      case (TNull(), target@TClassUnique(_, _)) =>
+        getAnyCoercion(TNull(), target.inner).getOrElse(return None)
       case (TNull(), JavaTClass(target, _)) => CoerceNullJavaClass(target)
       case (TNull(), TAnyClass()) => CoerceNullAnyClass()
       case (TNull(), target: PointerType[G]) => CoerceNullPointer(target)
@@ -230,17 +230,17 @@ case object CoercionUtils {
         CoerceCVectorVector(rSize, element)
       case (s@CTPointer(innerLeft), t@CTPointer(innerRight)) =>
         getPointerCoercion(s, t, innerLeft, innerRight).getOrElse(return None)
-      case (s@TPointer(innerLeft), t@TPointer(innerRight)) =>
+      case (s@TPointer(innerLeft, uniqueL), t@TPointer(innerRight, uniqueR)) if uniqueL == uniqueR =>
         getPointerCoercion(s, t, innerLeft, innerRight).getOrElse(return None)
-      case (s@CTPointer(innerLeft), t@TPointer(innerRight)) =>
+      case (s@CTPointer(innerLeft), t@TPointer(innerRight, None)) =>
         getPointerCoercion(s, t, innerLeft, innerRight).getOrElse(return None)
-      case (s@TPointer(innerLeft), t@CTPointer(innerRight)) =>
+      case (s@TPointer(innerLeft, None), t@CTPointer(innerRight)) =>
         getPointerCoercion(s, t, innerLeft, innerRight).getOrElse(return None)
-      case (TNonNullPointer(innerType), TPointer(element))
-          if innerType == element =>
+      case (TNonNullPointer(innerType, uniqueL), TPointer(element, uniqueR)) if uniqueL == uniqueR &&
+        innerType == element =>
         CoerceNonNullPointer(innerType)
-      case (TNonNullPointer(a), TNonNullPointer(b))
-          if getAnyCoercion(a, b).isDefined =>
+      case (TNonNullPointer(a, uniqueL), TNonNullPointer(b, uniqueR)) if uniqueL == uniqueR &&
+          getAnyCoercion(a, b).isDefined =>
         CoerceIdentity(target)
       case (CTArray(_, innerType), t@CTPointer(element)) =>
         if (element == innerType) { CoerceCArrayPointer(innerType) }
@@ -250,7 +250,7 @@ case object CoercionUtils {
             getPointerCoercion(CTPointer(innerType), t, innerType, element).getOrElse(return None)
           ))
         }
-      case (CPPTArray(_, innerType), TPointer(element)) =>
+      case (CPPTArray(_, innerType), TPointer(element, None)) =>
         if (element == innerType) { CoerceCPPArrayPointer(innerType) }
         else {
           CoercionSequence(Seq(
@@ -324,6 +324,10 @@ case object CoercionUtils {
         CoercionSequence(Seq(CoerceUnboundInt(source, TInt()), CoerceIntRat()))
       case (_: IntType[G], TRational()) => CoerceIntRat()
 
+      case (source : TClass[G], target: TClassUnique[G]) if source.cls == target.cls =>
+        CoerceBetweenUniqueClass(source, target)
+      case (source: TClassUnique[G], target: TClass[G]) if source.cls == target.cls =>
+        CoerceBetweenUniqueClass(source, target)
       case (source: TClass[G], target: TClass[G])
           if source.typeArgs.isEmpty && target.typeArgs.isEmpty &&
             source.transSupportArrows().exists { case (_, supp) =>
@@ -331,18 +335,11 @@ case object CoercionUtils {
             } =>
         CoerceSupports(source.cls, target.cls)
 
-      case (source @ TClass(clsS, _), target@TClassUnique(clsT, _)) if clsS == clsT =>
-        CoerceBetweenUniqueClass(source, target)
-      case (source@TClassUnique(clsS,_), target@ TClass(clsT, _)) if clsS == clsT =>
-        CoerceBetweenUniqueClass(source, target)
-      case (source@TClassUnique(clsS, _), target@TClassUnique(clsT, _))
-        if clsS == clsT =>
-        CoerceBetweenUniqueClass(source, target)
       case (source: TClass[G], TAnyClass()) =>
         CoerceClassAnyClass(source.cls, source.typeArgs)
 
-      case (source @ TClassUnique(cls, _), TAnyClass()) =>
-        CoerceClassAnyClass(cls, Seq())
+      case (source: TClassUnique[G], TAnyClass()) =>
+        CoerceClassAnyClass(source.cls, Seq())
 
       case (
             source @ JavaTClass(sourceClass, Nil),
@@ -422,8 +419,8 @@ case object CoercionUtils {
           case None => return None
         }
 
-      case (TPointer(TAny()), TPointer(any)) => CoerceIdentity(TPointer(any))
-      case (TPointer(any), TPointer(TAny())) => CoerceIdentity(TPointer(any))
+      case (TPointer(TAny(), uniqueL), TPointer(any, uniqueR)) if uniqueL == uniqueR => CoerceIdentity(TPointer(any, uniqueR))
+      case (TPointer(any, uniqueL), TPointer(TAny(), uniqueR)) if uniqueL == uniqueR => CoerceIdentity(TPointer(any, uniqueR))
 
       // Something with TVar?
 
@@ -568,21 +565,21 @@ case object CoercionUtils {
         getAnyPointerCoercion(t.inner).map{ case (c, res) => (CoercionSequence(Seq(CoerceFromUnique(t.inner, t.unique), c)), res)}
       case t: CPrimitiveType[G] => chainCCoercion(t, getAnyPointerCoercion)
       case t: PointerType[G] => Some((CoerceIdentity(source), t))
-      case t: CTPointer[G] => Some((CoerceIdentity(source), TPointer(t.innerType)))
-      case t: CTArray[G] => Some((CoerceCArrayPointer(t.innerType), TPointer(t.innerType)))
+      case t: CTPointer[G] => Some((CoerceIdentity(source), TPointer(t.innerType, None)))
+      case t: CTArray[G] => Some((CoerceCArrayPointer(t.innerType), TPointer(t.innerType, None)))
       case t: TNonNullPointer[G] =>
-        Some((CoerceIdentity(source), TPointer(t.element)))
+        Some((CoerceIdentity(source), TPointer(t.element, None)))
       case t: CPPPrimitiveType[G] => chainCPPCoercion(t, getAnyPointerCoercion)
       case t: CPPTArray[G] =>
-        Some((CoerceCPPArrayPointer(t.innerType), TPointer(t.innerType)))
+        Some((CoerceCPPArrayPointer(t.innerType), TPointer(t.innerType, None)))
       case LLVMTPointer(None) =>
-        Some((CoerceIdentity(source), TPointer[G](TAnyValue())))
+        Some((CoerceIdentity(source), TPointer[G](TAnyValue(), None)))
       case LLVMTPointer(Some(innerType)) =>
-        Some((CoerceIdentity(source), TPointer(innerType)))
+        Some((CoerceIdentity(source), TPointer(innerType, None)))
       case LLVMTArray(numElements, innerType) if numElements > 0 =>
-        Some((CoerceIdentity(source), TPointer(innerType)))
+        Some((CoerceIdentity(source), TPointer(innerType, None)))
       case _: TNull[G] =>
-        val t = TPointer[G](TAnyValue())
+        val t = TPointer[G](TAnyValue(), None)
         Some((CoerceNullPointer(t), t))
       case _ => None
     }
@@ -748,7 +745,7 @@ case object CoercionUtils {
       case t: TConst[G] =>
         getAnyClassCoercion(t.inner).map{ case (c, res) => (CoercionSequence(Seq(CoerceFromConst(t.inner), c)), res)}
       case t: TClass[G] => Some((CoerceIdentity(source), t))
-      case t: TClassUnique[G] => Some((CoerceIdentity(source), TClass(t.cls, Seq())))
+      case t: TClassUnique[G] => Some((CoerceIdentity(source), t.innerT))
       case t: TUnion[G] =>
         val superType = Types.leastCommonSuperType(t.types)
         getAnyClassCoercion(superType) match {

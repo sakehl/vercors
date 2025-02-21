@@ -13,5 +13,6 @@ trait TNonNullPointerImpl[G] extends TNonNullPointerOps[G] {
   }
 
   override def layout(implicit ctx: Ctx): Doc =
-    Group(Text("NonNull") <> open <> element <> close)
+    Group(Text(
+      (if(unique.isDefined) "unique<"+unique.get.toString+">" else "")+"NonNull") <> open <> element <> close)
 }

@@ -6,4 +6,5 @@ trait PointerTypeImpl[G] {
   this: PointerType[G] =>
 
   val element: Type[G]
+  val unique: Option[BigInt]
 }

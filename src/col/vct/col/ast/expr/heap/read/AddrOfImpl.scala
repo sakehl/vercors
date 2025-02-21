@@ -6,7 +6,8 @@ import vct.col.ast.ops.AddrOfOps
 
 trait AddrOfImpl[G] extends AddrOfOps[G] {
   this: AddrOf[G] =>
-  override def t: Type[G] = TPointer(e.t)
+  // TODO LvdH: Need to do something with uniqueness here probably
+  override def t: Type[G] = TPointer(e.t, None)
 
   override def precedence: Int = Precedence.PREFIX
   override def layout(implicit ctx: Ctx): Doc = Text("&") <> assoc(e)

@@ -260,18 +260,10 @@ case object C extends LazyLogging {
     val info = getDeclaratorInfo(decl.inits.head.decl)
     val t = specs match {
       case CStructDeclaration(_, _) +: Seq() => CTStruct[G](gdecl.ref)
-      case _ => getPrimitiveType(specs, context)
+      case _ => getPrimitiveType(specs, platformContext, context)
     }
 
     info.typeOrReturnType(t)
-    /* MERGE TODO
-    // Need to get specifications from the init (can only have one init as typedef), since it can contain GCC Type extensions
-    getPrimitiveType(
-      getSpecs(decl.inits.head.decl) ++ specs,
-      platformContext,
-      context,
-    )
-    */
   }
 
   def getPrimitiveType[G](
@@ -429,7 +421,6 @@ case object C extends LazyLogging {
     case struct: CTStruct[G] => getCStructDeref(struct.ref.decl, name)
     case struct: CTStructUnique[G] => findStruct(struct.inner, name)
     case _ => None
-//      ???
   }
 
   def getCStructDeref[G](

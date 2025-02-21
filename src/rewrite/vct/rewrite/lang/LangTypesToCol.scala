@@ -104,9 +104,9 @@ case class LangTypesToCol[Pre <: Generation](platformContext: PlatformContext)
         )
       case t @ CPPPrimitiveType(specs) =>
         dispatch(CPP.getBaseTypeFromSpecs(specs, context = Some(t)))
-      case t @ CTStructUnique(inner, fieldRef, unique) =>
-        val fieldSucc: Ref[Post, CStructMemberDeclarator[Post]] = cStructFieldsSuccessor(fieldRef.decl).ref
-        t.rewrite(fieldRef = fieldSucc)
+      case t @ CTStructUnique(inner, pointerFieldRef, unique) =>
+        val fieldSucc: Ref[Post, CStructMemberDeclarator[Post]] = cStructFieldsSuccessor(pointerFieldRef.decl).ref
+        t.rewrite(pointerFieldRef = fieldSucc)
       case t @ SilverPartialTAxiomatic(Ref(adt), partialTypeArgs) =>
         if (partialTypeArgs.map(_._1.decl).toSet != adt.typeArgs.toSet)
           throw IncompleteTypeArgs(t)

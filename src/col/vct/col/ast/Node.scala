@@ -130,9 +130,7 @@ final case class TUnion[G](types: Seq[Type[G]])(
 final case class TArray[G](element: Type[G])(
     implicit val o: Origin = DiagnosticOrigin
 ) extends Type[G] with TArrayImpl[G]
-final case class TNonNullPointer[G](element: Type[G])(
-    implicit val o: Origin = DiagnosticOrigin
-) extends Type[G] with TNonNullPointerImpl[G]
+
 // TODO: Add information for inner type to pointer block type
 final case class TPointerBlock[G]()(implicit val o: Origin = DiagnosticOrigin)
     extends Type[G] with TPointerBlockImpl[G]
@@ -147,21 +145,18 @@ final case class TConst[G](inner: Type[G])(
 final case class TUnique[G](inner: Type[G], unique: BigInt)(
   implicit val o: Origin = DiagnosticOrigin
 ) extends Type[G] with TUniqueImpl[G]
-final case class CTStructUnique[G](inner: Type[G], fieldRef: Ref[G, CStructMemberDeclarator[G]], unique: BigInt)(
+final case class CTStructUnique[G](inner: Type[G], pointerFieldRef: Ref[G, CStructMemberDeclarator[G]], unique: BigInt)(
   implicit val o: Origin = DiagnosticOrigin
 ) extends CType[G] with CTStructUniqueImpl[G]
-final case class TClassUnique[G](cls: Ref[G, Class[G]], uniqueMap: Seq[(Ref[G, InstanceField[G]], BigInt)])(
-  implicit val o: Origin = DiagnosticOrigin
-) extends Type[G] with TClassUniqueImpl[G]
 
 
 sealed trait PointerType[G] extends Type[G] with PointerTypeImpl[G]
-final case class TPointer[G](element: Type[G])(
+final case class TPointer[G](element: Type[G], unique: Option[BigInt])(
   implicit val o: Origin = DiagnosticOrigin
 ) extends PointerType[G] with TPointerImpl[G]
-final case class TPointerUnique[G](element: Type[G], id: BigInt)(
+final case class TNonNullPointer[G](element: Type[G], unique: Option[BigInt])(
   implicit val o: Origin = DiagnosticOrigin
-) extends PointerType[G] with TPointerUniqueImpl[G]
+) extends PointerType[G] with TNonNullPointerImpl[G]
 final case class TConstPointer[G](pureElement: Type[G])(
   implicit val o: Origin = DiagnosticOrigin
 ) extends PointerType[G] with TConstPointerImpl[G]
@@ -258,6 +253,9 @@ final case class TByValueClass[G](
     typeArgs: Seq[Type[G]],
 )(implicit val o: Origin = DiagnosticOrigin)
     extends TClass[G] with TByValueClassImpl[G]
+final case class TClassUnique[G](inner: Type[G], uniqueMap: Seq[(Ref[G, InstanceField[G]], BigInt)])(
+  implicit val o: Origin = DiagnosticOrigin
+) extends TClass[G] with TClassUniqueImpl[G]
 final case class TAnyClass[G]()(implicit val o: Origin = DiagnosticOrigin)
     extends DeclaredType[G] with TAnyClassImpl[G]
 final case class TAxiomatic[G](
@@ -2056,7 +2054,7 @@ final case class NewConstPointerArray[G](element: Type[G], size: Expr[G])(
   val blame: Blame[ArraySizeError]
 )(implicit val o: Origin)
   extends NewPointer[G] with NewConstPointerArrayImpl[G]
-final case class NewNonNullPointerArray[G](element: Type[G], size: Expr[G])(
+final case class NewNonNullPointerArray[G](element: Type[G], size: Expr[G], unique: Option[BigInt])(
     val blame: Blame[ArraySizeError]
 )(implicit val o: Origin)
     extends NewPointer[G] with NewNonNullPointerArrayImpl[G]

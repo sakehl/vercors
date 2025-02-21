@@ -862,7 +862,7 @@ case object Java extends LazyLogging {
   def zeroValue[G](t: Type[G]): Expr[G] =
     t match {
       case TArray(_) => Null()
-      case TPointer(_) => Null()
+      case TPointer(_, _) => Null()
       case TSeq(element) => LiteralSeq(element, Nil)
       case TSet(element) => LiteralSet(element, Nil)
       case TBag(element) => LiteralBag(element, Nil)

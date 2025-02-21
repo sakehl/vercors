@@ -1606,8 +1606,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
         NewPointerArray(element, size, unique)(na.blame)
       case nca @ NewConstPointerArray(element, size) =>
         NewConstPointerArray(element, size)(nca.blame)
-      case na @ NewNonNullPointerArray(element, size) =>
-        NewNonNullPointerArray(element, size)(na.blame)
+      case na @ NewNonNullPointerArray(element, size, unique) =>
+        NewNonNullPointerArray(element, size, unique)(na.blame)
       case NewObject(cls) => NewObject(cls)
       case NewObjectUnique(cls, m) => NewObjectUnique(cls, m)
       case NoPerm() => NoPerm()

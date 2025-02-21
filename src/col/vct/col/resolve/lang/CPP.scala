@@ -75,7 +75,7 @@ case object CPP {
             innerInfo.params,
             t =>
               innerInfo.typeOrReturnType(
-                FuncTools.repeat[Type[G]](TPointer(_), operators.size, t)
+                FuncTools.repeat[Type[G]](TPointer(_, None), operators.size, t)
               ),
             innerInfo.name,
           )

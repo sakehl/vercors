@@ -59,12 +59,12 @@ case class TypeQualifierCoercion[Pre <: Generation]()
               case field: InstanceField[Pre] if pointerInstanceFields.contains(field) =>
                 val unique = pointerInstanceFields(field)
                 val it = field.t match {
-                  case TPointer(it) => it
+                  case TPointer(it, _) => it
                   case _ => ??? // Not allowed
                 }
                 val (info, innerResType) = getUnqualified(it)
                 if (info.const) ??? // Not allowed
-                val resType = TPointerUnique(innerResType, unique)
+                val resType = TPointer(innerResType, Some(unique))
                 val resField = field.rewrite(t = resType)
                 uniqueField((field, pointerInstanceFields)) = resField
                 resField
@@ -75,11 +75,13 @@ case class TypeQualifierCoercion[Pre <: Generation]()
               case _ => ??? // Not allowed
             }}
           }}._1
-          original.rewrite(decls=decls)
+          original match {
+            case original: ByValueClass[Pre] => original.rewrite(decls=decls)
+            case original: ByReferenceClass[Pre] => original.rewrite(decls=decls)
+          }
         })
       })
   }
-
 
 
   override def applyCoercion(e: => Expr[Post], coercion: Coercion[Pre])(
@@ -104,12 +106,12 @@ case class TypeQualifierCoercion[Pre <: Generation]()
     t match {
       case TConst(t) => dispatch(t)
       case TUnique(_, _) => throw DisallowedQualifiedType(t)
-      case TPointer(it) => makePointer(it)
+      case TPointer(it, None) => makePointer(it)
       case tu: TClassUnique[Pre] =>
         val map = TypeQualifierCoercion.getUniqueMap(tu)
         val c = tu.cls.decl
         val uniqueClass = uniqueClasses.getOrElseUpdate((c,map), createUniqueClassCopy(c, map))
-        TClass[Post](uniqueClass.ref, Seq())
+        uniqueClass.classType(Seq())
       case other => other.rewriteDefault()
     }
 
@@ -170,8 +172,7 @@ case class TypeQualifierCoercion[Pre <: Generation]()
     implicit val o: Origin = t.o
     val (info, resType) = getUnqualified(t)
     if(info.const) TConstPointer(resType)
-    else if (info.unique.isDefined) TPointerUnique(resType, info.unique.get)
-    else TPointer(resType)
+    else TPointer(resType, info.unique)
   }
 }
 
@@ -201,154 +202,37 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
       case t: PointerType[Pre] => Seq(t)
       case t@TClassUnique(cls, _) =>
         val m = TypeQualifierCoercion.getUniqueMap(t)
-        cls.decl.decls.flatMap {
+        t.cls.decl.decls.flatMap {
           case field: InstanceField[Pre] if m.contains(field) =>
             // Field which are in the unique map should be pointers
             val element = field.t.asPointer.get.element
             // But also consider the element type of the pointer
-            Seq(TPointerUnique(element, m(field))) ++ getPointers(element)
+            Seq(TPointer(element, Some(m(field)))) ++ getPointers(element)
           case field: InstanceField[Pre] => getPointers(field.t)
           case _: JavaClassDeclaration[Pre] | _: PVLClassDeclaration[Pre] => ???
           case _ => Seq()
         }
-      case tc@TClass(cls, Seq()) =>
+      case tc: TClass[Pre] =>
+        // Do not support type args yet. We should instantiate them or something?
+        if(tc.typeArgs.nonEmpty) ???
+
         if(seenClasses.top.contains(tc)) return Seq()
         seenClasses.top.add(tc)
 
-        cls.decl.decls.flatMap {
+        tc.cls.decl.decls.flatMap {
           case field: InstanceField[Pre] => getPointers(field.t)
           case _: JavaClassDeclaration[Pre] | _: PVLClassDeclaration[Pre] => ???
           case _ => Seq()
         }
-      // Do not support type args yet. We should instantiate them or something?
-      case TClass(cls, typeArgs) => ???
       case _ => Seq()
     }
     // Just go over all subnodes of the type. Only TClass(Unique) is a special instance, since
     // flatCollect does not visit references (and TClass contains a reference towards the class)
+//    TODO: This is wrong since TClassUnique(TClass())) is valid, so TClass will also be visited
+    ???
     t.flatCollect(getPointersRec(_))
   }
 
-  /* A class/struct can create pointer coercions.
-   * Given a class coercion, we capture all the pointer coercions which are made.
-   * We also capture all pointer types, which are not coerced in any way.
-   * E.g. struct v { int* xs, unique<2> int* ys} can get get turned into
-   * struct v { unique<1> int* xs, unique<2> int* ys}, then not only struct v is coerced, but also int* -> unique<1> int*
-   * is a coercion we need to capture. It is also useful to capture that unique<2> int* is not coerced.
-  */
-  def getPointerCoercionFromClassCoercion(originalParam: Type[Pre], givenT: Type[Pre]):
-  (Seq[CoercedArg], Seq[PointerType[Pre]]) =
-    (originalParam, givenT) match {
-      case (TClass(clsParam, Seq()), TClass(clsGiven, Seq())) =>
-        if(clsParam.decl.decls.length != clsGiven.decl.decls.length) ???
-        clsParam.decl.decls.zip(clsGiven.decl.decls).map{
-          case (fieldP, fieldG) => ???
-        }
-        ???
-      case (originalT@TClassUnique(inner, _), TClass(cls, typeArgs)) =>
-        // No type args
-        if(!(typeArgs.isEmpty && inner == cls)) ???
-        val m = TypeQualifierCoercion.getUniqueMap(originalT)
-
-        val (resCoercions, resPointers) = m.map{case (field, u) =>
-          field.t match {
-            case t: PointerType[Pre] =>
-              // This pointer gets coerced. But the element type of the pointer could contain further
-              // pointers, so we need to check that.
-              (CoercedArg(TPointerUnique(t.element, u), t), getPointers(t.element))
-            case _ => ???
-          }
-        }.foldLeft( (Seq[CoercedArg](), Seq[PointerType[Pre]]()) ){
-          case ((resCoercions, resPointers), (coerce, pointers)) => (resCoercions :+ coerce, resPointers ++ pointers)
-        }
-
-        val resPointers2 = cls.decl.decls.flatMap {
-          // All fields which were not in the map, are not coerced, but could still contain pointers
-          case field: InstanceField[Pre] if !m.contains(field) =>
-            getPointers(field.t)
-          case _ => Seq()
-        }
-        (resCoercions, resPointers++resPointers2)
-      case (TClass(cls, typeArgs), givenT@TClassUnique(inner, _)) =>
-        // No type args
-        if(!(typeArgs.isEmpty && inner == cls)) ???
-        val m = TypeQualifierCoercion.getUniqueMap(givenT)
-
-        val (resCoercions, resPointers) = m.map{case (field, u) =>
-          field.t match {
-            case t: PointerType[Pre] =>
-              // Any fields which are in the resulting unique map, are pointers that are coerced.
-              // And again we check the element type of the pointer, since that could contain pointers.
-              (CoercedArg(t, TPointerUnique(t.element, u)), getPointers(t.element))
-            case _ => ???
-          }
-        }.foldLeft( (Seq[CoercedArg](), Seq[PointerType[Pre]]()) ){
-          case ((resCoercions, resPointers), (coerce, pointers)) => (resCoercions :+ coerce, resPointers ++ pointers)
-        }
-
-        // Again, anything not in the unique map is not coerced. So check those fields for pointers
-        val resPointers2 = cls.decl.decls.flatMap {
-          case field: InstanceField[Pre] if !m.contains(field) =>
-            getPointers(field.t)
-          case _ => Seq()
-        }
-        (resCoercions, resPointers++resPointers2)
-
-      case (originalParam@TClassUnique(innerO, _), givenT@TClassUnique(innerG, _)) =>
-        // No type args
-        if(!(innerO == innerG)) ???
-        val originalM = TypeQualifierCoercion.getUniqueMap(originalParam)
-        val givenM = TypeQualifierCoercion.getUniqueMap(givenT)
-
-        /* The most interesting case! We have two unique map
-         * 1)If the unique maps contain the same field:
-         * a) the unique numbers are the same, there is no coercion
-         * b) the unique numbers are differnet, there is a coercion
-         * 2) For each field which isn't contained in the other map:
-         *    There is a coercion!
-         * 3) Each field which is not contained in either map:
-         *    There is no coercion! But still needs to be checked for pointers
-         */
-
-
-        val (resCoercions1, resPointers1) =  originalM.map { case (field, uO) =>
-          field.t match {
-            case t: PointerType[Pre] =>
-              val coercion = givenM.get(field) match {
-                case Some(uG) if uO == uG => Seq()
-                case Some(uG) => Seq(CoercedArg(TPointerUnique(t.element, uO), TPointerUnique(t.element, uG)))
-                case None => Seq(CoercedArg(TPointerUnique(t.element, uO), TPointer(t.element)))
-              }
-              (coercion, getPointers(t))
-            case _ => ???
-          }
-        }.foldLeft( (Seq[CoercedArg](), Seq[PointerType[Pre]]()) ){
-          case ((resCoercions, resPointers), (coerce, pointers)) => (resCoercions ++ coerce, resPointers ++ pointers)
-        }
-
-        val (resCoercions2, resPointers2) =  givenM.map { case (field, uG) =>
-          field.t match {
-            case t: PointerType[Pre] =>
-              givenM.get(field) match {
-                case None => (Seq(CoercedArg(TPointer(t.element), TPointerUnique(t.element, uG))), getPointers(t))
-                // If it was both unique in given and original, it was already covered above
-                case Some(_) => (Seq(), Seq())
-              }
-            case _ => ???
-          }
-        }.foldLeft( (Seq[CoercedArg](), Seq[PointerType[Pre]]()) ){
-          case ((resCoercions, resPointers), (coerce, pointers)) => (resCoercions ++ coerce, resPointers ++ pointers)
-        }
-        // And check all the fields which were not in any unique maps
-        val resPointers3 = innerO.decl.decls.flatMap {
-          case field: InstanceField[Pre] if !originalM.contains(field) && !givenM.contains(field) =>
-            getPointers(field.t)
-          case _ => Seq()
-        }
-        (resCoercions1 ++ resCoercions2, resPointers1++resPointers2++resPointers3)
-      // Should only work for class types
-      case _ => ???
-  }
 
   def checkCoercion(original: Type[Pre], result: Type[Pre], coercionMap: Map[Type[Pre], Type[Pre]],
                     calledOrigin: Origin): Unit = {
@@ -400,9 +284,7 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
 
   def getCoercionPerParam(paramT: Type[Pre], argT: Type[Pre]): (Seq[CoercedArg], Seq[PointerType[Pre]]) = (paramT, argT) match {
     // Unpack pointers first, since the outer pointer is structurally the same
-    case (p@TPointer(paramT), a@TPointer(argT)) =>
-      addFirst(CoercedArg(p, a), getCoercionPerParam(paramT, argT))
-    case (p@TPointerUnique(paramT, paramU), a@TPointerUnique(argT, argU)) if paramU == argU =>
+    case (p@TPointer(paramT, paramU), a@TPointer(argT, argU)) if paramU == argU =>
       addFirst(CoercedArg(p, a), getCoercionPerParam(paramT, argT))
     // Now we should have two different pointers
     case (p: PointerType[Pre], a: PointerType[Pre]) =>
@@ -456,9 +338,8 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
       // No coercions, return empty map
       return Map()
     }
-    seenClassConversions.push(mutable.Set())
-    seenClasses.push(mutable.Set())
-
+    seenClassConversions.having(mutable.Set()){
+    seenClasses.having(mutable.Set()){
 
     var (coercions, nonCoercedPointers) = args.foldLeft(Seq[CoercedArg](), Seq[PointerType[Pre]]()){
       case (res, (fArgs, invArgs)) =>  combine(res, getCoercionAndPointers(fArgs, invArgs))
@@ -476,10 +357,8 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
     // If any nonCoercedPointer is in the coercion set, invocation is wrong
     if(m.keySet.intersect(nonCoercedPointers.toSet).nonEmpty)
       throw DisallowedQualifiedMethodCoercion(calledOrigin)
-
-    seenClassConversions.pop()
-    seenClasses.pop()
     m
+    }}
   }
 
 

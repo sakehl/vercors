@@ -31,9 +31,9 @@ trait DerefImpl[G] extends ExprImpl[G] with DerefOps[G] {
     classT.asClass.map(_.instantiate(ref.decl.t)).getOrElse(ref.decl.t)
   }
 
-  def addUniquePointer(cls: Ref[G, vct.col.ast.Class[G]], unique: BigInt): Type[G] = {
-    getT(TClass(cls, Seq())) match {
-      case TPointer(inner) => TPointer(TUnique(inner, unique))
+  def addUniquePointer(inner: Type[G], unique: BigInt): Type[G] = {
+    getT(inner) match {
+      case TPointer(inner, _) => TPointer(inner, Some(unique))
       case _ => ???
     }
   }
