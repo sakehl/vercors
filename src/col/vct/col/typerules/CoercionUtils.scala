@@ -238,7 +238,9 @@ case object CoercionUtils {
         getPointerCoercion(s, t, innerLeft, innerRight).getOrElse(return None)
       case (TNonNullPointer(innerType, uniqueL), TPointer(element, uniqueR)) if uniqueL == uniqueR &&
         innerType == element =>
-        CoerceNonNullPointer(innerType)
+        CoerceNonNullPointer(target)
+      case (TNonNullConstPointer(innerType), TConstPointer(element)) if innerType == element =>
+        CoerceNonNullPointer(target)
       case (TNonNullPointer(a, uniqueL), TNonNullPointer(b, uniqueR)) if uniqueL == uniqueR &&
           getAnyCoercion(a, b).isDefined =>
         CoerceIdentity(target)
@@ -567,8 +569,6 @@ case object CoercionUtils {
       case t: PointerType[G] => Some((CoerceIdentity(source), t))
       case t: CTPointer[G] => Some((CoerceIdentity(source), TPointer(t.innerType, None)))
       case t: CTArray[G] => Some((CoerceCArrayPointer(t.innerType), TPointer(t.innerType, None)))
-      case t: TNonNullPointer[G] =>
-        Some((CoerceIdentity(source), TPointer(t.element, None)))
       case t: CPPPrimitiveType[G] => chainCPPCoercion(t, getAnyPointerCoercion)
       case t: CPPTArray[G] =>
         Some((CoerceCPPArrayPointer(t.innerType), TPointer(t.innerType, None)))

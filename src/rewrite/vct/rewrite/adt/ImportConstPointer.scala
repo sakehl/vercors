@@ -61,11 +61,13 @@ case class ImportConstPointer[Pre <: Generation](importer: ImportADTImporter)
 
   def isConstPointer(e: Expr[Pre]): Boolean = e.t match {
     case TConstPointer(_) => true
+    case TNonNullConstPointer(_) => true
     case _ => false
   }
 
   def getInner(t: Type[Pre]): Type[Pre] = t match {
     case TConstPointer(inner) => inner
+    case TNonNullConstPointer(inner) => inner
     case _ => ???
   }
 
@@ -74,12 +76,14 @@ case class ImportConstPointer[Pre <: Generation](importer: ImportADTImporter)
   ): Expr[Post] =
     coercion match {
       case CoerceNullPointer(TConstPointer(_)) => OptNone()
+      case CoerceNonNullPointer(TConstPointer(_)) => OptSome(e)
       case other => super.applyCoercion(e, other)
     }
 
   override def postCoerce(t: Type[Pre]): Type[Post] =
     t match {
       case TConstPointer(inner) => TOption(TAxiomatic(pointerAdt.ref, Seq(dispatch(inner))))
+      case TNonNullConstPointer(inner) => TAxiomatic(pointerAdt.ref, Seq(dispatch(inner)))
       case other => other.rewriteDefault()
     }
 
@@ -89,6 +93,22 @@ case class ImportConstPointer[Pre <: Generation](importer: ImportADTImporter)
         ??? // Should not happen?
       case other => other.rewriteDefault()
     }
+
+  def isNullable(t: Type[Pre]): Boolean = t match {
+    case TConstPointer(_) => true
+    case TNonNullConstPointer(_) => false
+  }
+
+  def getPointer(pointer: Expr[Pre], blame: Blame[OptionNone])(implicit o: Origin): Expr[Post] = {
+    val nullable = isNullable(pointer.t)
+    if(nullable){
+      OptGet(dispatch(pointer))(
+        blame
+      )
+    } else {
+      dispatch(pointer)
+    }
+  }
 
   override def postCoerce(e: Expr[Pre]): Expr[Post] = {
     implicit val o: Origin = e.o
@@ -101,9 +121,7 @@ case class ImportConstPointer[Pre <: Generation](importer: ImportADTImporter)
             FunctionInvocation[Post](
               ref = pointerAdd.ref,
               args = Seq(
-                OptGet(dispatch(pointer))(
-                  PointerNullOptNone(sub.blame, pointer)
-                ),
+                getPointer(pointer, PointerNullOptNone(sub.blame, pointer)),
                 dispatch(index),
               ),
               typeArgs = Seq(inner),
@@ -121,7 +139,7 @@ case class ImportConstPointer[Pre <: Generation](importer: ImportADTImporter)
           FunctionInvocation[Post](
             ref = pointerAdd.ref,
             args = Seq(
-              OptGet(dispatch(pointer))(PointerNullOptNone(add.blame, pointer)),
+              getPointer(pointer, PointerNullOptNone(add.blame, pointer)),
               dispatch(offset),
             ),
             typeArgs = Seq(inner),
@@ -130,9 +148,6 @@ case class ImportConstPointer[Pre <: Generation](importer: ImportADTImporter)
           )(NoContext(PointerBoundsPreconditionFailed(add.blame, pointer)))
         )
       case deref @ DerefPointer(pointer) if isConstPointer(pointer) =>
-//        val c_pointer = OptGet(dispatch(pointer))(PointerNullOptNone(sub.blame, pointer))
-//        //        val blame = NoContext(PointerBoundsPreconditionFailed(sub.blame, index))
-//        SeqSubscript(c_pointer, dispatch(index))(PanicBlame("TODO: pointer subscript out of bounds"))
         val inner = dispatch(getInner(pointer.t))
         FunctionInvocation[Post](
           ref = pointerDeref.ref,
@@ -141,9 +156,7 @@ case class ImportConstPointer[Pre <: Generation](importer: ImportADTImporter)
               ref = pointerAdd.ref,
               // Always index with zero, otherwise quantifiers with pointers do not get triggered
               args = Seq(
-                OptGet(dispatch(pointer))(
-                  PointerNullOptNone(deref.blame, pointer)
-                ),
+                getPointer(pointer, PointerNullOptNone(deref.blame, pointer)),
                 const(0),
               ),
               typeArgs = Seq(inner),
@@ -163,7 +176,7 @@ case class ImportConstPointer[Pre <: Generation](importer: ImportADTImporter)
             typeArgs = Some((pointerAdt.ref, Seq(inner))),
             ref = pointerBlock.ref,
             args = Seq(
-              OptGet(dispatch(pointer))(PointerNullOptNone(len.blame, pointer))
+              getPointer(pointer, PointerNullOptNone(len.blame, pointer))
             ),
           ))
       case off @ PointerBlockOffset(pointer) if isConstPointer(pointer) =>
@@ -172,7 +185,7 @@ case class ImportConstPointer[Pre <: Generation](importer: ImportADTImporter)
           typeArgs = Some((pointerAdt.ref, Seq(inner))),
           ref = pointerOffset.ref,
           args = Seq(
-            OptGet(dispatch(pointer))(PointerNullOptNone(off.blame, pointer))
+            getPointer(pointer, PointerNullOptNone(off.blame, pointer))
           ),
         )
       case pointerLen @ PointerLength(pointer) if isConstPointer(pointer) =>

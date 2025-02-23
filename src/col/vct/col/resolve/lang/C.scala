@@ -304,8 +304,6 @@ case object C extends LazyLogging {
           defn.ref.get match {
             case RefTypeDef(decl) =>
               getTypeFromTypeDef(decl, platformContext)
-              //getTypeFromTypeDef(decl.decl, platformContext)
-            // MERGE TODO case RefTypeDef(decl) => getTypeFromTypeDef(decl)
             case _ => ???
           }
         case Seq(CSpecificationType(typ)) => typ
@@ -516,6 +514,8 @@ case object C extends LazyLogging {
           case _ => None
         }
       case struct: CTStruct[G] => getCStructDeref(struct.ref.decl, name)
+      case struct: CTStructUnique[G] =>
+        findStruct(struct, name)
       case CTCudaVec() =>
         val ref = obj.asInstanceOf[CLocal[G]].ref.get
           .asInstanceOf[RefCudaVec[G]]

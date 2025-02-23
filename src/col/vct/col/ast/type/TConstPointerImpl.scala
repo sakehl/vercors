@@ -8,5 +8,5 @@ trait TConstPointerImpl[G] extends TConstPointerOps[G] { this: TConstPointer[G] 
   val element: Type[G] = TConst[G](pureElement)
   val unique = None
   override def layout(implicit ctx: Ctx): Doc =
-    Text("const_pointer") <> open <> element <> close
+    Text("const_pointer") <> open <> pureElement <> close
 }

@@ -11,6 +11,4 @@ trait NewPointerImpl[G] {
   val size: Expr[G]
 
   override def precedence: Int = Precedence.POSTFIX
-  override def layout(implicit ctx: Ctx): Doc =
-    Text("new") <+> element <> "[" <> size <> "]"
 }

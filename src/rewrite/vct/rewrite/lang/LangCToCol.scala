@@ -388,9 +388,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   private def getBaseType[G](t: Type[G]): Type[G] =
     t match {
       case CPrimitiveType(specs) =>
-        // Is this not needed?
-        ???
-//        getBaseType(C.getPrimitiveType(specs, platformContext, Some(t)))
+        getBaseType(C.getPrimitiveType(specs, None, Some(t)))
       case TUnique(it, _) => getBaseType(it)
       case TConst(it) => getBaseType(it)
       case t@TClassUnique(cls, _) => t.inner

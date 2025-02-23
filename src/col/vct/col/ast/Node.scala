@@ -160,6 +160,9 @@ final case class TNonNullPointer[G](element: Type[G], unique: Option[BigInt])(
 final case class TConstPointer[G](pureElement: Type[G])(
   implicit val o: Origin = DiagnosticOrigin
 ) extends PointerType[G] with TConstPointerImpl[G]
+final case class TNonNullConstPointer[G](pureElement: Type[G])(
+  implicit val o: Origin = DiagnosticOrigin
+) extends PointerType[G] with TNonNullConstPointerImpl[G]
 
 sealed trait CompositeType[G] extends Type[G] with CompositeTypeImpl[G]
 sealed trait SizedType[G] extends CompositeType[G] with SizedTypeImpl[G]
@@ -1080,7 +1083,7 @@ final case class CoerceNullAnyClass[G]()(implicit val o: Origin)
 final case class CoerceNullPointer[G](target: Type[G])(
     implicit val o: Origin
 ) extends Coercion[G] with CoerceNullPointerImpl[G]
-final case class CoerceNonNullPointer[G](elementType: Type[G])(
+final case class CoerceNonNullPointer[G](target: Type[G])(
     implicit val o: Origin
 ) extends Coercion[G] with CoerceNonNullPointerImpl[G]
 final case class CoerceNullEnum[G](targetEnum: Ref[G, Enum[G]])(
@@ -2058,6 +2061,10 @@ final case class NewNonNullPointerArray[G](element: Type[G], size: Expr[G], uniq
     val blame: Blame[ArraySizeError]
 )(implicit val o: Origin)
     extends NewPointer[G] with NewNonNullPointerArrayImpl[G]
+final case class NewNonNullConstPointerArray[G](element: Type[G], size: Expr[G])(
+  val blame: Blame[ArraySizeError]
+)(implicit val o: Origin)
+  extends NewPointer[G] with NewNonNullConstPointerArrayImpl[G]
 
 final case class UniquePointerCoercion[G](e: Expr[G], t: Type[G])(
   implicit val o: Origin

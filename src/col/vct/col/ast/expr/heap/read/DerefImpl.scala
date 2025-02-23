@@ -33,7 +33,7 @@ trait DerefImpl[G] extends ExprImpl[G] with DerefOps[G] {
 
   def addUniquePointer(inner: Type[G], unique: BigInt): Type[G] = {
     getT(inner) match {
-      case TPointer(inner, _) => TPointer(inner, Some(unique))
+      case TPointer(inner, _) => TPointer(TUnique(inner, unique), None)
       case _ => ???
     }
   }

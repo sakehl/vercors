@@ -499,11 +499,13 @@ case class EncodeArrayValues[Pre <: Generation]() extends Rewriter[Pre] {
     def makeCast(
         access: Variable[Post] => Expr[Post],
         innerType: Type[Post],
-        unique: Option[BigInt]
+        unique: Option[BigInt],
+        isConst: Boolean
     ): Expr[Post] = {
       implicit val o: Origin = arrayCreationOrigin
       val zero = const[Post](0)
-      val cast = Cast(access(i), TypeValue(TNonNullPointer(innerType, unique)))
+      val t = if(!isConst) TNonNullPointer(innerType, unique) else TNonNullConstPointer(innerType)
+      val cast = Cast(access(i), TypeValue(t))
       val body = (zero <= i.get && i.get < size) ==> (cast === access(i))
       Forall(Seq(i), Seq(Seq(cast)), body)
     }
@@ -514,7 +516,7 @@ case class EncodeArrayValues[Pre <: Generation]() extends Rewriter[Pre] {
       case _: TClass[_] => true
       case _ => false
     }
-  /*MERGE TODO THis method needs to be called correctly now*/
+
   def makePointerCreationMethodFor(
       elementType: Type[Pre],
       nullable: Boolean,
@@ -536,8 +538,6 @@ case class EncodeArrayValues[Pre <: Generation]() extends Rewriter[Pre] {
       val j = new Variable[Post](TInt())(o.where(name = "j"))
       val access =
         (i: Variable[Post]) => PointerSubscript(result, i.get)(FramedPtrOffset)
-      val pointerAccess =
-        (i: Variable[Post]) => PointerAdd(result, i.get)(FramedPtrOffset)
 
       val makeStruct = MakeAnns(
         i,
@@ -580,22 +580,26 @@ case class EncodeArrayValues[Pre <: Generation]() extends Rewriter[Pre] {
           ensures &* foldStar(permFields.map(_._1))
 
       val innerType = dispatch(elementType)
-      ensures =
-        ensures &* makeStruct.makeCast(
-          i => PointerAdd(result, i.get)(FramedPtrOffset),
-          innerType, unique
-        )
+      // TODO: Ask alexander what this is supposed to add. I did not want to copy all the
+      // applyAsTypeFunction in ImportPointer towards ImportConstPointer to get this to work
+      if(!isConst) {
+        ensures =
+          ensures &* makeStruct.makeCast(
+            i => PointerAdd(result, i.get)(FramedPtrOffset),
+            innerType, unique, isConst
+          )
+      }
 
       ensures =
         if (nullable) { Star(Implies(result !== Null(), ensures), tt) }
         else { ensures }
 
       val returnT = {
-        if(isConst) TConstPointer(innerType)
+        if(isConst && !nullable) TNonNullConstPointer(innerType)
+        else if(isConst) TConstPointer(innerType)
         else if(!nullable) TNonNullPointer(innerType, unique)
         else TPointer(innerType, unique)
       }
-      val innerTypeS = innerType.toString
       val name = if(isConst) "make_const_pointer_array_" + innerType.toString
         else "make_pointer_array_" + innerType.toString + "" + (if(nullable) "_nullable" else "")
       procedure(
@@ -638,7 +642,6 @@ case class EncodeArrayValues[Pre <: Generation]() extends Rewriter[Pre] {
           Nil,
         )(ArrayCreationFailed(newArr))
       case newPointerArr @ NewPointerArray(element, size, unique) =>
-      // MERGE TODO: Check makePointerCreationMethodFor type signature
         val method = pointerArrayCreationMethods
           .getOrElseUpdate((element, unique), makePointerCreationMethodFor(element, nullable = true, unique, isConst=false))
         ProcedureInvocation[Post](
@@ -665,6 +668,17 @@ case class EncodeArrayValues[Pre <: Generation]() extends Rewriter[Pre] {
       case ncpa @ NewConstPointerArray(element, size) =>
         val method = constPointerArrayCreationMethods
           .getOrElseUpdate((element), makePointerCreationMethodFor(element, nullable = true, None, isConst=true))
+        ProcedureInvocation[Post](
+          method.ref,
+          Seq(dispatch(size)),
+          Nil,
+          Nil,
+          Nil,
+          Nil,
+        )(PointerArrayCreationFailed(ncpa, ncpa.blame))
+      case ncpa @ NewNonNullConstPointerArray(element, size) =>
+        val method = constPointerArrayCreationMethods
+          .getOrElseUpdate((element), makePointerCreationMethodFor(element, nullable = false, None, isConst=true))
         ProcedureInvocation[Post](
           method.ref,
           Seq(dispatch(size)),

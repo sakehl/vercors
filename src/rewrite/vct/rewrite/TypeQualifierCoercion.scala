@@ -6,7 +6,7 @@ import vct.col.rewrite.{Generation, Rewriter, RewriterBuilder}
 import vct.col.typerules.CoercingRewriter
 import vct.result.VerificationError.UserError
 import hre.util.ScopedStack
-import vct.col.ref.Ref
+import vct.col.ref.{LazyRef, Ref}
 
 import scala.collection.mutable
 
@@ -124,6 +124,10 @@ case class TypeQualifierCoercion[Pre <: Generation]()
         val (info, newT) = getUnqualified(t)
         if(info.const) NewConstPointerArray(newT, dispatch(size))(npa.blame)
         else NewPointerArray(newT, dispatch(size), info.unique)(npa.blame)
+      case npa @ NewNonNullPointerArray(t, size, _) =>
+        val (info, newT) = getUnqualified(t)
+        if(info.const) NewNonNullConstPointerArray(newT, dispatch(size))(npa.blame)
+        else NewNonNullPointerArray(newT, dispatch(size), info.unique)(npa.blame)
       case newO@NewObjectUnique(cls, _) =>
         val map = TypeQualifierCoercion.getUniqueMap(newO.t.asInstanceOf[TClassUnique[Pre]])
         val c = cls.decl
@@ -197,10 +201,12 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
 
   case class CoercedArg(originalParamT: Type[Pre], givenArgT: Type[Pre])
 
+
+
   def getPointers(t: Type[Pre]): Seq[PointerType[Pre]] = {
     def getPointersRec(n: Node[Pre]): Seq[PointerType[Pre]] = n match {
       case t: PointerType[Pre] => Seq(t)
-      case t@TClassUnique(cls, _) =>
+      case t@TClassUnique(_, _) =>
         val m = TypeQualifierCoercion.getUniqueMap(t)
         t.cls.decl.decls.flatMap {
           case field: InstanceField[Pre] if m.contains(field) =>
@@ -208,7 +214,12 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
             val element = field.t.asPointer.get.element
             // But also consider the element type of the pointer
             Seq(TPointer(element, Some(m(field)))) ++ getPointers(element)
-          case field: InstanceField[Pre] => getPointers(field.t)
+          case field: InstanceField[Pre] =>
+            // TODO: Ask alexander, but now all fields are also considered pointers right? With the same field
+            // as a regular pointer?
+            // If so, then I need to add this field towards the pointer we find. Something like
+            // getPointers(field.t) :+ TPointer(field.t, None)
+            getPointers(field.t) 
           case _: JavaClassDeclaration[Pre] | _: PVLClassDeclaration[Pre] => ???
           case _ => Seq()
         }
@@ -226,11 +237,18 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
         }
       case _ => Seq()
     }
-    // Just go over all subnodes of the type. Only TClass(Unique) is a special instance, since
-    // flatCollect does not visit references (and TClass contains a reference towards the class)
-//    TODO: This is wrong since TClassUnique(TClass())) is valid, so TClass will also be visited
-    ???
-    t.flatCollect(getPointersRec(_))
+    // Just go over all subnodes of the type. Only TClassUnique is a special instance, since it contains
+    // a TClass as explicit node
+    val builder = IndexedSeq.newBuilder[PointerType[Pre]]
+    def visitTypes(n: Node[Pre]): Unit = {
+      builder ++= getPointersRec(n)
+      n match {
+        case TClassUnique(_, _) =>
+        case n => n.subnodes.foreach(visitTypes)
+      }
+    }
+    visitTypes(t)
+    builder.result()
   }
 
 
@@ -504,6 +522,12 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
       case e@SharedMemSize(p) => e.rewrite(pointer=rewriteAnyPointerReturn(p))
       // We store the coercion for the return type
       case u: UniquePointerCoercion[Pre] => rewriteCoerce(u.e, u.t)
+      case Result(ref) if methodCopyTypes.nonEmpty =>
+        val m = methodCopyTypes.top
+        ref.decl match {
+        case f: Function[Pre] => Result(new LazyRef(abstractFunction.get(f, m).get))
+        case p: Procedure[Pre] => Result(new LazyRef(abstractProcedure.get(p, m).get))
+      }
       case other => other.rewriteDefault()
     }
   }

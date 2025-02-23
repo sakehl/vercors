@@ -16,7 +16,7 @@ class StructQualifierSpec extends VercorsSpec {
 
   /*@
     context xs != NULL && xs2 != NULL;
-    context x1 != NULL ** \pointer_length(x1)==1 ** Perm(x1, write) ** Perm(*x1, write);
+    requires x1 != NULL ** \pointer_length(x1)==1 ** Perm(x1, write) ** Perm(*x1, write);
     context Perm(v, write) ** v.xxs != NULL;
   @*/
 
@@ -164,7 +164,7 @@ class StructQualifierSpec extends VercorsSpec {
   };
 
   /*@
-    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(&v->xs, 1\100);
     ensures \result == v->xs;
   @*/
   /*@ unique<1> @*/ int* get_xs(/*@unique_pointer_field<xs, 1>@*/ struct vec* v){
@@ -188,7 +188,7 @@ class StructQualifierSpec extends VercorsSpec {
   };
 
   /*@
-    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(&v->xs, 1\100);
     ensures \result == v->xs;
   @*/
   int* get_xs(struct vec* v){
@@ -213,7 +213,7 @@ class StructQualifierSpec extends VercorsSpec {
   };
 
   /*@
-    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(&v->xs, 1\100);
     ensures \result == v->xs;
   @*/
   /*@unique<1>@*/ int* get_xs(/*@unique_pointer_field<xs, 1>@*/ struct vec* v){
@@ -237,7 +237,7 @@ struct vec {
   };
 
   /*@
-    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(&v->xs, 1\100);
     ensures v->xs  == \result;
   @*/
   int* get_xs(struct vec* v){
@@ -669,7 +669,7 @@ struct vec {
   };
 
   /*@
-    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(&v->xs, 1\100);
     ensures v->xs  == \result;
   @*/
   int* get_xs(struct vec* v){
@@ -714,7 +714,7 @@ struct vec {
   };
 
   /*@
-    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(&v->xs, 1\100);
     ensures \result == v->xs;
   @*/
   int* get_xs(struct vec* v){
@@ -740,7 +740,7 @@ struct vec {
   /*@
     given int* ys;
     yields int* res;
-    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(&v->xs, 1\100);
     ensures v->xs  == \result;
   @*/
   int* get_xs(struct vec* v){
@@ -766,7 +766,7 @@ struct vec {
   /*@
     given int* ys;
     yields int* res;
-    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(v->xs, 1\100);
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(&v->xs, 1\100);
     ensures v->xs  == \result;
   @*/
   int* get_xs(struct vec* v){

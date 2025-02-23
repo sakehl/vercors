@@ -564,6 +564,7 @@ case class LangSpecificToCol[Pre <: Generation](
           cint
         case t: CTArray[Pre] => c.arrayType(t)
         case t: CTStruct[Pre] => c.structType(t)
+        case t: CTStructUnique[Pre] => c.structType(t)
         case t: LLVMTInt[Pre] => TInt()(t.o)
         case t: LLVMTFloat[Pre] => TFloat(t.exponent, t.mantissa)
         case t: LLVMTStruct[Pre] => llvm.structType(t)
