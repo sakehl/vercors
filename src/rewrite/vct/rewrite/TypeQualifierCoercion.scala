@@ -206,20 +206,6 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
   def getPointers(t: Type[Pre]): Seq[PointerType[Pre]] = {
     def getPointersRec(n: Node[Pre]): Seq[PointerType[Pre]] = n match {
       case t: PointerType[Pre] => Seq(t)
-      case t@TClassUnique(_, _) =>
-        val m = TypeQualifierCoercion.getUniqueMap(t)
-        t.cls.decl.decls.flatMap {
-          case field: InstanceField[Pre] if m.contains(field) =>
-            // Field which are in the unique map should be pointers
-            val element = field.t.asPointer.get.element
-            // But also consider the element type of the pointer
-            Seq(TPointer(element, Some(m(field)))) ++ getPointers(element)
-          case field: InstanceField[Pre] =>
-            // Fields are also pointers
-            getPointers(field.t) :+ TPointer(field.t, None)
-          case _: JavaClassDeclaration[Pre] | _: PVLClassDeclaration[Pre] => ???
-          case _ => Seq()
-        }
       case tc: TClass[Pre] =>
         // Do not support type args yet. We should instantiate them or something?
         if(tc.typeArgs.nonEmpty) ???
@@ -247,17 +233,6 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
     }
     visitTypes(t)
     builder.result()
-  }
-
-
-  def checkCoercion(original: Type[Pre], result: Type[Pre], coercionMap: Map[Type[Pre], Type[Pre]],
-                    calledOrigin: Origin): Unit = {
-    val rec = (l, r) => checkCoercion(l, r, coercionMap, calledOrigin)
-    (original, result) match {
-    case (l: PointerType[Pre], r: PointerType[Pre]) =>
-      if(coercionMap.contains(l) && coercionMap(l) != r) throw DisallowedQualifiedMethodCoercion(calledOrigin)
-      rec(l.element, r.element)
-  }
   }
 
   def removeCoercions(args: Seq[Expr[Pre]]): Seq[Expr[Post]] = args.map({
@@ -377,8 +352,6 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
     }}
   }
 
-
-
   def rewriteProcedureInvocation(inv: ProcedureInvocation[Pre], returnCoercion: Option[CoercedArg], anyReturnPointer: Boolean = false): ProcedureInvocation[Post] = {
     val f = inv.ref.decl
     val m = createMapAndCheck(
@@ -480,7 +453,6 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
         t.asClass.get.cls.decl.decls(idx).asInstanceOf[InstanceField[Post]]
       })
     )
-
 
   override def dispatch(e: Location[Pre]): Location[Post] = e match {
     case loc: FieldLocation[Pre] =>
