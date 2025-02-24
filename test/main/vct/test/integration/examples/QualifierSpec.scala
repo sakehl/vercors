@@ -912,6 +912,13 @@ struct vec {
 int f(struct vec v){
     /*@unique<1>@*/ int* n = (/*@unique<1>@*/ int*) &v;
 }
+"""
 
+  vercors should error withCode "unsupportedCast" in "Cast int to unique pointer" c
+    """
+void f(){
+  int x = 10342234;
+  /*@unique<1>@*/ int* n = (/*@unique<1>@*/ int *) x;
+}
 """
 }
