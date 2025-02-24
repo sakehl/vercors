@@ -290,8 +290,14 @@ trait SilverBackend
             val apply = get[col.Invocation[_]](node)
             apply.ref.decl.blame.blame(getDecreasesBlame(apply, reason))
           case MethodTerminationError(node: Infoed, reason, _) =>
-            val apply = get[col.InvokingNode[_]](node)
-            apply.ref.decl.blame.blame(getDecreasesBlame(apply, reason))
+            node match {
+              case silver.While(_, _, _) =>
+                val loop = get[col.Loop[_]](node)
+                loop.contract.asInstanceOf[col.LoopInvariant[_]].blame.blame(getDecreasesWhileBlame(loop, reason))
+              case _ =>
+                val apply = get[col.InvokingNode[_]](node)
+                apply.ref.decl.blame.blame(getDecreasesBlame(apply, reason))
+            }
           case LoopTerminationError(node: Infoed, reason, _) =>
             val decreases = get[col.DecreasesClause[_]](node)
             info(node).invariant.get.blame
@@ -388,10 +394,14 @@ trait SilverBackend
       case r => throw new NotImplementedError("Missing: " + r)
     }
 
+  def getDecreasesWhileBlame(loop: col.Loop[_], reason: ErrorReason) : blame.LoopInvariantFailure = {
+    blame.DecreaseTerminationMeasureFailedDueToWhile(loop)
+  }
+
   def getDecreasesBlame(invoking: col.InvokingNode[_], reason: ErrorReason) : blame.TerminationMeasureFailed = {
     reason match {
       case TerminationConditionFalse(node: Infoed) =>
-        val procedure = get[col.Procedure[_]](node)
+        val procedure = get[col.ContractApplicable[_]](node)
         blame.CallTerminationMeasureFailed(invoking, procedure)
       case _ => blame.DecreaseTerminationMeasureFailed(
         invoking.ref.decl,

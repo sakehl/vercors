@@ -362,8 +362,19 @@ case class DecreaseTerminationMeasureFailed(
     s"${apply.o.inlineContextText} may not terminate, since `${measure.o.inlineContextText}` is not decreased or not bounded"
 }
 
+case class DecreaseTerminationMeasureFailedDueToWhile(
+                                             node: Loop[_],
+                                           ) extends LoopInvariantFailure with NodeVerificationFailure {
+  override def code: String = "loopTerminationFailed"
+  override def position: String = node.o.shortPositionText
+  override def descInContext: String =
+    "Loop may not terminate, since no decrease clause is given"
+  override def inlineDescWithSource(source: String): String =
+    s"Loop may not terminate, since ${node.o.inlineContextText} is not proven to be decreasing with a decrease clause"
+}
+
 case class CallTerminationMeasureFailed(apply: InvokingNode[_],
-  calledMethod: AbstractMethod[_],
+  calledMethod: ContractApplicable[_],
   ) extends TerminationMeasureFailed {
   override def code: String = "callDecreasesFailed"
   override def position: String = calledMethod.o.shortPositionText
