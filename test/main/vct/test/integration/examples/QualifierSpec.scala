@@ -2,6 +2,67 @@ package vct.test.integration.examples
 
 import vct.test.integration.helper.VercorsSpec
 
+class ConstQualifierSpec extends VercorsSpec {
+  vercors should verify using silicon in "Assign to init const" c """void f(){const int x = 2; /*@ assert x == 2; @*/}"""
+  vercors should error withCode "disallowedConstAssignment" in "Assign to local const" c """void f(){const int x; x = 0;}"""
+  vercors should error withCode "disallowedConstAssignment" in "Assign to param const" c """void f(const int x){x = 0;}"""
+
+  vercors should verify using silicon in "Assign to init const array" c """void f(){const int x[2] = {0, 2}; /*@ assert x[1] == 2; @*/}"""
+  vercors should error withCode "disallowedConstAssignment" in "Assign to local array of const" c """void f(){const int x[2] = {0, 2}; x[0] = 1;}"""
+  vercors should error withCode "disallowedConstAssignment" in "Assign to local pointer of const" c """void f(){const int *x; x[0] = 1;}"""
+  vercors should error withCode "disallowedConstAssignment" in "Assign to param pointer of const" c """void f(const int *x){x[0] = 1;}"""
+
+  vercors should verify using silicon in "Assign const array to const pointer" c """void f(const int* y){const int x[2] = {0, 2}; y = x;}"""
+  vercors should error withCode "resolutionError:type" in "Assign const array to non-const pointer" c """void f(int* y){const int x[2] = {0, 2}; x = y;}"""
+
+  vercors should error withCode "disallowedConstAssignment" in "Assign const pointer" c """void f(int* const y){int* const x; y = x;}"""
+  vercors should verify using silicon in "Assign element of const pointer" c
+    """/*@ context x!=NULL ** \pointer_length(x) == 1 ** Perm(&x[0], write); ensures x[0] == 1;@*/
+  void f(int * const x){x[0] = 1;}"""
+
+  vercors should verify using silicon in "Const pointers add" c
+"""
+#include <stdlib.h>
+
+/*@
+  context_everywhere n > 0;
+  context_everywhere x0 != NULL ** \pointer_length(x0) == n;
+  context_everywhere x1 != NULL ** \pointer_length(x1) == n;
+  ensures \result != NULL ** \pointer_length(\result) == n ** (\forall* int i; 0<=i && i<n; Perm(&\result[i], write));
+  ensures (\forall int i; 0 <= i && i <n; \result[i] == x0[i] + x1[i]);
+@*/
+int* add(int n, const int* x0, const int* x1){
+  int* res = (int*) malloc(n*sizeof(int));
+  //@ assume res != NULL;
+  /*@
+    loop_invariant 0 <= i && i <= n;
+    loop_invariant res != NULL ** \pointer_length(res) == n ** (\forall* int i; 0<=i && i<n; Perm(&res[i], write));
+    loop_invariant (\forall int j; 0 <= j && j < i; res[j] == x0[j] + x1[j]);
+  @*/
+  for(int i=0; i<n; i++){
+    res[i] = x0[i] + x1[i];
+  }
+  return res;
+}
+"""
+
+  vercors should error withCode "disallowedQualifiedCoercion" in "Cast unique pointer" c
+    """
+struct vec {
+  int a;
+  int b;
+};
+
+  /*@ requires Perm(&v.a, write);
+  @*/
+int f(struct vec v){
+    v.a = 1;
+    const int* n = (const int*) &v;
+    //@ assert *n == 1;
+}
+"""
+}
+
 class StructQualifierSpec extends VercorsSpec {
   vercors should verify using silicon in "Unique pointer field of struct containing unique struct" c """
   struct vec2 {
@@ -270,6 +331,32 @@ struct vec {
       //@ assert get_xs2(v, m) != NULL;
     }
 """
+
+  vercors should error withCode "disallowedQualifiedMethodCoercion" in  "Coerce self reference struct" c """
+  struct vec {
+    int* xs;
+    int n;
+  };
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, 1\100) ** Perm(&v->xs, 1\100) ** Perm(&v->n, 1\100);
+    ensures \result == &(v->n);
+  @*/
+  int* get_xs(struct vec* v){
+    return &(v->n);
+   }
+
+  /*@
+    context v != NULL ** \pointer_length(v)==1 ** Perm(v, write) ** Perm(*v, write);
+    context v->xs != NULL;
+    context v->n == 42;
+  @*/
+  int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  v){
+      /*@ unique<2> @*/ int* xs2 = get_xs(v);
+      //@ assert xs2 != NULL;
+      //@ assert xs2[0] == 42;
+    }
+  """
 }
 
 class QualifierSpec extends VercorsSpec {
@@ -298,23 +385,6 @@ class QualifierSpec extends VercorsSpec {
   vercors should error withCode "disallowedQualifiedCoercion" in "different uniques param - 2" c """void f(/*@ unique<1> @*/ int* x0){ /*@ unique<2> @*/ int* x1 = x0;}"""
   vercors should error withCode "disallowedQualifiedCoercion" in "different uniques local" c """void f(){/*@ unique<1> @*/ int x0[2] = {1,2}; /*@ unique<2> @*/ int* x1; x1 = x0;}"""
   vercors should error withCode "disallowedQualifiedCoercion" in "multiple uniques parameter" c """void f(/*@ unique<1> @*/ int* x0, /*@ unique<2> @*/ int* x1){x1 = x0;}"""
-
-  vercors should verify using silicon in "Assign to init const" c """void f(){const int x = 2; /*@ assert x == 2; @*/}"""
-  vercors should error withCode "disallowedConstAssignment" in "Assign to local const" c """void f(){const int x; x = 0;}"""
-  vercors should error withCode "disallowedConstAssignment" in "Assign to param const" c """void f(const int x){x = 0;}"""
-
-  vercors should verify using silicon in "Assign to init const array" c """void f(){const int x[2] = {0, 2}; /*@ assert x[1] == 2; @*/}"""
-  vercors should error withCode "disallowedConstAssignment" in "Assign to local array of const" c """void f(){const int x[2] = {0, 2}; x[0] = 1;}"""
-  vercors should error withCode "disallowedConstAssignment" in "Assign to local pointer of const" c """void f(){const int *x; x[0] = 1;}"""
-  vercors should error withCode "disallowedConstAssignment" in "Assign to param pointer of const" c """void f(const int *x){x[0] = 1;}"""
-
-  vercors should verify using silicon in "Assign const array to const pointer" c """void f(const int* y){const int x[2] = {0, 2}; y = x;}"""
-  vercors should error withCode "resolutionError:type" in "Assign const array to non-const pointer" c """void f(int* y){const int x[2] = {0, 2}; x = y;}"""
-
-  vercors should error withCode "disallowedConstAssignment" in "Assign const pointer" c """void f(int* const y){int* const x; y = x;}"""
-  vercors should verify using silicon in "Assign element of const pointer" c
-    """/*@ context x!=NULL ** \pointer_length(x) == 1 ** Perm(&x[0], write); ensures x[0] == 1;@*/
-  void f(int * const x){x[0] = 1;}"""
 
   vercors should verify using silicon in "Call non-unique procedure" c """/*@
   context n > 0;
@@ -781,5 +851,67 @@ struct vec {
       /*@unique<1>@*/int* xs2 = get_xs(v) /*@ given { ys = ys }  @*/;
       //@ assert xs2 != NULL;
     }
+"""
+
+  vercors should error withCode "disallowedQualifiedCoercion" in "Unique pointer of addr of local" c
+    """
+struct vec {
+  int* xs;
+  int n;
+};
+
+int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  v){
+    int n = 2;
+    /*@ unique<2> @*/ int* xs2 = &n;
+  }
+"""
+
+  vercors should error withCode "disallowedQualifiedCoercion" in "Unique pointer of addr of struct field" c
+    """
+struct vec {
+  int* xs;
+  int n;
+};
+
+int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  v){
+    /*@ unique<2> @*/ int* xs2 = &v->n;
+  }
+"""
+
+  vercors should error withCode "disallowedQualifiedType" in "Unique pointer of addr of unique param" c
+    """
+struct vec {
+  int* xs;
+  int n;
+};
+
+int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  v, /*@unique<2>@*/ int n){
+    /*@ unique<2> @*/ int* xs2 = &n;
+  }
+"""
+
+  vercors should error withCode "disallowedQualifiedCoercion" in "Unique pointer of addr of param" c
+    """
+struct vec {
+  int* xs;
+  int n;
+};
+
+int f(/*@unique_pointer_field<xs, 2>@*/ struct vec*  v, int n){
+    /*@ unique<2> @*/ int* xs2 = &n;
+  }
+"""
+
+  vercors should error withCode "disallowedQualifiedCoercion" in "Cast unique pointer" c
+    """
+struct vec {
+  int a;
+  int b;
+};
+
+int f(struct vec v){
+    /*@unique<1>@*/ int* n = (/*@unique<1>@*/ int*) &v;
+}
+
 """
 }

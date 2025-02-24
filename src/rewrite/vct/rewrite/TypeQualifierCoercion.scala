@@ -215,11 +215,8 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
             // But also consider the element type of the pointer
             Seq(TPointer(element, Some(m(field)))) ++ getPointers(element)
           case field: InstanceField[Pre] =>
-            // TODO: Ask alexander, but now all fields are also considered pointers right? With the same field
-            // as a regular pointer?
-            // If so, then I need to add this field towards the pointer we find. Something like
-            // getPointers(field.t) :+ TPointer(field.t, None)
-            getPointers(field.t) 
+            // Fields are also pointers
+            getPointers(field.t) :+ TPointer(field.t, None)
           case _: JavaClassDeclaration[Pre] | _: PVLClassDeclaration[Pre] => ???
           case _ => Seq()
         }
@@ -231,7 +228,8 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
         seenClasses.top.add(tc)
 
         tc.cls.decl.decls.flatMap {
-          case field: InstanceField[Pre] => getPointers(field.t)
+          // Fields are also pointers
+          case field: InstanceField[Pre] => getPointers(field.t) :+ TPointer(field.t, None)
           case _: JavaClassDeclaration[Pre] | _: PVLClassDeclaration[Pre] => ???
           case _ => Seq()
         }
@@ -322,7 +320,7 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
       pClass.zip(aClass).map {
         case (pf: InstanceField[Pre], af: InstanceField[Pre]) if pf.t == af.t =>
           if(!(pf.flags == af.flags)) ???
-          (Seq(), getPointers(pf.t))
+          (Seq(), getPointers(pf.t) :+ TPointer(pf.t, None))
         case (pf: InstanceField[Pre], af: InstanceField[Pre]) =>
           if(!(pf.flags.isEmpty && af.flags.isEmpty)) ???
           // Should be different types. That can only be because of pointers or classes!
@@ -528,6 +526,14 @@ case class MakeUniqueMethodCopies[Pre <: Generation]()
         case f: Function[Pre] => Result(new LazyRef(abstractFunction.get(f, m).get))
         case p: Procedure[Pre] => Result(new LazyRef(abstractProcedure.get(p, m).get))
       }
+      case c@Cast(value, typeValue) =>
+        val targetType = typeValue.t.asInstanceOf[TType[Pre]].t
+        (targetType, value.t) match {
+          case (target: PointerType[Pre], value: PointerType[Pre]) if target.unique != value.unique ||
+            target.isConst != value.isConst =>
+              throw DisallowedQualifiedCoercion(c.o, value, target)
+          case _ => c.rewriteDefault()
+        }
       case other => other.rewriteDefault()
     }
   }

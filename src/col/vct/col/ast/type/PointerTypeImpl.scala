@@ -7,4 +7,6 @@ trait PointerTypeImpl[G] {
 
   val element: Type[G]
   val unique: Option[BigInt]
+  val isConst: Boolean
+  val isNonNull: Boolean
 }
