@@ -4,7 +4,7 @@ import vct.col.ast._
 import vct.col.origin._
 import vct.col.rewrite.Generation
 import vct.col.util.AstBuildHelpers.{ExprBuildHelpers, const}
-
+import vct.result.VerificationError.UserError
 
 case object ImportConstPointer extends ImportADTBuilder("const_pointer") {
   case class PointerNullOptNone(inner: Blame[PointerNull], expr: Expr[_])
@@ -84,13 +84,6 @@ case class ImportConstPointer[Pre <: Generation](importer: ImportADTImporter)
     t match {
       case TConstPointer(inner) => TOption(TAxiomatic(pointerAdt.ref, Seq(dispatch(inner))))
       case TNonNullConstPointer(inner) => TAxiomatic(pointerAdt.ref, Seq(dispatch(inner)))
-      case other => other.rewriteDefault()
-    }
-
-  override def postCoerce(location: Location[Pre]): Location[Post] =
-    location match {
-      case loc @ PointerLocation(pointer) if isConstPointer(pointer) =>
-        ??? // Should not happen?
       case other => other.rewriteDefault()
     }
 

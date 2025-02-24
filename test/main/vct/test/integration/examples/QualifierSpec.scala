@@ -61,6 +61,16 @@ int f(struct vec v){
     //@ assert *n == 1;
 }
 """
+
+  vercors should error withCode "noPermissionForConstPointer" in "Specify perm const pointer" c
+  """
+/*@
+ requires x!= NULL ** \pointer_length(x)==1 ** Perm(x, 1\2);
+@*/
+void f(const int* x){
+  int y = x[0];
+}
+"""
 }
 
 class StructQualifierSpec extends VercorsSpec {
@@ -919,6 +929,16 @@ int f(struct vec v){
 void f(){
   int x = 10342234;
   /*@unique<1>@*/ int* n = (/*@unique<1>@*/ int *) x;
+}
+"""
+
+  vercors should error withCode "disallowedQualifiedCoercion" in "Addr of unique pointer" c
+    """
+/*@
+ requires x!= NULL ** \pointer_length(x)==1 ** Perm(x, 1\2);
+@*/
+void f(/*@unique<1>@*/ int* x){
+  int* y = &(x[0]);
 }
 """
 }

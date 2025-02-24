@@ -10,6 +10,12 @@ import vct.col.ref.{LazyRef, Ref}
 
 import scala.collection.mutable
 
+case class NoPermissionForConstPointer(location: Node[_]) extends UserError {
+  override def code: String = "noPermissionForConstPointer"
+  override def text: String =
+    location.o.messageInContext("You do not have to specify permission for const pointers.")
+}
+
 case class DisallowedConstAssignment(target: Node[_]) extends UserError {
   override def code: String = "disallowedConstAssignment"
   override def text: String =
@@ -83,7 +89,6 @@ case class TypeQualifierCoercion[Pre <: Generation]()
       })
   }
 
-
   override def applyCoercion(e: => Expr[Post], coercion: Coercion[Pre])(
     implicit o: Origin
   ): Expr[Post] = {
@@ -100,6 +105,20 @@ case class TypeQualifierCoercion[Pre <: Generation]()
       case _ =>
     }
     e
+  }
+  def isConstElement(t: Type[Pre]): Boolean = t match {
+    case TConst(_) => true
+    case TUnique(t, _) => isConstElement(t)
+    case _ => false
+  }
+
+  override def postCoerce(loc: Location[Pre]): Location[Post] = loc match {
+    case AmbiguousLocation(pointer) =>
+      pointer.t match {
+        case t: PointerType[Pre] if isConstElement(t.element) => throw NoPermissionForConstPointer(loc)
+        case _ => loc.rewriteDefault()
+      }
+    case other => other.rewriteDefault()
   }
 
   override def postCoerce(t: Type[Pre]): Type[Post] =
