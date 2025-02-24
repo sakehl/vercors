@@ -8,24 +8,10 @@ import vct.col.origin.AccountedDirection
 import vct.col.{ast => col, origin => blame}
 import vct.result.VerificationError.SystemError
 import viper.api.SilverTreeCompare
-import viper.api.transform.{
-  ColToSilver,
-  NodeInfo,
-  NopViperReporter,
-  SilverParserDummyFrontend,
-}
+import viper.api.transform.{ColToSilver, NodeInfo, NopViperReporter, SilverParserDummyFrontend}
 import viper.silver.ast.Infoed
 import viper.silver.plugin.SilverPluginManager
-import viper.silver.plugin.standard.termination.{
-  FunctionTerminationError,
-  LoopTerminationError,
-  MethodTerminationError,
-  TerminationConditionFalse,
-  TupleBoundedFalse,
-  TupleConditionFalse,
-  TupleDecreasesFalse,
-  TupleSimpleFalse,
-}
+import viper.silver.plugin.standard.termination.{FunctionTerminationError, LoopTerminationError, MethodTerminationError, TerminationConditionFalse, TupleBoundedFalse, TupleConditionFalse, TupleDecreasesFalse, TupleSimpleFalse}
 import viper.silver.reporter.Reporter
 import viper.silver.verifier._
 import viper.silver.verifier.errors._
@@ -33,6 +19,7 @@ import viper.silver.{ast => silver}
 
 import java.nio.file.{Files, Path}
 import scala.reflect.ClassTag
+import scala.util.matching.Regex
 import scala.util.{Try, Using}
 
 trait SilverBackend
@@ -298,7 +285,7 @@ trait SilverBackend
                 val apply = get[col.InvokingNode[_]](node)
                 apply.ref.decl.blame.blame(getDecreasesBlame(apply, reason))
             }
-          case LoopTerminationError(node: Infoed, reason, _) =>
+          case err@LoopTerminationError(node: Infoed, reason, _) =>
             val decreases = get[col.DecreasesClause[_]](node)
             info(node).invariant.get.blame
               .blame(blame.LoopTerminationMeasureFailed(decreases))
