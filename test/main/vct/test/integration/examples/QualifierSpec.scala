@@ -1005,11 +1005,3 @@ void f(/*@unique<1>@*/ int* x){
 }
 """
 }
-
-class WIP extends VercorsSpec {
-
-}
-
-class WIP2 extends VercorsSpec {
-
-}
