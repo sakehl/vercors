@@ -186,32 +186,6 @@ case class VariableToPointer[Pre <: Generation]() extends Rewriter[Pre] {
               )(PanicBlame("Initialisation should always succeed"))
             } ++ Seq(dispatch(s.body))),
         )
-        // TODO: Can we remove this? It doesn't seem we ever fill fieldMap anyway
-//      case i @ Instantiate(cls, out)
-//          if cls.decl.isInstanceOf[ByValueClass[Pre]] =>
-//        Block(Seq(i.rewriteDefault()) ++ cls.decl.declarations.flatMap {
-//          case f: InstanceField[Pre] =>
-//            if (f.t.asClass.isDefined) {
-//              Seq(
-//                Assign(
-//                  Deref[Post](dispatch(out), fieldMap.ref(f))(PanicBlame(
-//                    "Initialisation should always succeed"
-//                  )),
-//                  makeNewPointerArray(fieldMap(f).t),
-//                )(PanicBlame("Initialisation should always succeed")),
-//                Assign(
-//                  PointerSubscript(
-//                    Deref[Post](dispatch(out), fieldMap.ref(f))(PanicBlame(
-//                      "Initialisation should always succeed"
-//                    )),
-//                    const[Post](0),
-//                  )(PanicBlame("Size is > 0")),
-//                  dispatch(NewObject[Pre](f.t.asClass.get.cls)),
-//                )(PanicBlame("Initialisation should always succeed")),
-//              )
-//            } else { Seq() }
-//          case _ => Seq()
-//        })
       case other => other.rewriteDefault()
     }
   }
