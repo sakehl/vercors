@@ -1059,4 +1059,56 @@ int f(/*@unique<3>@*/ int* xs){
   return get_first_two( xs );
 }
 """
+
+  vercors should verify using silicon in "Predicate coercion" c
+"""
+struct dim {
+    int min, extent, stride;
+    int flags;
+};
+/*@
+inline resource dim_perm(struct dim *dim, rational p, int i) =
+ Perm(&dim[i], 1\2) **
+ Perm(dim[i].min, 1\2) **
+ Perm(dim[i].stride, 1\2) **
+ Perm(dim[i].extent, 1\2) **
+ dim[i].extent > 0
+ ;
+@*/
+
+struct shape {
+    int dimensions;
+    struct dim *dim;
+};
+
+struct buf {
+    struct shape shape;
+    /*@unique<0>@*/ int *host;
+};
+
+/*@
+inline resource buffer_pred(struct buf *buf, rational p, int n_dims) =
+ buf != NULL **
+ \pointer_length(buf) == 1 **
+ Perm(buf, p) **
+ Perm(&buf->shape, p) **
+ Perm(&buf->shape.dim, p) **
+ buf->shape.dim != NULL **
+ \pointer_length(buf->shape.dim) == n_dims **
+ Perm(&buf->host, p) **
+ buf->host != NULL;
+@*/
+
+/*@
+ context buffer_pred(out, 1\2, 1);
+ context dim_perm(out->shape.dim, 1\2, 0);
+ context \pointer_length(out->host) == out->shape.dim[0].extent * out->shape.dim[0].stride;
+ context out->shape.dim[0].min == 0 && out->shape.dim[0].extent == 100 && out->shape.dim[0].stride == 1;
+ context (\forall* int _0; 0 <= _0 && _0 < 100; Perm(&out->host[_0], 1\1));
+ ensures \result == out->host[0];
+@*/
+int f(/*@unique_pointer_field<host, 1>@*/ struct buf *out) {
+  return out->host[0];
+}
+"""
 }
