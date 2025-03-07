@@ -1004,4 +1004,59 @@ void f(/*@unique<1>@*/ int* x){
   int* y = &(x[0]);
 }
 """
+
+  vercors should verify using silicon in "Method has func in contract" c
+    """
+  /*@
+    requires xs != NULL ** \pointer_length(xs)>1 ** Perm(&xs[0], 1\100);
+  @*/
+  /*@ pure @*/ int get_head(int* xs){
+    return xs[0];
+  }
+
+  /*@
+    context xs != NULL ** \pointer_length(xs)>2 ** Perm(&xs[0], 1\100);
+    ensures \result == get_head(xs) + get_head(xs+1);
+  @*/
+int get_first_two(/*@unique<1>@*/ int* xs){
+    return xs[0] + xs[1];
+}
+
+
+  /*@
+    context xs != NULL ** \pointer_length(xs)>2 ** Perm(&xs[0], 1\100);
+    ensures \result == xs[0] + xs[1];
+  @*/
+  int f(/*@unique<2>@*/ int* xs){
+      return get_first_two(xs);
+    }
+"""
+
+  vercors should error withCode "disallowedQualifiedMethodCoercionNest" in "Method has func in contract" c
+    """
+ /*@
+  context xs != NULL ** \pointer_length(xs)>2 ** Perm(&xs[0], 1\100);
+  ensures \result == xs[0];
+@*/
+/*@ pure @*/ int id(/*@unique<2>@*/ int* xs){
+  return xs[0];
+}
+
+/*@
+  context xs != NULL ** \pointer_length(xs)>2 ** Perm(&xs[0], 1\100) ** Perm(&xs[1], 1\100);
+  ensures \result == id(xs) + xs[1];
+@*/
+int get_first_two(/*@unique<1>@*/ int* xs){
+  return xs[0] + xs[1];
+}
+
+
+/*@
+  context xs != NULL ** \pointer_length(xs)>2 ** Perm(&xs[0], 1\100) ** Perm(&xs[1], 1\100);
+  ensures \result == id(xs) + xs[1];
+@*/
+int f(/*@unique<3>@*/ int* xs){
+  return get_first_two( xs );
+}
+"""
 }
