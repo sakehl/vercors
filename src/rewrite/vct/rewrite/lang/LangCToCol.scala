@@ -1210,7 +1210,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             else { t }
           cGlobalNameSuccessor(RefCGlobalDeclaration(decl, idx)) = rw
             .globalDeclarations
-            .declare(new HeapVariable(newT)(init.o.sourceName(info.name)))
+            .declare(new HeapVariable(newT, init.init.map(rw.dispatch))(init.o.sourceName(info.name)))
       }
     }
   }
@@ -1226,7 +1226,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         Assume[Post](
         AmbiguousSubscript(array.get, c_const(index))(PanicBlame(
           "The explicit initialization of an array in C should never exceed the bounds of the array"
-        )) === rw.dispatch(value),
+        )) === rw.dispatch(value)
         )
     })
   }
