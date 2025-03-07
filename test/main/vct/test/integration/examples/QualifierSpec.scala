@@ -1005,7 +1005,7 @@ void f(/*@unique<1>@*/ int* x){
 }
 """
 
-  vercors should verify using silicon in "Method has func in contract" c
+  vercors should error withCode "disallowedQualifiedMethodCoercionNest" in "Method has func in contract - 1" c
     """
   /*@
     requires xs != NULL ** \pointer_length(xs)>1 ** Perm(&xs[0], 1\100);
@@ -1032,7 +1032,7 @@ int get_first_two(/*@unique<1>@*/ int* xs){
     }
 """
 
-  vercors should error withCode "disallowedQualifiedMethodCoercionNest" in "Method has func in contract" c
+  vercors should error withCode "disallowedQualifiedMethodCoercionNest" in "Method has func in contract - 2" c
     """
  /*@
   context xs != NULL ** \pointer_length(xs)>2 ** Perm(&xs[0], 1\100);
